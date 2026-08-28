@@ -6,16 +6,16 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { ResourceBrowser } from "@/features/resources/components/resource-browser";
-import {
-  getContentTypeBySlug,
-  listContentTypes,
-} from "@/features/resources/content-types";
-import { resources } from "@/mocks";
+import { getContentTypeBySlug } from "@/features/resources/content-types";
+import { parseListQuery, PAGE_SIZE } from "@/features/resources/list.schema";
 import { requireActiveUser } from "@/server/auth/guards";
+import * as resourceService from "@/server/services/resource.service";
 
-export async function generateStaticParams() {
-  return listContentTypes().map((t) => ({ type: t.slug }));
-}
+/*
+ * **`generateStaticParams` 를 두지 않습니다.**
+ * 이 페이지는 `requireActiveUser()`(→ `cookies()`)로 어차피 동적입니다.
+ * 회원 상세에서 같은 이유로 걷어냈습니다 (`DEC-045`).
+ */
 
 export async function generateMetadata({
   params,
@@ -27,21 +27,34 @@ export async function generateMetadata({
 /** SCR-111 자료 목록 (타입별) — 타입이 늘어도 이 파일 하나가 처리한다 */
 export default async function ResourceTypePage({
   params,
+  searchParams,
 }: PageProps<"/resources/[type]">) {
   // 인가는 레이아웃이 아니라 page 가 한다 (DEC-035)
-  await requireActiveUser();
+  const session = await requireActiveUser();
 
   const { type } = await params;
   const meta = getContentTypeBySlug(type);
   if (!meta) notFound();
 
-  const list = resources.filter((r) => r.type === meta.code);
+  /*
+   * URL 의 `type` 은 **경로 세그먼트**가 이깁니다 —
+   * `/resources/ai-material?type=SKILL` 이 스킬 목록을 보여주면 안 됩니다.
+   */
+  const query = { ...parseListQuery(await searchParams), type: meta.code };
+
+  const [page, authors] = await Promise.all([
+    resourceService.list(
+      query,
+      { kind: "cursor", after: query.cursor, size: PAGE_SIZE },
+      session.userId
+    ),
+    resourceService.listAuthors(),
+  ]);
 
   return (
     <>
       <PageHeader
         description={meta.description}
-        count={list.length}
         action={
           <Button asChild>
             <Link href="/resources/new">
@@ -51,7 +64,12 @@ export default async function ResourceTypePage({
           </Button>
         }
       />
-      <ResourceBrowser resources={list} />
+      <ResourceBrowser
+        resources={page.items}
+        query={query}
+        authors={authors}
+        nextCursor={page.nextCursor}
+      />
     </>
   );
 }

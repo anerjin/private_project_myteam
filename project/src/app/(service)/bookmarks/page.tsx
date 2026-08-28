@@ -6,22 +6,33 @@ import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { ResourceBrowser } from "@/features/resources/components/resource-browser";
-import { resources } from "@/mocks";
+import { parseListQuery, PAGE_SIZE } from "@/features/resources/list.schema";
 import { requireActiveUser } from "@/server/auth/guards";
+import * as resourceService from "@/server/services/resource.service";
 
 export const metadata: Metadata = { title: "북마크" };
 
 /** SCR-133 내 북마크 */
-export default async function BookmarksPage() {
+export default async function BookmarksPage({
+  searchParams,
+}: PageProps<"/bookmarks">) {
   // 인가는 레이아웃이 아니라 page 가 한다 (DEC-035)
-  await requireActiveUser();
+  const session = await requireActiveUser();
 
-  const list = resources.filter((r) => r.bookmarked);
+  const query = parseListQuery(await searchParams);
+  const [page, authors] = await Promise.all([
+    resourceService.listBookmarked(session.userId, {
+      kind: "offset",
+      page: 1,
+      size: PAGE_SIZE,
+    }),
+    resourceService.listAuthors(),
+  ]);
 
   return (
     <>
-      <PageHeader count={list.length} />
-      {list.length === 0 ? (
+      <PageHeader count={page.total ?? page.items.length} />
+      {page.items.length === 0 ? (
         <EmptyState
           icon={BookMarked}
           title="북마크한 자료가 없습니다"
@@ -33,7 +44,12 @@ export default async function BookmarksPage() {
           }
         />
       ) : (
-        <ResourceBrowser resources={list} />
+        <ResourceBrowser
+          resources={page.items}
+          query={query}
+          authors={authors}
+          total={page.total}
+        />
       )}
     </>
   );

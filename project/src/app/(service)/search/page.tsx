@@ -5,30 +5,40 @@ import { PageHeader } from "@/components/common/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ResourceBrowser } from "@/features/resources/components/resource-browser";
 import { listContentTypes } from "@/features/resources/content-types";
-import { resources } from "@/mocks";
+import {
+  parseListQuery,
+  PAGE_SIZE,
+  toSearchParams,
+} from "@/features/resources/list.schema";
 import { requireActiveUser } from "@/server/auth/guards";
+import * as resourceService from "@/server/services/resource.service";
 
 export const metadata: Metadata = { title: "검색" };
 
-/** SCR-121 검색 결과 */
-export default async function SearchPage() {
+/**
+ * SCR-121 검색 결과.
+ *
+ * 사이드바의 타입·태그는 **집계**라 목록과 다른 질의입니다.
+ * 태그를 누르면 `?tag=` 가 붙어 **같은 URL 상태**로 합류합니다 (`DEC-045`).
+ */
+export default async function SearchPage({
+  searchParams,
+}: PageProps<"/search">) {
   // 인가는 레이아웃이 아니라 page 가 한다 (DEC-035)
-  await requireActiveUser();
+  const session = await requireActiveUser();
 
-  const byType = listContentTypes().map((t) => ({
-    meta: t,
-    count: resources.filter((r) => r.type === t.code).length,
-  }));
-  const tagCounts = Object.entries(
-    resources
-      .flatMap((r) => r.tags)
-      .reduce<Record<string, number>>((acc, t) => {
-        acc[t] = (acc[t] ?? 0) + 1;
-        return acc;
-      }, {})
-  )
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 12);
+  const query = parseListQuery(await searchParams);
+
+  const [page, authors, typeCounts, topTags] = await Promise.all([
+    resourceService.list(
+      query,
+      { kind: "cursor", after: query.cursor, size: PAGE_SIZE },
+      session.userId
+    ),
+    resourceService.listAuthors(),
+    resourceService.countByType(),
+    resourceService.topTags(12),
+  ]);
 
   return (
     <>
@@ -41,7 +51,7 @@ export default async function SearchPage() {
               <CardTitle className="text-sm">타입</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1.5">
-              {byType.map(({ meta, count }) => (
+              {listContentTypes().map((meta) => (
                 <Link
                   key={meta.code}
                   href={`/resources/${meta.slug}`}
@@ -49,7 +59,7 @@ export default async function SearchPage() {
                 >
                   <span>{meta.label}</span>
                   <span className="text-muted-foreground tabular-nums">
-                    {count}
+                    {typeCounts[meta.code] ?? 0}
                   </span>
                 </Link>
               ))}
@@ -61,19 +71,32 @@ export default async function SearchPage() {
               <CardTitle className="text-sm">인기 태그</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-1.5">
-              {tagCounts.map(([tag, n]) => (
-                <span
-                  key={tag}
-                  className="bg-muted rounded px-2 py-0.5 text-xs"
-                >
-                  #{tag} <span className="text-muted-foreground">{n}</span>
-                </span>
-              ))}
+              {topTags.length === 0 ? (
+                <p className="text-muted-foreground text-xs">
+                  아직 태그가 없습니다.
+                </p>
+              ) : (
+                topTags.map((t) => (
+                  <Link
+                    key={t.slug}
+                    href={`/search${toSearchParams(query, { tag: t.slug })}`}
+                    className="bg-muted hover:bg-muted/70 rounded px-2 py-0.5 text-xs"
+                  >
+                    #{t.slug}{" "}
+                    <span className="text-muted-foreground">{t.count}</span>
+                  </Link>
+                ))
+              )}
             </CardContent>
           </Card>
         </aside>
 
-        <ResourceBrowser resources={resources} />
+        <ResourceBrowser
+          resources={page.items}
+          query={query}
+          authors={authors}
+          nextCursor={page.nextCursor}
+        />
       </div>
     </>
   );

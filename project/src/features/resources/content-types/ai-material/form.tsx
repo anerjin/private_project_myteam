@@ -18,7 +18,7 @@ export function Form({ detail }: { detail?: ResourceDetail }) {
     <>
       <Field>
         <FieldLabel htmlFor="materialKind">자료 형식 *</FieldLabel>
-        <Select defaultValue={d?.materialKind ?? "ARTICLE"}>
+        <Select name="materialKind" defaultValue={d?.materialKind ?? "ARTICLE"}>
           <SelectTrigger id="materialKind">
             <SelectValue />
           </SelectTrigger>
@@ -36,6 +36,7 @@ export function Form({ detail }: { detail?: ResourceDetail }) {
         <FieldLabel htmlFor="sourceName">출처</FieldLabel>
         <Input
           id="sourceName"
+          name="sourceName"
           defaultValue={d?.sourceName}
           placeholder="arXiv, Anthropic Blog …"
         />
@@ -43,13 +44,19 @@ export function Form({ detail }: { detail?: ResourceDetail }) {
 
       <Field>
         <FieldLabel htmlFor="publishedAt">발행일</FieldLabel>
-        <Input id="publishedAt" type="date" defaultValue={d?.publishedAt} />
+        <Input
+          id="publishedAt"
+          name="publishedAt"
+          type="date"
+          defaultValue={d?.publishedAt}
+        />
       </Field>
 
       <Field>
         <FieldLabel htmlFor="keyPoints">핵심 요약</FieldLabel>
         <Textarea
           id="keyPoints"
+          name="keyPoints"
           rows={4}
           defaultValue={d?.keyPoints}
           placeholder="- 불릿 3~5개로 정리"
@@ -60,6 +67,7 @@ export function Form({ detail }: { detail?: ResourceDetail }) {
         <FieldLabel htmlFor="applicability">사내 적용 아이디어 *</FieldLabel>
         <Textarea
           id="applicability"
+          name="applicability"
           rows={3}
           defaultValue={d?.applicability}
           placeholder="드론·공간정보·개발팀 맥락에서 어떻게 쓸지 한 줄 이상"

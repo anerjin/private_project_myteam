@@ -57,7 +57,15 @@ export interface VerifiedKey {
  * 여기서 새는 것은 «그 키의 상태»뿐이고, 그건 키 소유자만 물을 수 있는 질문입니다.
  */
 export async function verifyKey(raw: string): Promise<VerifiedKey> {
-  const key = await db.apiKey.findFirst({
+  /*
+   * `findUnique` — `key_hash` 가 유니크입니다.
+   *
+   * 전에는 `findFirst` + 인덱스 없음이라 **매 API 요청이 `api_keys` 전체 스캔**이었고,
+   * `P7` Ingest 의 인증 핫패스가 여기 하나입니다. 제약도 반대로 걸려 있었습니다 —
+   * 키를 «식별»하는 것은 `key_hash` 인데 유니크는 `key_prefix`(48비트) 쪽에 있어서,
+   * 식별에 쓰이지도 않으면서 **발급이 유니크 위반으로 실패할 경로**만 만들었습니다.
+   */
+  const key = await db.apiKey.findUnique({
     where: { keyHash: hashKey(raw) },
     select: {
       id: true,

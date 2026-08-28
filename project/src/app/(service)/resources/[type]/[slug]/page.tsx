@@ -1,4 +1,4 @@
-import { Bookmark, Eye, FolderPlus, Pencil, Share2 } from "lucide-react";
+import { Eye, FolderPlus, Pencil } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -21,39 +21,51 @@ import {
   getContentType,
   getContentTypeBySlug,
 } from "@/features/resources/content-types";
-import { resources } from "@/mocks";
+import { ResourceActions } from "@/features/resources/components/resource-actions";
+import { AppError } from "@/lib/errors";
+import * as resourceService from "@/server/services/resource.service";
 
 export async function generateMetadata({
   params,
 }: PageProps<"/resources/[type]/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const r = resources.find((x) => x.slug === slug);
-  return { title: r?.title ?? "자료" };
+  try {
+    const r = await resourceService.getBySlug(slug);
+    return { title: r.title };
+  } catch {
+    return { title: "자료" };
+  }
 }
 
 /** SCR-112 자료 상세 */
 export default async function ResourceDetailPage({
   params,
 }: PageProps<"/resources/[type]/[slug]">) {
+  const session = await requireActiveUser();
+
   const { type, slug } = await params;
   const meta = getContentTypeBySlug(type);
-  const resource = resources.find(
-    (r) => r.slug === slug && r.type === meta?.code
-  );
-  if (!meta || !resource) notFound();
+  if (!meta) notFound();
+
+  /*
+   * 서비스는 `NOT_FOUND` 를 던지고 **화면이 `notFound()` 로 바꿉니다** —
+   * service 가 `next/navigation` 을 알면 워커·Ingest 에서 재사용할 수 없습니다
+   * (`DEV-06 · 6.6`: service 는 요청 컨텍스트에 의존하지 않는다).
+   */
+  let resource;
+  try {
+    resource = await resourceService.getBySlug(slug, session.userId);
+  } catch (e) {
+    if (e instanceof AppError && e.code === "NOT_FOUND") notFound();
+    throw e;
+  }
+  // 경로의 타입과 자료의 타입이 다르면 잘못된 주소다
+  if (resource.type !== meta.code) notFound();
+
   const category = CATEGORIES.find((c) => c.slug === resource.category);
   const toc = resource.body ? extractToc(resource.body) : [];
-
-  const session = await requireActiveUser();
-  // 목 자료의 author.id 는 실제 계정 id 와 맞지 않아 P2~P3 동안 EDITOR+ 에게만 보인다.
-  // **버그가 아니라 목 경계가 드러난 것이므로 목 데이터를 맞추지 않는다** — P4 에서 저절로 맞는다.
   const canEdit = canEditResource(await toActor(session), resource.author.id);
-  const related = resources
-    .filter(
-      (r) =>
-        r.id !== resource.id && r.tags.some((t) => resource.tags.includes(t))
-    )
-    .slice(0, 3);
+  const related = await resourceService.findRelated(resource.id, resource.tags);
 
   return (
     <>
@@ -76,23 +88,15 @@ export default async function ResourceDetailPage({
 
           <div className="flex flex-wrap gap-2">
             {resource.url && <ExternalLinkButton url={resource.url} />}
-            <Button variant="outline" size="sm">
-              <Bookmark
-                className={
-                  resource.bookmarked
-                    ? "size-4 fill-amber-400 text-amber-500"
-                    : "size-4"
-                }
-              />
-              북마크
-            </Button>
-            <Button variant="outline" size="sm">
+            <ResourceActions
+              resourceId={resource.id}
+              bookmarked={resource.bookmarked ?? false}
+              bookmarkCount={resource.bookmarkCount}
+            />
+            {/* 컬렉션은 아직 없다 — 「있는데 안 된다」보다 disabled 가 정직하다 */}
+            <Button variant="outline" size="sm" disabled>
               <FolderPlus className="size-4" />
               컬렉션에 담기
-            </Button>
-            <Button variant="outline" size="sm">
-              <Share2 className="size-4" />
-              링크 복사
             </Button>
             {canEdit ? (
               <div className="ml-auto flex gap-2">

@@ -60,6 +60,14 @@ async function* walk(dir) {
   }
 }
 
+/** `export … from "x"` 인가 — 그냥 import 와 구분한다 */
+function isReExport(code, spec) {
+  const q = spec.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\bexport\\b[\\s\\S]{0,200}?from\\s+["']${q}["']`).test(
+    code
+  );
+}
+
 /** `import ... from "x"` 와 `import("x")` 의 대상만 뽑는다 */
 function importsOf(code) {
   const specs = [];
@@ -99,6 +107,39 @@ const WRITE_VERBS =
 const writeCall = (model) =>
   new RegExp(`\\w+\\.${model}\\.(?:${WRITE_VERBS})\\s*\\(`);
 
+/**
+ * `@/mocks` 를 아직 읽는 파일 (`P4` DoD: **`src/mocks/` 삭제**).
+ *
+ * **이 목록이 곧 진행률입니다.** `P4` 마지막에 폴더를 지우면 그때 20군데가 한꺼번에
+ * 터지므로, 게이트를 **먼저** 켜고 목록을 줄여 나갑니다 — 새 파일이 목을 읽으면
+ * 곧바로 막히고, 목록이 비면 `P4` DoD 의 그 줄이 달성된 것입니다.
+ *
+ * **줄이기만 합니다. 여기에 파일을 «추가»하는 커밋은 되돌리십시오.**
+ */
+const MOCK_DEBT = [
+  "app/(admin)/admin/audit-logs/page.tsx",
+  "app/(admin)/admin/jobs/page.tsx",
+  "app/(admin)/admin/page.tsx",
+  "app/(admin)/admin/resources/page.tsx",
+  "app/(admin)/admin/settings/page.tsx",
+  "app/(admin)/admin/taxonomy/page.tsx",
+  "app/(admin)/layout.tsx",
+  "app/(service)/collections/[slug]/page.tsx",
+  "app/(service)/collections/page.tsx",
+  "app/(service)/dashboard/page.tsx",
+  "app/(service)/layout.tsx",
+  "app/(service)/me/page.tsx",
+  "app/_shell/breadcrumb-labels.ts",
+  "features/dashboard/components/trend-chart.tsx",
+];
+
+/*
+ * 이 규칙은 `BYPASS`(파일 내용 정규식)가 아니라 **import 루프**에 있습니다 —
+ * `from "@/mocks"` 만 보면 `import { x } from "../../mocks"` 가 빠져나갑니다.
+ * 실제로 그 형태를 던져서 통과하는 것을 확인하고 옮겼습니다.
+ * 계층으로 판정하면 별칭이든 상대 경로든 같은 결과가 나옵니다.
+ */
+
 const BYPASS = [
   {
     pattern: writeCall("user"),
@@ -111,6 +152,20 @@ const BYPASS = [
       "server/services/auth.service.ts",
     ],
     why: "users 쓰기는 위 세 파일로만 한다 (DEC-036·DEC-044). status·role 을 다른 데서 바꾸면 세션 무효화가 갈라져 「정지했는데 안 끊긴다」가 된다",
+  },
+  {
+    /*
+     * `DEC-037` 이 「정지는 키를 «폐기»하지 않고 «판정»한다」로 섰으므로,
+     * 다른 데서 `apiKey.update({ revokedAt })` 하는 것은 `user.update({ status })` 가
+     * `DEC-036` 을 깨는 것과 **같은 방식으로** `DEC-037` 을 깹니다.
+     */
+    pattern: writeCall("apiKey"),
+    allow: [
+      "server/services/api-key.service.ts",
+      // lastUsedAt 갱신 (verifyKey)
+      "server/auth/api-key.ts",
+    ],
+    why: "api_keys 쓰기는 위 두 파일로만 한다 (DEC-037·DEC-044). 다른 데서 폐기하면 「정지는 판정」이라는 전제가 깨진다",
   },
   {
     pattern: writeCall("session"),
@@ -142,6 +197,9 @@ const BYPASS = [
 
 const violations = [];
 
+/** 실제로 목을 읽은 파일 — 부채 목록이 «현재»와 맞는지 대조한다 */
+const mockUsers = new Set();
+
 for await (const file of walk(SRC)) {
   const rel = relative(SRC, file).split(sep).join("/");
   const fromLayer = rel.split("/")[0];
@@ -170,6 +228,40 @@ for await (const file of walk(SRC)) {
       if (fromLayer === from && toLayer === to) {
         violations.push({ file: rel, spec, rule: `${from} → ${to}`, why });
       }
+    }
+
+    if (toLayer === "mocks" && fromLayer !== "mocks") mockUsers.add(rel);
+
+    // 목 데이터 부채 — 목록에 없는 파일이 새로 읽으면 위반 (P4 DoD)
+    if (
+      toLayer === "mocks" &&
+      fromLayer !== "mocks" &&
+      !MOCK_DEBT.includes(rel)
+    ) {
+      violations.push({
+        file: rel,
+        spec,
+        rule: `→ mocks (남은 부채 ${MOCK_DEBT.length}개)`,
+        why: "목 데이터는 P4 에서 전부 걷어낸다 (DEV-07 · 7.4 DoD). 새로 읽는 파일을 만들지 말고 scripts/check-deps.mjs 의 MOCK_DEBT 목록을 줄일 것",
+      });
+    }
+
+    /*
+     * **재수출은 허용 목록을 통째로 무력화합니다.**
+     *
+     * 예외 목록의 파일 하나가 `export * from "@/mocks"` 하면 그것을 import 하는
+     * **모든 파일이 합법**이 됩니다 — 목록이 20개인지 200개인지 알 수 없게 됩니다.
+     * 실제로 던져 보고 통과하는 것을 확인한 뒤 넣은 규칙입니다.
+     *
+     * 목을 «쓰는» 것과 «퍼뜨리는» 것은 다릅니다. 부채 목록은 앞의 것만 허용합니다.
+     */
+    if (toLayer === "mocks" && fromLayer !== "mocks" && isReExport(code, spec)) {
+      violations.push({
+        file: rel,
+        spec,
+        rule: "mocks 재수출",
+        why: "목을 다시 export 하면 예외 목록이 무의미해진다. 쓰는 것은 되지만 퍼뜨리는 것은 안 된다",
+      });
     }
 
     // proxy.ts 는 server-only 모듈을 끌어오면 안 된다 (DEC-035).
@@ -226,8 +318,28 @@ for await (const file of walk(SRC)) {
   }
 }
 
+/*
+ * **정리된 파일은 목록에서 지웁니다.**
+ *
+ * 허용 목록은 «없는 파일」을 조용히 통과시키므로, 부채를 갚아도 목록이 그대로면
+ * 「남은 20개」가 영원히 20개입니다 — 그러면 **목록이 진행률이라는 말이 거짓말**이 됩니다.
+ * 정리 커밋에서 목록 한 줄을 함께 지우게 하는 것이 이 검사의 값입니다.
+ */
+const stale = MOCK_DEBT.filter((f) => !mockUsers.has(f));
+for (const f of stale) {
+  violations.push({
+    file: f,
+    spec: "@/mocks",
+    rule: "부채 목록이 낡음",
+    why: "이 파일은 더 이상 목을 읽지 않는다. scripts/check-deps.mjs 의 MOCK_DEBT 에서 지울 것 — 목록이 곧 P4 진행률이다",
+  });
+}
+
 if (violations.length === 0) {
-  console.log("✓ 의존 방향 위반 0건");
+  const left = MOCK_DEBT.length;
+  console.log(
+    `✓ 의존 방향 위반 0건${left ? ` · 목 부채 ${left}개 남음 (P4 DoD: 0)` : " · 목 부채 0 — P4 DoD 달성"}`
+  );
   process.exit(0);
 }
 
