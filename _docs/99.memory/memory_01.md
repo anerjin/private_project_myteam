@@ -790,3 +790,83 @@ Next.js 16 번들 문서(`node_modules/next/dist/docs`)를 직접 열어 확인�
   **`shiki`**(마크다운 코드 하이라이트 없음)는 지금 화면에 영향이 있다
 - **일정 12.5주는 낙관적이다.** M1에 자체 세션이 얹혔고 M3는 API 8종+MCP 패키지+Skill 을 2주에 담고 있다.
   `DEV-07 · 7.10` 위험표에 적어 두었다
+
+---
+
+## [016] 2026-08-28 · 페이즈 진행 방식 확정 + `P0` 저장소 골격 완료
+
+- **지시** — *"개발은 페이즈 단위로 … 아키텍처·시니어·프론트·코드리뷰어가 참여하고, 개발이 끝나면
+  코드리뷰어가 리뷰하고 아키텍처가 최종확인하고 문제 없으면 다음 작업으로. 의사결정은
+  아키텍처와 시니어개발자가 같이 논의해서."*
+
+### 진행 방식 (`DEV-07 · 7.11` 신설)
+
+`P0`~`P9` 로 나누고, 페이즈마다 **개발 → 코드리뷰 → 아키텍처 승인** 주기를 돈다.
+페이즈 완료 판정은 **`npm run verify`** (typecheck · lint · check:deps · build) 통과다.
+
+**`M3`(CLI)를 `M4`(타입·파일) 뒤로 옮겼다** — 아키텍처·시니어 합의.
+`API-100` 은 **모든 타입의 zod** 를 JSON Schema 로 내려주는 것이고 `FR-CLI-008` 은
+아카이브 인프라가 있어야 한다. 타입 1종·파일 없음 상태에서 CLI를 먼저 만들면 두 번 만든다.
+
+### `P0` 산출물
+
+| 파일 | 내용 |
+| --- | --- |
+| `docker/docker-compose.dev.yml` | postgres 16 · redis 7. **named volume** (바인드 마운트는 WSL2 왕복으로 느리다) |
+| `.env.example` · 루트 `.gitignore` | `AUTH_SECRET` 없음(`DEC-030`), `SESSION_COOKIE_NAME`·`SESSION_TTL_DAYS` |
+| `src/lib/env.ts` | zod 환경 변수 검증. **실패하면 기동 시 즉시 종료** (`NFR-MAINT-006`) |
+| `src/lib/disk.ts` | `statfs` 기반 여유 확인 (`NFR-BACKUP-007`) |
+| `src/app/api/health/route.ts` | `API-090`. **P0 범위인 `storage`·`disk` 만** |
+| `scripts/check-deps.mjs` | 의존 방향 검사 + `npm run check:deps` (`NFR-MAINT-002`) |
+| `.github/workflows/ci.yml` | CI 게이트 5단계 |
+| `package.json` · `tsconfig.json` | **`workspaces`** 추가, 경로 별칭 **7개**로 확장 |
+| 루트 `README.md` | 빠른 시작 + 자주 쓰는 명령 |
+
+### 판단 근거로 남길 것
+
+- **`lib/env.ts` 가 죽은 코드가 될 뻔했다.** 만들어 놓고 아무도 import 하지 않으면
+  «검증한다»는 문서만 남고 실제로는 아무것도 안 막는다. 그래서 **`/api/health` 를 P0 범위로
+  당겨** 살아 있게 했다. 페이즈 산출물은 **그 페이즈 안에서 실행되어야 한다.**
+- **헬스체크에 없는 항목을 `"ok"` 로 채우지 않았다.** `db`·`redis` 는 `checks` 가 아니라
+  **`pending` 배열**에 이름만 올렸다. 확인하지 않은 것을 확인한 것처럼 보고하면
+  나중에 «헬스체크는 ok 인데 왜 안 되지»가 된다. → `DEV-01 · 1.11` 에 규칙으로 남김.
+- **포맷 정규화를 별도 커밋으로 뺐다.** `[012]` 의 `.gitattributes` 교훈과 같다 —
+  48파일이 한 번에 바뀌는 변경을 기능과 섞으면 `git blame` 이 끊긴다.
+  **코드 커밋이 3개뿐인 지금이 가장 싼 시점**이었다.
+- **의존 검사 스크립트가 첫 실행에서 오탐 6건을 냈다.** 레지스트리(`content-types/index.ts`)가
+  모든 타입 폴더를 import 하는 것을 «타입 간 결합»으로 잡았다. 규칙은 «타입 폴더**끼리**»여야 해서
+  **타입 폴더 안에 있는 파일만** 검사 대상으로 좁혔다. 검사기를 만들면 먼저 자기 자신을 의심할 것.
+
+### 코드리뷰어 지적 → 수정 (2건)
+
+| 지적 | 수정 |
+| --- | --- |
+| `check-deps.mjs` 가 `URL.pathname` 을 직접 잘라 Windows 드라이브 문자를 처리 — 경로에 공백(`%20`)이 있으면 깨진다 | `fileURLToPath` 로 교체 |
+| `GITHUB_TOKEN` 이 빈 문자열을 그대로 통과 — octokit 에 `auth: ""` 를 넘기면 미인증과 다르게 동작할 수 있다 | `""` → `undefined` 로 접는 transform 추가 |
+
+**오탐으로 확인한 것 2건** (수정 안 함):
+`lib/utils.ts` 에 `server-only` 가 없는 것은 옳다 — `cn()` 은 클라이언트에서 쓴다.
+`COOKIE_SECURE` 의 `.default(false)` 는 미설정·`false`·`true`·`1` 네 경우 모두 boolean 으로 정상 동작함을 직접 실행해 확인했다.
+
+### 아키텍처 최종 확인
+
+- `DEV-06 · 6.1` 트리에 **`project/scripts/`·`.github/`·루트 `.gitignore` 가 빠져 있었다** → 추가.
+  트리가 «계획»인지 «현황»인지 헷갈리지 않게 **«현재 있는 것 / 아직 없는 것»** 을 함께 적었다.
+- `DEV-07 · 7.9` 착수 체크리스트 갱신 — 저장소 항목 8개 중 7개 완료, 브랜치 전략만 남음.
+- **승인.**
+
+### 확인
+
+- `npm run verify` 통과 — typecheck · lint · **의존 위반 0건** · build(43 라우트)
+- `GET /api/health` → `200 {"status":"ok","checks":{"storage":"ok","disk":"ok"},"diskFreeGb":146.4,"pending":["db","redis"]}`
+- 환경 변수 스키마가 잘못된 값을 **실제로 거부**하는지 직접 실행 확인
+  (`APP_URL=not-a-url` · `DATABASE_URL=mysql://x` → 사유와 함께 거부)
+
+### 다음 — `P1` 데이터 계층
+
+**착수 조건: Docker Desktop 기동.** CLI(v29.7.2)는 설치돼 있으나 엔진이 꺼져 있다.
+`E:\queenbee-data\files\{tmp,attachments,archives}` 는 생성해 뒀다 (여유 146.4GB).
+
+`P1` 범위: `prisma/schema.prisma` 전체 + 수동 마이그레이션 SQL(`DEV-02 · 2.5`) ·
+`lib/db.ts` · `lib/redis.ts` · `prisma/seed.ts` · `/api/health` 에 `db`·`redis` 추가.
+**DoD:** `/api/health` 가 네 항목 모두 `ok` 이고 `pending` 이 빈다.

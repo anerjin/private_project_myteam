@@ -1,0 +1,52 @@
+# CI 게이트 (NFR-MAINT-002).
+#
+# DB·Redis 가 필요한 검사는 여기 없습니다. 이 게이트는 «코드가 규약을 지키는가»만 봅니다.
+# 데이터 계층 테스트는 P1 이후 별도 job 으로 붙입니다.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: project
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: project/package-lock.json
+
+      - run: npm ci
+
+      - name: 타입 검사
+        run: npm run typecheck
+
+      - name: 린트
+        run: npm run lint
+
+      - name: 의존 방향 검사 (DEV-06 · 6.9절)
+        run: npm run check:deps
+
+      - name: 포맷 검사
+        run: npm run format:check
+
+      - name: 빌드
+        run: npm run build
+        env:
+          # 빌드 자체는 DB에 붙지 않지만 lib/env.ts 가 기동 시 검증하므로
+          # 형식만 맞는 더미 값을 넣습니다. 실제 접속은 하지 않습니다.
+          APP_URL: http://localhost:3100
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          REDIS_URL: redis://localhost:6379
+          STORAGE_ROOT: /tmp/queenbee-files

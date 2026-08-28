@@ -1,0 +1,13 @@
+# 저장소 루트. 애플리케이션 쪽은 project/.gitignore 가 담당합니다.
+
+# 환경 변수 — .env.example 만 커밋합니다 (NFR-SEC-012)
+.env
+.env.*
+!.env.example
+
+# 데이터는 저장소 밖(E:\queenbee-data)에 두지만, 실수로 안에 만든 경우를 막습니다
+queenbee-data/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,53 @@
+# QueenBee — 1단계(개발 PC) 컨테이너 구성 (DEC-013)
+#
+# 컨테이너는 둘뿐입니다. web·worker 는 호스트에서 `npm run dev` 로 돌리고
+# (Windows 에서 컨테이너 안 파일 감시가 불안정합니다 — DEV-01 · 1.9절),
+# 파일 저장소는 컨테이너 없이 로컬 폴더를 씁니다 (MinIO 미사용 — DEC-019).
+#
+#   docker compose -f docker/docker-compose.dev.yml up -d
+#   docker compose -f docker/docker-compose.dev.yml down
+
+name: queenbee-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: queenbee-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-queenbee}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-queenbee}
+      POSTGRES_DB: ${POSTGRES_DB:-queenbee}
+      # 한국어 정렬·비교를 위해 초기화 옵션을 명시한다. 나중에 바꾸려면 재초기화가 필요하다.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      # named volume 을 쓴다. 프로젝트 폴더에 바인드 마운트하면
+      # WSL2 ↔ Windows 파일시스템 왕복으로 눈에 띄게 느려진다 (DEV-01 · 1.9절 주의사항).
+      - queenbee-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-queenbee} -d ${POSTGRES_DB:-queenbee}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: queenbee-redis
+    restart: unless-stopped
+    # 큐(BullMQ)가 올라가므로 메모리가 차도 키를 임의로 버리면 안 된다.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - queenbee-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  queenbee-pg:
+  queenbee-redis:

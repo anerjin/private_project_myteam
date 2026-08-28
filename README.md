@@ -1,0 +1,55 @@
+# QueenBee
+
+DOI(드론 공간정보) 개발팀이 AI 자료 · GitHub 오픈소스 · MCP 서버 · Skill · 개발 참고 자료를
+한곳에 모아 검색·재사용·보관하는 **사내 전용 정보 시스템**.
+
+> **문서가 먼저입니다.** 코드를 쓰기 전에 [`_docs/README.md`](_docs/README.md) 를 읽으세요.
+> 현재 단계와 다음 할 일이 거기 있습니다.
+
+## 빠른 시작
+
+```powershell
+# 1) 컨테이너 (postgres · redis)
+docker compose -f docker/docker-compose.dev.yml up -d
+
+# 2) 환경 변수
+Copy-Item .env.example project\.env      # 값을 채운 뒤 진행
+
+# 3) 파일 저장 경로 (저장소 밖 — DEC-016)
+New-Item -ItemType Directory -Force E:\queenbee-data\files
+
+# 4) 앱
+cd project
+npm install
+npm run dev            # http://localhost:3100
+```
+
+## 자주 쓰는 명령
+
+| 명령 | 하는 일 |
+| --- | --- |
+| `npm run dev` | 개발 서버 (**포트 3100 고정** — `DEC-028`) |
+| `npm run verify` | typecheck · lint · **check:deps** · build. **페이즈 완료 기준** |
+| `npm run check:deps` | 의존 방향 검사 (`DEV-06 · 6.9절`). 위반 0건이어야 한다 |
+| `npm run db:up` / `db:down` | 컨테이너 기동 / 정지 |
+| `npm run format` | Prettier |
+| `node _docs/_viewer/build.mjs` | 문서 뷰어 갱신 |
+
+## 저장소 구조
+
+```
+doi_dev_team/
+├─ _docs/       문서 — 요구사항 · 설계 · 의사결정 · 작업 기록
+├─ project/     애플리케이션 (Next.js 16 + shadcn/ui)
+├─ docker/      컨테이너 구성 (1단계는 postgres · redis 둘뿐)
+└─ .env.example
+
+E:\queenbee-data\   DB · 파일 데이터 — 저장소 밖. 커밋하지 않는다
+```
+
+## 알아둘 것
+
+- **포트는 3100** 입니다. 이 PC에서 다른 프로젝트가 3000을 씁니다 (`DEC-028`).
+- **Auth.js 를 쓰지 않습니다.** 세션은 자체 구현입니다 (`DEC-030`).
+- **`proxy.ts` 는 낙관적 검사만** 합니다. 인가는 Server Action 진입부에서 합니다 (`DEC-031`).
+- 아이콘은 **lucide-react 만** 씁니다. 이모지는 쓰지 않습니다 (`DEV-04 · 4.5절`).
