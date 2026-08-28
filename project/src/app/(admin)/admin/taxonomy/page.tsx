@@ -14,7 +14,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CATEGORIES } from "@/config/site";
-import { listContentTypes } from "@/features/resources/content-types";
+import * as contentTypeService from "@/server/services/content-type.service";
 import * as resourceService from "@/server/services/resource.service";
 import { requireRole } from "@/server/auth/guards";
 
@@ -38,11 +38,14 @@ export default async function AdminTaxonomyPage() {
    * 메모리에서 집계하게 됩니다 — `tags.usage_count` 가 그 일을 하려고 있는
    * 표시용 캐시이고, 등록·수정이 세어서 씁니다.
    */
-  const [tagCounts, typeCounts, categoryCounts] = await Promise.all([
-    resourceService.topTags(200),
-    resourceService.countByType(),
-    resourceService.countByCategory(),
-  ]);
+  const [tagCounts, typeCounts, categoryCounts, typeSettings] =
+    await Promise.all([
+      resourceService.topTags(200),
+      resourceService.countByType(),
+      resourceService.countByCategory(),
+      // 운영 설정은 DB, 표현은 코드 (DEC-032) — 병합은 service 가 한다
+      contentTypeService.listSettings(),
+    ]);
 
   return (
     <>
@@ -149,7 +152,7 @@ export default async function AdminTaxonomyPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="divide-y">
-              {listContentTypes().map((t) => (
+              {typeSettings.map((t) => (
                 <div
                   key={t.code}
                   className="flex flex-wrap items-center gap-4 py-3"

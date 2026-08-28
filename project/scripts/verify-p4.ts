@@ -16,6 +16,7 @@ import { AppError } from "@/lib/errors";
 import { redis } from "@/lib/redis";
 import type { Actor } from "@/server/auth/actor";
 import { hashPassword } from "@/server/auth/password";
+import * as contentTypeService from "@/server/services/content-type.service";
 import * as resourceService from "@/server/services/resource.service";
 import * as resourceWrite from "@/server/services/resource.write";
 
@@ -313,6 +314,56 @@ async function run() {
 
     const gone = await msg(() => resourceService.getBySlug(row!.slug));
     check("상세도 못 연다", gone.includes("찾을 수 없습니다"), gone);
+  }
+
+  console.log(
+    "\n★ DEC-032 병합 — 관리자가 타입 노출을 끄면 사이드바에서 사라진다 (P4 DoD)"
+  );
+  {
+    const before = await contentTypeService.navTypes();
+    check(
+      "기본값은 레지스트리를 따른다 (행이 없어도 보인다)",
+      before.some((t) => t.code === "AI_MATERIAL"),
+      `${before.length}종`
+    );
+
+    // 운영자가 껐다고 가정 — DB 행을 만든다
+    await db.contentTypeSetting.upsert({
+      where: { type: "AI_MATERIAL" },
+      create: { type: "AI_MATERIAL", showInNav: false },
+      update: { showInNav: false },
+    });
+    const hidden = await contentTypeService.navTypes();
+    check(
+      "showInNav 를 끄면 사이드바에서 빠진다",
+      !hidden.some((t) => t.code === "AI_MATERIAL"),
+      `${hidden.length}종`
+    );
+
+    // **비활성이면 showInNav 와 무관하게 빠져야 한다**
+    await db.contentTypeSetting.update({
+      where: { type: "AI_MATERIAL" },
+      data: { showInNav: true, isActive: false },
+    });
+    const inactive = await contentTypeService.navTypes();
+    check(
+      "isActive 가 꺼지면 showInNav 가 켜져 있어도 빠진다",
+      !inactive.some((t) => t.code === "AI_MATERIAL")
+    );
+
+    // 관리 화면은 꺼진 것도 보여야 한다 — 다시 켜려면 보여야 하니까
+    const all = await contentTypeService.listSettings();
+    check(
+      "관리 화면 목록에는 꺼진 타입도 남는다",
+      all.some((t) => t.code === "AI_MATERIAL" && !t.isActive)
+    );
+
+    await db.contentTypeSetting.delete({ where: { type: "AI_MATERIAL" } });
+    const restored = await contentTypeService.navTypes();
+    check(
+      "행을 지우면 레지스트리 기본값으로 돌아온다",
+      restored.some((t) => t.code === "AI_MATERIAL")
+    );
   }
 
   // ── 정리 ────────────────────────────────────────────

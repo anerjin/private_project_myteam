@@ -8,7 +8,7 @@ import {
   serviceHomeGroup,
   serviceLibraryGroup,
 } from "@/config/navigation";
-import { buildResourceNavGroup } from "@/features/resources/nav";
+import { buildResourceNavGroup, type NavType } from "@/features/resources/nav";
 
 /**
  * 메뉴를 조립해 표현 컴포넌트(`components/layout/app-sidebar`)에 넘긴다.
@@ -25,14 +25,17 @@ export function ServiceSidebar({
   user,
   isAdmin,
   pendingCount,
+  navTypes,
 }: {
   user: NavUserData;
   isAdmin: boolean;
   pendingCount: number;
+  /** 노출 여부·순서는 서버가 판정해서 넘긴다 (`DEC-032`) */
+  navTypes: NavType[];
 }) {
   const groups = [
     serviceHomeGroup,
-    buildResourceNavGroup(),
+    buildResourceNavGroup(navTypes),
     serviceLibraryGroup,
   ];
 

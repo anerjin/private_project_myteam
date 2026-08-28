@@ -289,13 +289,16 @@ for await (const file of walk(SRC)) {
       rel.startsWith(ctPrefix) && rel.slice(ctPrefix.length).includes("/");
     if (insideTypeFolder && spec.includes("/content-types/")) {
       const fromType = rel.slice(ctPrefix.length).split("/")[0];
-      const toType = spec.split("/content-types/")[1]?.split("/")[0];
-      if (
-        toType &&
-        fromType !== toType &&
-        toType !== "index" &&
-        toType !== "types"
-      ) {
+      const after = spec.split("/content-types/")[1] ?? "";
+      const toType = after.split("/")[0];
+      /*
+       * **`content-types/` «루트»의 파일은 공용 모듈입니다** — `types.ts`·`index.ts`·
+       * `operational.ts`·`schemas.ts`. 이름을 하나씩 예외 목록에 넣으면 새 공용
+       * 모듈을 만들 때마다 이 검사기를 고치게 되고, 그러면 규칙이 두 곳에 생깁니다.
+       * **폴더 안인지 루트인지**로 판정합니다 — 뒤에 `/` 가 있으면 타입 폴더입니다.
+       */
+      const toIsSharedRoot = !after.includes("/");
+      if (toType && fromType !== toType && !toIsSharedRoot) {
         violations.push({
           file: rel,
           spec,

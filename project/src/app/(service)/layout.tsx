@@ -9,6 +9,7 @@ import { ServiceSidebar } from "@/app/_shell/sidebar";
 import { toSearchItems } from "@/features/resources/search-items";
 import * as memberService from "@/server/services/member.service";
 import * as notify from "@/server/services/notification.service";
+import * as contentTypeService from "@/server/services/content-type.service";
 import * as resourceService from "@/server/services/resource.service";
 
 export default async function ServiceLayout({ children }: LayoutProps<"/">) {
@@ -38,6 +39,9 @@ export default async function ServiceLayout({ children }: LayoutProps<"/">) {
   );
   const recentResources = recent.items;
 
+  // 사이드바 타입 메뉴는 `content_type_settings` 를 반영한다 (DEC-032·FR-ADM-014)
+  const navTypes = await contentTypeService.navTypes();
+
   const rows = await notify.listFor(session.userId, 20);
   const notifications = rows.map((n) => ({
     id: n.id,
@@ -57,6 +61,7 @@ export default async function ServiceLayout({ children }: LayoutProps<"/">) {
         }}
         isAdmin={session.role === "ADMIN"}
         pendingCount={pendingCount}
+        navTypes={navTypes}
       />
       <SidebarInset>
         <SiteHeader
