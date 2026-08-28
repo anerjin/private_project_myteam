@@ -10,7 +10,7 @@ import {
 import { db } from "@/lib/db";
 
 /**
- * 자료 조회 (FR-RES-004~006).
+ * 자료 조회 (`FR-RES-001` 목록 · `FR-RES-003` 상세).
  *
  * **Prisma 질의만 둡니다.** 「볼 수 있는가」·「고칠 수 있는가」는 service 의 일입니다
  * (`DEV-06 · 6.6`).
@@ -68,7 +68,7 @@ export type ResourceCardRow = Prisma.ResourceGetPayload<{
  */
 function toWhere(
   f: Partial<ListQuery>,
-  /** 관리 화면은 휴지통을 봐야 한다 (`FR-RES-012`) */
+  /** 관리 화면은 휴지통을 봐야 한다. 되살리기는 아직 없다 — `P8` */
   scope: "live" | "trash" = "live"
 ): Prisma.ResourceWhereInput {
   return {
@@ -274,7 +274,7 @@ export function findById(id: string) {
   });
 }
 
-/** URL 중복 확인 (FR-RES-002) — 정규화된 값으로 본다 */
+/** URL 중복 확인 (`FR-RES-011`) — 정규화된 값으로 본다 */
 export function findByUrl(urlNormalized: string) {
   return db.resource.findFirst({
     where: { urlNormalized, deletedAt: null },

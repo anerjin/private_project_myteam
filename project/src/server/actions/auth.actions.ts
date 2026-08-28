@@ -85,7 +85,7 @@ function safeNext(next: string | undefined): string {
   }
 }
 
-/** API-004 로그인 */
+/** API-004 로그인 (`FR-AUTH-006`) — 시도 제한은 `FR-AUTH-012` */
 export async function signInAction(
   input: unknown,
   next?: string
@@ -152,7 +152,7 @@ async function limitAnonymous(bucket: string): Promise<void> {
   }
 }
 
-/** API-002 회원가입 신청 */
+/** API-002 회원가입 신청 (`FR-AUTH-001`) */
 export async function signUpAction(
   input: unknown
 ): Promise<ActionResult<{ id: string }>> {

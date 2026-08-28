@@ -11,7 +11,7 @@ import {
 } from "@/server/actions/resource.actions";
 
 /**
- * 자료 상세의 동작 묶음 (FR-RES-007, FR-RES-009).
+ * 자료 상세의 동작 묶음 (`FR-COLL-001` 북마크 · `FR-RES-014` 조회수).
  *
  * ## 조회수를 **렌더 중에 세지 않습니다**
  *

@@ -79,7 +79,7 @@ export async function reset(key: string): Promise<void> {
   }
 }
 
-/** REQ-02 · 2.6절 로그인 시도 제한 */
+/** REQ-02 · 2.6절 로그인 시도 제한 (`FR-AUTH-012`) — 계정과 IP 를 따로 센다 */
 export const loginLimits = {
   account: (username: string) => ({
     key: `rl:login:${username}`,

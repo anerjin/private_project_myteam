@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 
 /**
- * 마크다운 렌더러.
+ * 마크다운 렌더러 (`FR-RES-015`) — 자료 본문을 마크다운으로 쓰고 렌더한다.
  *
  * **sanitize 는 필수입니다** (`NFR-SEC-007`). 자료 본문은 사용자·에이전트가 쓴 값이라
  * 그대로 렌더하면 XSS 가 됩니다. `dangerouslySetInnerHTML` 을 쓰지 않고

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 자료 목록의 **URL 상태** (FR-RES-004~006, `DEC-045`).
+ * 자료 목록의 **URL 상태** (`FR-RES-001`, `FR-SRCH-003`~`005`, `DEC-045`).
  *
  * ## 목록 상태의 정본은 `searchParams` 입니다
  *
@@ -156,8 +156,9 @@ export type ListQuery = z.infer<typeof listQuerySchema>;
 export const pageSchema = z.coerce.number().int().min(1).default(1).catch(1);
 
 /**
- * 리포지토리가 받는 «페이지 지정». **탐색과 관리가 같은 함수 모양을 씁니다** —
- * UI 만 공유하면 절반이고, 데이터 계층에서도 얹혀야 「한 번 만들어 얹는다」가 됩니다.
+ * 리포지토리가 받는 «페이지 지정» (`FR-SRCH-005`). **탐색과 관리가 같은 함수
+ * 모양을 씁니다** — UI 만 공유하면 절반이고, 데이터 계층에서도 얹혀야
+ * 「한 번 만들어 얹는다」가 됩니다.
  */
 export type PageSpec =
   | { kind: "cursor"; after?: string; size: number }

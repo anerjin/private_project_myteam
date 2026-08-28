@@ -37,7 +37,7 @@ import {
 import type { CategoryChoice, Resource } from "@/types";
 
 /**
- * 자료 목록 (SCR-111, FR-RES-004~006).
+ * 자료 목록 (SCR-111, `FR-RES-001` · `FR-RES-002` 뷰 전환 · `FR-SRCH-003`~`005`).
  *
  * ## 상태의 정본은 **URL** 입니다 (`DEC-045`)
  *

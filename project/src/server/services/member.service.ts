@@ -65,6 +65,7 @@ interface TransitionSpec {
   next?: UserStatus;
   action: audit.AuditAction;
   label: string;
+  /** 처리 결과를 신청자의 알림함에 남긴다 (`FR-NOTI-002`) */
   notifyUser?: (name: string) => { title: string; body?: string };
 }
 

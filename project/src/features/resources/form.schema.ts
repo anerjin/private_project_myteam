@@ -5,7 +5,7 @@ import { RESOURCE_TYPES } from "@/features/resources/list.schema";
 import type { ResourceType } from "@/types";
 
 /**
- * 자료 등록·수정 입력 (FR-RES-004~006).
+ * 자료 등록·수정 입력 (`FR-RES-004` 등록 · `FR-RES-005` URL 빠른 등록 · `FR-RES-006` 수정).
  *
  * **공통 뼈대는 여기, 타입 전용은 타입 폴더** (`content-types/<type>/schema.ts`).
  * 이 파일이 둘을 합칩니다 — 합치는 곳이 하나여야 웹과 Ingest(`P7`)가 같은 규칙을 씁니다.

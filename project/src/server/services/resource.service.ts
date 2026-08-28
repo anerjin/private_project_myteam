@@ -15,7 +15,7 @@ import { toResource } from "@/server/services/resource.mapper";
 import type { Resource } from "@/types";
 
 /**
- * 자료 (FR-RES-001~010).
+ * 자료 조회·북마크·조회수·삭제 (`FR-RES-001`·`003`·`007`·`014`, `FR-COLL-001`·`002`).
  *
  * **웹과 Ingest(`P7`)가 같은 함수를 지납니다** (`NFR-SEC-018`).
  * 그래서 요청 컨텍스트를 쓰지 않고 `Actor` 를 파라미터로 받습니다.
@@ -42,7 +42,7 @@ export async function list(
   query: Partial<ListQuery>,
   page: PageSpec = { kind: "cursor", size: PAGE_SIZE },
   viewerId?: string,
-  /** 관리 화면의 휴지통 탭 (`FR-RES-012`) */
+  /** 관리 화면의 휴지통 탭. 되살리기 자체는 아직 없다 — `P8` */
   scope: "live" | "trash" = "live"
 ): Promise<ListPage> {
   const result = await resourceRepo.list(query, page, scope);
@@ -91,7 +91,7 @@ export async function listAuthors(): Promise<
 }
 
 /**
- * 관련 자료 — 태그가 겹치는 것 (FR-RES-013).
+ * 관련 자료 — 태그가 겹치는 것. 상세 화면의 일부다 (`FR-RES-003`).
  *
  * **자료를 전부 읽어 교집합을 세지 않습니다.** `resource_tags` 를 타고 들어가
  * DB 가 좁히게 합니다 — 1만 건에서 앞의 방식은 성립하지 않습니다.
@@ -228,7 +228,7 @@ export async function getBySlug(
 const VIEW_DEDUPE_TTL_SEC = 6 * 60 * 60;
 
 /**
- * 조회수 (`FR-RES-007`) — **동일 사용자 중복 제외** (`FR-RES-014`).
+ * 조회수 — 상세 진입 시 세고 **동일 사용자는 중복 제외**한다 (`FR-RES-014`).
  *
  * **상세 렌더 안에서 세지 않습니다.** 서버 컴포넌트는 프리페치·재검증으로
  * 여러 번 실행될 수 있어 숫자가 부풀고, 렌더 중 쓰기는 캐시와도 싸웁니다.
@@ -416,7 +416,7 @@ export async function listBookmarked(
   };
 }
 
-/** 소프트 삭제 (FR-RES-010). 30일 뒤 워커가 실제로 지운다 (P6) */
+/** 소프트 삭제 (`FR-RES-007`). 30일 뒤 워커가 실제로 지운다 (P6) */
 export async function remove(actor: Actor, id: string): Promise<void> {
   await db.$transaction(async (tx) => {
     const target = await tx.resource.findFirst({

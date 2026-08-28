@@ -97,7 +97,7 @@ export async function checkDuplicateAction(
   });
 }
 
-/** API-034 북마크 토글 (FR-RES-009) */
+/** API-034 북마크 토글 (`FR-COLL-001`) */
 export async function toggleBookmarkAction(
   resourceId: unknown
 ): Promise<ActionResult<resourceService.BookmarkResult>> {
@@ -114,7 +114,7 @@ export async function toggleBookmarkAction(
 }
 
 /**
- * 조회수 (FR-RES-007).
+ * 조회수 (`FR-RES-014`).
  *
  * **인가가 «있지만 느슨합니다»** — 로그인한 사람이면 됩니다.
  * 자료는 로그인만 하면 누구나 볼 수 있으므로(`DEC-018`) 그 이상 좁힐 근거가 없고,
@@ -138,7 +138,7 @@ export async function countViewAction(
   });
 }
 
-/** API-033 자료 삭제 — 소프트 삭제 (FR-RES-010) */
+/** API-033 자료 삭제 — 소프트 삭제 (`FR-RES-007`) */
 export async function deleteResourceAction(
   resourceId: unknown
 ): Promise<ActionResult<void>> {
