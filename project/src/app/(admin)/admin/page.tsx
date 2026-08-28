@@ -22,8 +22,10 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { TrendChart } from "@/features/dashboard/components/trend-chart";
+// 회원 수는 실데이터, 작업·디스크·자료는 아직 목이다 — P4·P5 에서 걷어낸다
 import { auditLogs, jobs, stats } from "@/mocks";
 import { requireRole } from "@/server/auth/guards";
+import * as memberService from "@/server/services/member.service";
 
 export const metadata: Metadata = { title: "관리자" };
 
@@ -31,6 +33,12 @@ export const metadata: Metadata = { title: "관리자" };
 export default async function AdminDashboardPage() {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
   await requireRole("ADMIN");
+
+  // 배지와 같은 출처를 본다 (DEC-038) — 두 곳에서 다른 숫자가 나오면 안 된다
+  const [pendingMembers, totalMembers] = await Promise.all([
+    memberService.countPending(),
+    memberService.countAll(),
+  ]);
 
   const archivePct = Math.round(
     (stats.archiveUsedGb / stats.archiveLimitGb) * 100
@@ -46,7 +54,7 @@ export default async function AdminDashboardPage() {
       <div className="grid gap-3 lg:grid-cols-2">
         <Alert>
           <UserPlus />
-          <AlertTitle>승인 대기 {stats.pendingMembers}건</AlertTitle>
+          <AlertTitle>승인 대기 {pendingMembers}건</AlertTitle>
           <AlertDescription className="flex items-center gap-3">
             영업일 1일 안에 처리하는 것을 목표로 합니다.
             <Button size="sm" variant="outline" asChild>
@@ -72,13 +80,13 @@ export default async function AdminDashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="전체 회원"
-          value={stats.totalMembers}
+          value={totalMembers}
           unit="명"
           icon={Users}
         />
         <StatCard
           label="승인 대기"
-          value={stats.pendingMembers}
+          value={pendingMembers}
           unit="명"
           icon={UserPlus}
         />

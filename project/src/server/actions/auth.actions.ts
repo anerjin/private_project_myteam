@@ -19,8 +19,13 @@ import {
   writeSessionCookie,
 } from "@/server/auth/cookie";
 import { AppError } from "@/lib/errors";
-import { getSession, toActor } from "@/server/auth/guards";
-import { destroy, sessionTtlMs } from "@/server/auth/session";
+import {
+  getSession,
+  requireActor,
+  requirePendingUser,
+  toActor,
+} from "@/server/auth/guards";
+import { destroy, destroyById, sessionTtlMs } from "@/server/auth/session";
 import * as userRepo from "@/server/repositories/user.repository";
 import * as audit from "@/server/services/audit.service";
 import * as authService from "@/server/services/auth.service";
@@ -31,9 +36,14 @@ import * as authService from "@/server/services/auth.service";
  * **Auth.js 를 쓰지 않으므로 `/api/auth/[...nextauth]` 가 없습니다** (`DEC-030`).
  * 로그인·로그아웃도 다른 폼과 같은 Server Action 입니다.
  *
- * 모든 액션은 `DEV-05 · 5.10` 의 6단계를 지킵니다 —
- * **인가 → 검증 → 소유권 → service → 감사 → 캐시 무효화.**
+ * 모든 액션은 `DEV-05 · 5.10` 의 **5단계**를 지킵니다 —
+ * **인가 → 검증 → 소유권 → service → 캐시 무효화.**
+ * **감사 로그는 service 가 남깁니다** (`DEC-038`) — 액션에 두면 웹 외 경로(API 키·CLI)가
+ * 기록 없이 같은 일을 하게 됩니다. 전에 여기 적혀 있던 「6단계」는 `DEC-038` 이 폐기한
+ * 옛 규칙이고, `member.actions.ts` 는 5단계로 적혀 있어 **두 파일이 서로 달랐습니다.**
+ *
  * 액션 진입부가 유일한 방어선입니다 (`DEC-031`): `proxy` 는 Server Action 을 건너뜁니다.
+ * 그래서 `"use server"` 는 이 폴더 안에서만 씁니다 (`DEC-046`, `check-deps` 가 강제).
  */
 
 async function requestMeta() {
@@ -96,10 +106,14 @@ export async function signInAction(
 
     await writeSessionCookie(result.token, parsed.data.remember, sessionTtlMs);
 
+    // 목적지는 **서버가** 정한다. 클라이언트가 정하면 `mustChangePassword`·`PENDING`
+    // 같은 조건을 화면마다 다시 구현하게 된다.
     return ok({
-      redirectTo: result.mustChangePassword
-        ? "/change-password"
-        : safeNext(next),
+      redirectTo: result.isPending
+        ? "/pending"
+        : result.mustChangePassword
+          ? "/change-password"
+          : safeNext(next),
     });
   });
 }
@@ -174,6 +188,38 @@ export async function checkUsernameAction(
   });
 }
 
+/** API-007 활성 세션 개별 종료 (FR-USER-006) */
+export async function revokeSessionAction(
+  sessionId: unknown
+): Promise<ActionResult<void>> {
+  return guard(async () => {
+    const actor = await requireActor();
+    if (typeof sessionId !== "string" || sessionId.length === 0) {
+      throw new AppError("VALIDATION_ERROR", "세션을 지정해 주세요.");
+    }
+    // `destroyById` 가 소유자를 확인한다 — 남의 세션은 못 지운다
+    await destroyById(sessionId, actor.id);
+    revalidatePath("/me");
+    return ok(undefined);
+  });
+}
+
+/**
+ * 승인 대기 화면의 상태 새로고침 (`REQ-02 · 2.4`).
+ *
+ * **페이지 안의 인라인 액션이 아니라 여기 있습니다** (`DEC-046`).
+ * `check-page-guards` 는 page 함수만 보므로 페이지에 숨은 액션의 가드를
+ * 원리적으로 확인할 수 없습니다 — 실제로 이 액션이 인가 검사 없이 통과했습니다.
+ *
+ * 알림을 메일로 보내지 않으므로(`DEC-015`) 결과는 직접 확인해야 합니다.
+ * 캐시를 비우고 다시 그리면 `requirePendingUser` 가 승인된 사용자를
+ * `/dashboard` 로 보냅니다 — 별도 분기가 필요 없습니다.
+ */
+export async function refreshPendingAction(): Promise<void> {
+  await requirePendingUser();
+  revalidatePath("/pending");
+}
+
 /** API-006 비밀번호 변경 */
 export async function changePasswordAction(
   input: unknown
@@ -183,8 +229,13 @@ export async function changePasswordAction(
      * 1) 인가 — 가장 먼저.
      *
      * **`requireActor()` 가 아니라 `getSession()` 을 씁니다.** `requireActor` 는
-     * `mustChangePassword` 를 막는데(M2 대응), 이 액션은 바로 그 상태를 푸는 액션이라
-     * 유일한 예외입니다.
+     * `mustChangePassword` 를 막는데, 이 액션은 바로 그 상태를 푸는 액션입니다.
+     *
+     * **`PENDING` 도 이 문으로 들어옵니다** (`DEC-040` 이후). 의도한 것입니다 —
+     * 관리자가 승인 대기자의 비밀번호를 초기화하면 그 사람은 바꿀 수 있어야 하고,
+     * 본인 자격 증명을 본인이 바꾸는 일이라 승인 여부와 무관합니다.
+     * (전에 이 주석은 `mustChangePassword` 만 예외로 적어 두었습니다.
+     *  **주석이 코드보다 좁게 말하면 다음 사람이 코드를 좁힙니다.**)
      */
     const session = await getSession();
     if (!session) {

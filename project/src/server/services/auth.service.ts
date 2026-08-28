@@ -30,24 +30,53 @@ export interface SignInResult {
   token: string;
   expires: Date;
   mustChangePassword: boolean;
+  /** 승인 대기 중이면 `/pending` 으로 보낸다 (DEC-040) */
+  isPending: boolean;
 }
 
-/** 상태별 안내 — 인증 성공 후에 판정한다 (REQ-02 · 2.6절) */
-const BLOCKED_MESSAGE: Partial<Record<UserStatus, string>> = {
-  PENDING: "아직 승인 대기 중입니다. 관리자 승인 후 이용할 수 있습니다.",
-  REJECTED: "가입이 거부된 계정입니다. 관리자에게 문의해 주세요.",
-  SUSPENDED: "이용이 정지된 계정입니다. 관리자에게 문의해 주세요.",
-  WITHDRAWN: "탈퇴한 계정입니다.",
-};
+/**
+ * 로그인 자체를 막는 상태 (`DEC-040`).
+ *
+ * **`PENDING` 은 여기 없습니다.** 승인 대기자는 로그인해서 `/pending` 안내 화면을
+ * 봐야 하고, 그 화면은 신청일시·아이디를 보여줘야 합니다 (`FR-AUTH-007`).
+ * 세션 없이는 채울 수 없는 값들입니다.
+ */
+const BLOCKED_STATUSES = new Set<UserStatus>([
+  "REJECTED",
+  "SUSPENDED",
+  "WITHDRAWN",
+]);
 
-const BLOCKED_CODE: Partial<
-  Record<UserStatus, "ACCOUNT_PENDING" | "ACCOUNT_BLOCKED">
-> = {
-  PENDING: "ACCOUNT_PENDING",
-  REJECTED: "ACCOUNT_BLOCKED",
-  SUSPENDED: "ACCOUNT_BLOCKED",
-  WITHDRAWN: "ACCOUNT_BLOCKED",
-};
+/**
+ * 차단 안내 문구 — **여기가 사유 전달의 정본입니다** (`DEC-041`, `FR-AUTH-007`).
+ *
+ * 거부·정지된 사람은 로그인 자체가 막혀(`DEC-040`) **알림함에 도달할 수 없습니다.**
+ * 알림 행을 만들어 봐야 아무도 읽지 못하므로, `FR-ADM-004` 의 「사유가 신청자에게
+ * 그대로 전달된다」를 지킬 수 있는 곳은 이 화면뿐입니다.
+ *
+ * - `REJECTED` — **거부 사유를 그대로 싣습니다.**
+ * - `SUSPENDED` — 문의 안내만. 규격이 사유를 요구하지 않고, 정지는 조사 중일 수 있습니다.
+ * - `WITHDRAWN` — **「존재하지 않는 계정」.** 「탈퇴한 계정입니다」는 *이 아이디가 있었다*를
+ *   알려 주는 계정 열거입니다. 실패 메시지를 통일하고(`REQ-02 · 2.6`) 타이밍까지
+ *   평준화해 놓고 여기서 흘리면 그 모든 것이 무의미해집니다 (`NFR-SEC-016`).
+ *
+ * 사유는 **비밀번호 검증을 통과한 뒤에만** 보입니다 — 자격 증명을 가진 본인에게만
+ * 도달하므로 계정 열거에 쓰이지 않습니다.
+ */
+function blockedMessage(status: UserStatus, reason: string | null): string {
+  switch (status) {
+    case "REJECTED":
+      return reason
+        ? `가입이 거부되었습니다. 사유: ${reason}`
+        : "가입이 거부되었습니다. 관리자에게 문의해 주세요.";
+    case "SUSPENDED":
+      return "이용이 정지된 계정입니다. 관리자에게 문의해 주세요.";
+    case "WITHDRAWN":
+      return "존재하지 않는 계정입니다.";
+    default:
+      return "이용할 수 없는 계정입니다.";
+  }
+}
 
 export async function signIn(
   username: string,
@@ -103,8 +132,9 @@ export async function signIn(
     );
   }
 
-  // 상태 차단은 **인증 성공 후**에 판정한다 — 그래야 상태별 안내를 줄 수 있다
-  if (user.status !== "ACTIVE") {
+  // 상태 차단은 **인증 성공 후**에 판정한다 — 그래야 상태별 안내를 줄 수 있다.
+  // `PENDING` 은 차단하지 않는다 — 세션을 발급하고 `/pending` 으로 보낸다 (DEC-040).
+  if (BLOCKED_STATUSES.has(user.status)) {
     // **비밀번호는 맞았다.** 정지된 계정에 올바른 자격 증명으로 들어오려는 시도는
     // 「퇴사자 자격 증명이 유출됐다」의 신호라 반드시 남긴다 (FR-AUDIT-001).
     await audit.log(
@@ -123,8 +153,8 @@ export async function signIn(
       }
     );
     throw new AppError(
-      BLOCKED_CODE[user.status] ?? "ACCOUNT_BLOCKED",
-      BLOCKED_MESSAGE[user.status] ?? "이용할 수 없는 계정입니다."
+      "ACCOUNT_BLOCKED",
+      blockedMessage(user.status, user.statusReason)
     );
   }
 
@@ -155,7 +185,12 @@ export async function signIn(
     { action: "USER_SIGNIN", summary: `로그인 — ${user.username}` }
   );
 
-  return { token, expires, mustChangePassword: user.mustChangePassword };
+  return {
+    token,
+    expires,
+    mustChangePassword: user.mustChangePassword,
+    isPending: user.status === "PENDING",
+  };
 }
 
 export async function signUp(input: {

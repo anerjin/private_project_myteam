@@ -7,6 +7,8 @@ import { requireRole } from "@/server/auth/guards";
 import { adminBreadcrumbLabels } from "@/app/_shell/breadcrumb-labels";
 import { AdminSidebar } from "@/app/_shell/sidebar";
 import { toSearchItems } from "@/features/resources/search-items";
+import * as memberService from "@/server/services/member.service";
+// 자료·알림은 아직 목이다 — P4 에서 `src/mocks/` 를 지운다 (DEV-07 · 7.4)
 import { notifications, resources, stats } from "@/mocks";
 
 export default async function AdminLayout({ children }: LayoutProps<"/">) {
@@ -23,6 +25,8 @@ export default async function AdminLayout({ children }: LayoutProps<"/">) {
    * 리다이렉트는 부수 효과일 뿐 이것에 기대지 않습니다.
    */
   const session = await requireRole("ADMIN");
+  // 배지는 실데이터다 (DEC-038) — 승인하면 숫자가 바뀌어야 한다
+  const pendingMembers = await memberService.countPending();
 
   return (
     <SidebarProvider>
@@ -34,7 +38,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/">) {
           roleLabel: ROLE_LABEL[session.role],
         }}
         badges={{
-          "/admin/members": stats.pendingMembers,
+          "/admin/members": pendingMembers,
           "/admin/jobs": stats.failedJobs,
         }}
       />

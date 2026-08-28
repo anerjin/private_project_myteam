@@ -1,14 +1,26 @@
 import { Clock, RefreshCw } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { SignOutButton } from "@/features/auth/components/sign-out-button";
+import { refreshPendingAction } from "@/server/actions/auth.actions";
+import { requirePendingUser } from "@/server/auth/guards";
+import { getProfile } from "@/server/services/user.service";
 
 export const metadata: Metadata = { title: "승인 대기" };
 
 /** SCR-003 승인 대기 */
-export default function PendingPage() {
+export default async function PendingPage() {
+  // `PENDING` 은 유효한 세션이다 (DEC-040). 승인되면 여기서 /dashboard 로 나간다.
+  const session = await requirePendingUser();
+  const profile = await getProfile(session.userId);
+
+  const appliedAt = profile.createdAt.toLocaleString("ko-KR", {
+    dateStyle: "long",
+    timeStyle: "short",
+  });
+
   return (
     <Card className="mx-auto w-full max-w-md">
       <CardContent className="flex flex-col items-center gap-5 p-8 text-center">
@@ -21,29 +33,27 @@ export default function PendingPage() {
             관리자 승인을 기다리고 있습니다
           </h1>
           <p className="text-muted-foreground text-sm">
-            승인되면 이 화면에서 바로 이용할 수 있습니다.
-            <br />
-            아래 버튼으로 상태를 확인하세요.
+            메일로 알려드리지 않습니다. 아래 버튼으로 직접 확인해 주세요.
           </p>
         </div>
 
         <dl className="bg-muted/50 grid w-full grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-lg p-4 text-left text-sm">
           <dt className="text-muted-foreground">아이디</dt>
-          <dd className="font-medium">taeyang</dd>
+          <dd className="font-medium">{profile.username}</dd>
           <dt className="text-muted-foreground">신청 일시</dt>
-          <dd>2026. 08. 28. 09:15</dd>
+          <dd>{appliedAt}</dd>
           <dt className="text-muted-foreground">소속</dt>
-          <dd>개발팀</dd>
+          <dd>{profile.department ?? "-"}</dd>
         </dl>
 
         <div className="flex w-full gap-2">
-          <Button className="flex-1">
-            <RefreshCw className="size-4" />
-            상태 새로고침
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/login">로그아웃</Link>
-          </Button>
+          <form action={refreshPendingAction} className="flex-1">
+            <Button type="submit" className="w-full">
+              <RefreshCw className="size-4" />
+              상태 새로고침
+            </Button>
+          </form>
+          <SignOutButton />
         </div>
       </CardContent>
     </Card>

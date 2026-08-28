@@ -16,6 +16,12 @@ export const ERROR_CODES = {
   NOT_FOUND: 404,
   VALIDATION_ERROR: 422,
   DUPLICATE: 409,
+  /**
+   * 대상의 «상태»가 이 동작을 허용하지 않음 (`DEC-039`).
+   * 「PENDING 이 아닌 계정을 승인」·「이미 처리됨」 — **입력은 정확했고 대상이 달라진 것**이라
+   * `VALIDATION_ERROR`(422, `fieldErrors`)에 밀어 넣지 않는다.
+   */
+  INVALID_STATE: 409,
   RATE_LIMITED: 429,
   PAYLOAD_TOO_LARGE: 413,
   UPSTREAM_ERROR: 502,

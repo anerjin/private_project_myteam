@@ -68,7 +68,8 @@ export type ActionResult<T = void> =
 | `FORBIDDEN` | 403 | 역할·소유권 부족 |
 | `NOT_FOUND` | 404 | 대상 없음 |
 | `VALIDATION_ERROR` | 422 | 입력 검증 실패 (`fieldErrors` 포함) |
-| `DUPLICATE` | 409 | 중복 (이메일, URL, owner/repo) |
+| `DUPLICATE` | 409 | 중복 (아이디, URL, owner/repo) |
+| `INVALID_STATE` | 409 | **대상의 상태가 이 동작을 허용하지 않음** (`DEC-039`). 「PENDING 이 아닌 계정을 승인」·「이미 처리됨」 — 입력은 정확했고 **대상이 달라진 것**이라 `VALIDATION_ERROR`(422)에 넣지 않는다 |
 | `RATE_LIMITED` | 429 | 요청 과다 (`Retry-After` 헤더) |
 | `PAYLOAD_TOO_LARGE` | 413 | 업로드 용량 초과 |
 | `UPSTREAM_ERROR` | 502 | 외부 API 실패 (GitHub 등) |
@@ -319,11 +320,16 @@ Cache-Control: private, no-store
 | API-077 | `updateSystemSettingAction` | ADMIN | 시스템 설정 변경 |
 | API-078 | `GET /api/admin/stats` | ADMIN | 대시보드 통계 (Redis 캐시 5분) |
 
-**API-061/062/063/065 공통 규칙**
+**API-061/062/063/064/065 공통 규칙** (`DEC-036`)
 
-- 처리 전 **마지막 관리자 보호** 검사 (`FR-ADM-009`) → 위반 시 `LAST_ADMIN`
-- 처리 후 감사 로그 기록 + 알림 생성
-- 정지·역할 변경 시 `user:sessions:{userId}` 의 세션을 전부 삭제
+- 이 액션들은 **하나의 전이 함수**(`member.service`)를 부릅니다. `users.status`·`users.role` 을
+  쓰는 곳은 그 함수뿐입니다 — 상태 변경과 세션 무효화가 갈라지지 않게 하기 위해서입니다.
+- 전이 함수는 트랜잭션을 열고 **`pg_advisory_xact_lock`** 을 잡은 뒤 **트랜잭션 안에서**
+  마지막 관리자를 재판정합니다 → 위반 시 `LAST_ADMIN`. **판정 시점과 반영 시점이 갈라지면
+  두 관리자가 동시에 서로를 강등해 관리자가 0명이 됩니다.**
+- 세션 «행» 삭제는 **같은 트랜잭션**, 캐시 무효화(세대 INCR)는 **커밋 후** (`DEC-035`).
+- 감사 로그·알림은 **service 가** 남깁니다 (`DEC-038`).
+- **일괄 처리는 부분 성공**입니다 (`DEC-039`) — 건별 트랜잭션, `ActionResult<BulkResult>`.
 
 ---
 
@@ -348,24 +354,34 @@ export async function updateResourceAction(
   input: UpdateResourceInput
 ): Promise<ActionResult<{ id: string }>> {
   // 1) 인증 · 인가 — 가장 먼저
-  const actor = await requireActiveUser();               // 미인증/비활성이면 throw
+  const actor = await requireActor();                    // 미인증/비활성이면 throw
   // 2) 입력 검증 — 클라이언트 검증을 신뢰하지 않는다
   const parsed = updateResourceSchema.safeParse(input);
   if (!parsed.success) return validationError(parsed.error);
   // 3) 소유권 · 역할 검사
   await assertCanEditResource(actor, parsed.data.id);
-  // 4) 비즈니스 로직은 service 로 위임
+  // 4) 비즈니스 로직은 service 로 위임 — **감사 로그·알림도 service 가 한다**
   const result = await resourceService.update(parsed.data, actor);
-  // 5) 감사 로그
-  await auditService.log(actor, 'RESOURCE_UPDATE', result.id, result.diff);
-  // 6) 캐시 무효화
+  // 5) 캐시 무효화
   revalidatePath(`/resources/${result.type}/${result.slug}`);
   revalidatePath('/resources');
   return { ok: true, data: { id: result.id } };
 }
 ```
 
-이 6단계 순서를 모든 액션에서 지킵니다. 코드 리뷰 시 확인 항목입니다.
+이 **5단계** 순서를 모든 액션에서 지킵니다. 코드 리뷰 시 확인 항목입니다.
+
+> **감사 로그·알림이 액션에 없는 이유** (`DEC-038`): 같은 «자료 등록»이 Server Action ·
+> Ingest Route Handler(`API-104`) · 워커 · 스크립트 **네 경로**로 들어옵니다. 진입부에 두면
+> 네 번 써야 하고 **한 곳은 반드시 빠집니다.** `FR-AUDIT-001` 의 «예외 없이 기록»은
+> **모든 경로가 반드시 지나가는 지점**에서만 보장됩니다.
+>
+> 게다가 **액션에서는 애초에 쓸 수 없습니다** — `auth.service.signIn` 은
+> `USER_SIGNIN_FAILED`·`USER_SIGNIN_BLOCKED` 를 구분해 남기는데 액션은 `AppError` 하나만
+> 받습니다. 「비밀번호는 맞았는데 정지 상태였다」를 액션은 알 수 없습니다.
+>
+> 「service 는 요청 컨텍스트를 쓰지 않는다」(`DEV-06 · 6.6절`)는 깨지지 않습니다 —
+> `ip`·`userAgent` 는 **`Actor` 에 실려 파라미터로** 들어옵니다.
 
 > **1단계를 «어차피 proxy 가 막았을 것»이라며 건너뛰면 안 됩니다.** Server Action 은 별도 라우트가
 > 아니라 그 경로로 들어오는 POST 라서, `matcher` 가 제외한 경로면 `proxy` 를 건너뜁니다.

@@ -1,4 +1,3 @@
-import { Monitor } from "lucide-react";
 import type { Metadata } from "next";
 
 import {
@@ -18,9 +17,14 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { ChangePasswordForm } from "@/features/auth/components/change-password-form";
 import { ApiKeyPanel } from "@/features/members/components/api-key-panel";
+import { SessionList } from "@/features/members/components/session-list";
 import { ResourceCard } from "@/features/resources/components/resource-card";
+import { env } from "@/lib/env";
 import { requireActiveUser } from "@/server/auth/guards";
+import { listFor as listSessions } from "@/server/auth/session";
+import * as apiKeyService from "@/server/services/api-key.service";
 import { getProfile } from "@/server/services/user.service";
 import { notifications, resources } from "@/mocks";
 
@@ -33,6 +37,11 @@ export default async function MePage() {
   const me = await getProfile(session.userId);
   // 목 자료의 author.id 는 실제 계정 id 와 맞지 않는다 — P4 에서 실데이터가 오면 맞는다
   const mine = resources.filter((r) => r.author.id === me.id);
+
+  const [keys, sessions] = await Promise.all([
+    apiKeyService.listFor(session.userId),
+    listSessions(session.userId),
+  ]);
 
   return (
     <>
@@ -78,71 +87,44 @@ export default async function MePage() {
         </TabsContent>
 
         <TabsContent value="security" className="mt-4 space-y-4">
-          <ApiKeyPanel />
+          <ApiKeyPanel
+            keys={keys.map((k) => ({
+              id: k.id,
+              name: k.name,
+              keyPrefix: k.keyPrefix,
+              scopes: k.scopes,
+              lastUsedAt: k.lastUsedAt?.toISOString() ?? null,
+              expiresAt: k.expiresAt.toISOString(),
+              revokedAt: k.revokedAt?.toISOString() ?? null,
+              createdAt: k.createdAt.toISOString(),
+            }))}
+            // 선택 가능 스코프도 서버가 계산해서 준다 (DEC-037)
+            allowedScopes={[...apiKeyService.scopesAllowedFor(me.role)]}
+            appUrl={env.APP_URL}
+          />
 
           <Card>
             <CardHeader>
               <CardTitle className="text-base">비밀번호 변경</CardTitle>
+              <CardDescription>
+                변경하면 이 기기를 제외한 다른 세션이 모두 종료됩니다.
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="cur">현재 비밀번호</FieldLabel>
-                  <Input id="cur" type="password" />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="new">새 비밀번호</FieldLabel>
-                  <Input id="new" type="password" />
-                </Field>
-                <Field>
-                  <Button className="w-fit">변경</Button>
-                </Field>
-              </FieldGroup>
+              <ChangePasswordForm variant="settings" />
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">활성 세션</CardTitle>
-              <CardDescription>
-                로그인된 기기 목록입니다. 낯선 기기가 있으면 종료하세요.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {[
-                {
-                  device: "Windows · Chrome",
-                  ip: "192.168.0.14",
-                  current: true,
-                },
-                {
-                  device: "macOS · Safari",
-                  ip: "192.168.0.51",
-                  current: false,
-                },
-              ].map((s) => (
-                <div key={s.ip} className="flex items-center gap-3">
-                  <Monitor className="text-muted-foreground size-4" />
-                  <div className="flex-1 text-sm">
-                    <p>
-                      {s.device}
-                      {s.current && (
-                        <span className="text-muted-foreground ml-2 text-xs">
-                          현재 기기
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-muted-foreground text-xs">{s.ip}</p>
-                  </div>
-                  {!s.current && (
-                    <Button variant="ghost" size="sm">
-                      종료
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          <SessionList
+            sessions={sessions.map((s) => ({
+              id: s.id,
+              ip: s.ip,
+              userAgent: s.userAgent,
+              lastSeenAt: s.lastSeenAt?.toISOString() ?? null,
+              createdAt: s.createdAt.toISOString(),
+              current: s.id === session.sessionId,
+            }))}
+          />
         </TabsContent>
 
         <TabsContent value="activity" className="mt-4 space-y-4">

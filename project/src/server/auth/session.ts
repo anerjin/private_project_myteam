@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 
-import type { Role, UserStatus } from "@prisma/client";
+import type { Prisma, Role, UserStatus } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { SESSION_TTL_MS } from "@/lib/env";
@@ -27,7 +27,12 @@ import { redis } from "@/lib/redis";
  *
  * 그래서 사용자별 **세대 번호**를 둡니다. 무효화는 `INCR user:gen:{userId}` **한 번**이고,
  * 캐시 값에는 읽을 때의 세대가 함께 들어갑니다. 세대가 다르면 캐시는 무효입니다.
- * `INCR` 는 원자적이라 «지우기 전에 다시 깔리는» 창이 존재하지 않습니다.
+ *
+ * **세대만으로는 닫히지 않는 창이 하나 남습니다.** 세대 키가 `userId` 로 매겨져 있어
+ * DB 조회 «전»에는 읽을 수 없고(그때는 `userId` 를 모릅니다), 조회 «후»에 읽으면
+ * 그 사이에 올라간 새 세대를 읽어 **스스로 유효한 스냅샷을 깔아버립니다.**
+ * 그래서 `resolve()` 는 캐시를 깔기 직전에 **행이 아직 있는지 다시 확인**합니다.
+ * 두 장치가 서로의 창을 덮습니다 — 자세한 순서는 `resolve()` 안의 주석에 있습니다.
  */
 
 /** 세션에서 꺼내 쓰는 DTO. `passwordHash` 는 절대 싣지 않는다 */
@@ -55,6 +60,16 @@ interface CachedSession extends SessionUser {
   expiresAtMs: number;
   idleSinceMs: number;
 }
+
+/**
+ * 세션이 즉시 죽어야 하는 계정 상태 (`DEC-040`).
+ * `PENDING` 은 여기 없습니다 — 유효한 세션이고 DAL 이 `/pending` 으로 보냅니다.
+ */
+const BLOCKED_STATUSES = new Set<UserStatus>([
+  "REJECTED",
+  "SUSPENDED",
+  "WITHDRAWN",
+]);
 
 /** 유휴 만료 — 환경 변수로 빼지 않는다 (변수 증식 방지). REQ-02 · 2.7절 */
 const IDLE_TIMEOUT_MS = 12 * 60 * 60 * 1000;
@@ -91,13 +106,7 @@ async function currentGeneration(userId: string): Promise<number | null> {
  * 늦게 도착한 `writeCache` 도 옛 세대를 달고 있어 자동으로 무효가 됩니다.
  */
 async function bumpGeneration(userId: string): Promise<void> {
-  try {
-    await redis.incr(genKey(userId));
-    await redis.expire(genKey(userId), GEN_TTL_SECONDS);
-  } catch {
-    // Redis 가 죽었으면 캐시도 못 읽으므로(=미스) DB 가 정본이 된다.
-    // 이 실패로 호출부를 실패시키지 않는다 (NFR-AVAIL-004).
-  }
+  await invalidateSessionCache(userId);
 }
 
 /**
@@ -154,12 +163,19 @@ export async function resolve(token: string): Promise<SessionUser | null> {
   if (!row) return null;
 
   /*
-   * **세대를 DB 조회 «전»이 아니라 여기서 읽어도 되는 이유:**
-   * 무효화가 이 사이에 끼어들면 세대가 이미 올라가 있으므로, 우리가 읽는 값은
-   * 새 세대입니다. 그런데 우리가 캐시에 넣을 스냅샷은 **삭제된 행**을 보고 만든 것이
-   * 아니라 — `findUnique` 가 이미 `null` 을 돌려줬을 것입니다.
-   * 행이 살아 있었다면 아직 무효화 전이거나, 무효화가 커밋되기 전입니다.
-   * 후자를 막기 위해 **세대를 DB 조회 직전에 읽습니다.**
+   * **세대만으로는 부족합니다 — 세대는 «조회 «후»» 에 읽히기 때문입니다.**
+   *
+   * 세대 키가 `user:gen:{userId}` 라서 `userId` 를 알기 전에는 읽을 수 없고,
+   * `userId` 는 이 조회로 비로소 알게 됩니다. 그래서 다음 순서가 가능합니다:
+   *
+   * > `findUnique`(살아 있음) → 관리자 정지 커밋(행 삭제) → `INCR`(G→G+1)
+   * > → 여기서 세대 읽기(**G+1**) → `writeCache({ACTIVE, gen: G+1})`
+   *
+   * 새 세대를 달고 깔린 캐시는 **유효**하므로 정지된 사용자가 15분을 더 씁니다.
+   *
+   * 막는 방법은 세대를 앞당기는 것이 아니라 **행이 아직 있는지 다시 확인**하는 것이고,
+   * 그 확인은 이미 `touch()` 가 하고 있었습니다(삭제된 행이면 갱신이 0건).
+   * 그 결과를 버리지 않고 씁니다 — 아래 `alive` 참고.
    */
   const gen = await currentGeneration(row.userId);
 
@@ -167,8 +183,10 @@ export async function resolve(token: string): Promise<SessionUser | null> {
   if (
     row.expires.getTime() <= now ||
     now - idleSince.getTime() > IDLE_TIMEOUT_MS ||
-    // 소유자가 ACTIVE 가 아니면 세션이 남아 있어도 무효 (DEV-02 · 2.7절)
-    row.user.status !== "ACTIVE"
+    // **차단 3상태만** 세션 계층에서 즉사시킨다 (DEC-040).
+    // `PENDING` 은 「로그인은 됐지만 아직 들어올 수 없는」 유효한 세션이고,
+    // 그 판정은 DAL(`guards.ts`)이 한다 — 세션은 «누구인지», 가드는 «무엇을 할 수 있는지».
+    BLOCKED_STATUSES.has(row.user.status)
   ) {
     await destroyByHash(tokenHash, row.userId);
     return null;
@@ -188,7 +206,15 @@ export async function resolve(token: string): Promise<SessionUser | null> {
     idleSinceMs: idleSince.getTime(),
   };
 
-  await touch(row.id, idleSince, now);
+  /*
+   * **캐시를 깔기 전 마지막 관문.** 위 조회 이후에 세션이 폐기됐다면 여기서 걸립니다.
+   * 남는 창은 「`alive` 확인 ~ `writeCache`」 사이인데, 그 사이에 폐기가 커밋되면
+   * `INCR` 가 세대를 올리므로 우리가 방금 읽은 `gen` 이 옛 값이 되어 캐시가 무효화됩니다.
+   * **두 장치가 서로의 창을 덮습니다** — 세대만도, 존재 확인만도 부족합니다.
+   */
+  const alive = await touch(row.id, idleSince, now);
+  if (!alive) return null;
+
   if (gen !== null) await writeCache(tokenHash, session);
 
   return toDto(session);
@@ -221,18 +247,33 @@ function toDto(c: CachedSession | SessionUser): SessionUser {
  * 슬라이딩 만료는 **DB 쪽에서** 합니다.
  * 쿠키 재발급으로 하면 서버 컴포넌트 렌더 중 `cookies().set()` 이라 터집니다 (`DEC-035`).
  */
-async function touch(sessionId: string, lastSeen: Date, now: number) {
-  if (now - lastSeen.getTime() < LAST_SEEN_WRITE_INTERVAL_MS) return;
+async function touch(
+  sessionId: string,
+  lastSeen: Date,
+  now: number
+): Promise<boolean> {
   try {
-    await db.session.update({
+    if (now - lastSeen.getTime() < LAST_SEEN_WRITE_INTERVAL_MS) {
+      // 아직 갱신할 때가 아니다. 그래도 **행이 살아 있는지는** 확인한다 —
+      // 이 값이 캐시 스냅샷의 유효성을 보증한다. PK 조회라 쓰기보다 싸다.
+      return (await db.session.count({ where: { id: sessionId } })) === 1;
+    }
+    // `updateMany` 를 쓰는 이유: 없는 행에 예외 대신 `count: 0` 을 돌려준다.
+    const { count } = await db.session.updateMany({
       where: { id: sessionId },
       data: {
         lastSeenAt: new Date(now),
         expires: new Date(now + SESSION_TTL_MS),
       },
     });
+    return count === 1;
   } catch {
-    // 갱신 실패는 치명적이지 않다. 다음 요청에서 다시 시도한다.
+    /*
+     * **DB 오류는 「행이 없다」와 다릅니다.** 여기서 `false` 를 돌려주면
+     * DB 가 잠깐 흔들릴 때 멀쩡한 사용자가 전부 로그아웃됩니다.
+     * 갱신 실패는 치명적이지 않고 다음 요청에서 다시 시도합니다.
+     */
+    return true;
   }
 }
 
@@ -307,13 +348,63 @@ async function destroyByHash(tokenHash: string, userId?: string) {
   if (userId) await bumpGeneration(userId);
 }
 
+export interface RevokeResult {
+  /** 지운 세션 행 수 */
+  deleted: number;
+  /**
+   * 캐시 무효화(세대 INCR)에 성공했는가.
+   *
+   * **`false` 여도 본 작업은 유효합니다.** 다만 그 사용자의 캐시가 최대 15분 남을 수
+   * 있으므로 호출부가 이 사실을 **감사 로그와 화면에 실어야** 합니다 —
+   * 「조용히 성공한 척」과 「본 작업을 되돌림」 사이의 정답은
+   * **「했고, 어디까지 됐는지 말한다」** 입니다.
+   */
+  cacheInvalidated: boolean;
+}
+
 /**
- * 한 사용자의 세션을 전부 폐기 — 정지·역할 변경·비밀번호 변경.
+ * 세션 «행»만 지운다 — **트랜잭션 안에서** 부르는 용도 (`DEC-036`).
+ * 캐시 무효화는 커밋 «후» `invalidateSessionCache` 로 따로 합니다 (`DEC-035` 순서).
+ */
+export function deleteSessionsFor(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  exceptSessionId?: string
+): Promise<{ count: number }> {
+  return tx.session.deleteMany({
+    where: exceptSessionId
+      ? { userId, id: { not: exceptSessionId } }
+      : { userId },
+  });
+}
+
+/**
+ * 캐시 무효화 — **커밋 후에** 부릅니다.
  *
- * **Redis 실패로 던지지 않습니다.** 예전에는 던졌는데, 그러면 비밀번호 변경이
- * 이미 커밋된 뒤 「처리 중 문제가 발생했습니다」가 떠서 사용자가 **옛 비밀번호로 재시도**하게
- * 됩니다 (`NFR-AVAIL-004`). 세대 카운터가 실패해도 DB 행이 없으므로 캐시 미스 시
- * 재인증에 실패하고, 최악의 경우 15분 TTL 로 수렴합니다.
+ * Redis 가 죽으면 `currentGeneration` 이 `null` 을 돌려주고 캐시는 미스가 되므로
+ * **장애는 안전한 쪽으로 무너집니다.** 남는 창은 «Redis 는 살아 있는데 `INCR` 만 실패»
+ * 하나뿐이고, 그때만 캐시가 최대 15분 남습니다.
+ */
+export async function invalidateSessionCache(userId: string): Promise<boolean> {
+  try {
+    await redis.incr(genKey(userId));
+    await redis.expire(genKey(userId), GEN_TTL_SECONDS);
+    return true;
+  } catch (e) {
+    console.error(
+      `[session] 세대 무효화 실패 — user=${userId}. 캐시가 최대 15분 남을 수 있습니다:`,
+      e instanceof Error ? e.message : e
+    );
+    return false;
+  }
+}
+
+/**
+ * 한 사용자의 세션을 전부 폐기 — 트랜잭션 밖 호출자용 얇은 래퍼.
+ *
+ * **Redis 실패로 던지지 않습니다** (`NFR-AVAIL-004`). 던지면 비밀번호 변경이
+ * 이미 커밋된 뒤 「처리 중 문제가 발생했습니다」가 떠서 사용자가 **옛 비밀번호로 재시도**합니다.
+ * 대신 결과를 돌려주어 호출부가 **말할 수 있게** 합니다.
  *
  * @param exceptSessionId 비밀번호 변경처럼 «현재 세션은 남기는» 경우.
  *   **DB 행만 남기고 캐시는 무효화합니다** — 캐시를 남기면 방금 바꾼
@@ -322,15 +413,10 @@ async function destroyByHash(tokenHash: string, userId?: string) {
 export async function revokeAllFor(
   userId: string,
   exceptSessionId?: string
-): Promise<void> {
-  await db.session.deleteMany({
-    where: exceptSessionId
-      ? { userId, id: { not: exceptSessionId } }
-      : { userId },
-  });
-
-  // 남긴 세션의 캐시까지 한 번에 무효화된다. 다음 요청이 DB 에서 새로 채운다.
-  await bumpGeneration(userId);
+): Promise<RevokeResult> {
+  const { count } = await deleteSessionsFor(db, userId, exceptSessionId);
+  const cacheInvalidated = await invalidateSessionCache(userId);
+  return { deleted: count, cacheInvalidated };
 }
 
 /** 활성 세션 목록 (FR-USER-006) */

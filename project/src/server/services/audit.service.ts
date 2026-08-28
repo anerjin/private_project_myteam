@@ -8,8 +8,21 @@ import type { Actor } from "@/server/auth/actor";
 /**
  * 감사 로그 (FR-AUDIT-001, REQ-02 · 2.10절).
  *
- * **기록에 실패해도 본 작업을 되돌리지 않습니다.** 승인이 성공했는데 로그를 못 남겼다고
- * 승인을 취소하면 사용자가 더 곤란해집니다. 대신 서버 로그에 크게 남깁니다.
+ * ## 트랜잭션을 주면 본 작업과 운명을 같이합니다 (`DEC-043`, `DEC-038` 개정)
+ *
+ * 전에는 **모든** 기록이 실패를 삼켰습니다. 근거는 「승인이 성공했는데 로그를 못
+ * 남겼다고 승인을 취소하면 사용자가 더 곤란해진다」였는데, 그 판단은 **트랜잭션이
+ * 없는 인증 경로**의 것이었습니다. 로그인은 로그를 못 남겼다고 막으면 서비스가 죽습니다.
+ *
+ * 회원 상태 전이는 다릅니다. **되돌려도 관리자가 다시 누르면 그만**이고, 사용자는
+ * 롤백된 승인을 본 적이 없습니다. 반대로 커밋 직후 DB 가 죽어 로그만 사라지면
+ * **그것이 감사 추적이 가장 필요한 순간**입니다 (`FR-AUDIT-001` 「예외 없이 기록」).
+ *
+ * 그래서 규칙은 하나입니다 — **`tx` 를 주면 던지고, 안 주면 삼킨다.**
+ * 함수를 두 개로 나누면 「어느 쪽을 부를지」가 두 번째 규칙이 됩니다.
+ *
+ * **알림은 여전히 트랜잭션 밖입니다** (`DEC-038` 유지) — 일괄 승인에서
+ * advisory 락을 오래 잡지 않기 위해서입니다.
  *
  * **비밀번호·API 키 원문은 절대 넣지 않습니다** (`NFR-PRIV-004`).
  */
@@ -23,6 +36,8 @@ export type AuditAction =
   | "USER_SIGNOUT"
   | "USER_APPROVE"
   | "USER_REJECT"
+  /** 거부를 되돌려 재검토 대기로 (DEC-042) */
+  | "USER_REOPEN"
   | "USER_SUSPEND"
   | "USER_REACTIVATE"
   | "USER_ROLE_CHANGE"
@@ -54,23 +69,34 @@ export interface AuditInput {
  * `actorUsername` 을 **스냅샷으로 함께 저장**합니다. 계정이 익명화돼도
  * 「누가 했는지」가 남아야 합니다 (`DEC-021`, `DEV-02 · TBL-audit_logs`).
  */
-export async function log(actor: Actor, input: AuditInput): Promise<void> {
+export async function log(
+  actor: Actor,
+  input: AuditInput,
+  /** 주면 **본 작업과 같은 트랜잭션**에 넣고, 실패하면 던진다 (`DEC-043`) */
+  tx?: Prisma.TransactionClient
+): Promise<void> {
+  const data = {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    via: actor.via,
+    apiKeyId: actor.apiKeyId,
+    action: input.action,
+    targetType: input.targetType,
+    targetId: input.targetId,
+    summary: input.summary,
+    diff: input.diff,
+    ip: actor.ip,
+    userAgent: actor.userAgent,
+  };
+
+  // 트랜잭션 안이면 **삼키지 않는다.** 삼키면 롤백도 안 되고 기록도 없다.
+  if (tx) {
+    await tx.auditLog.create({ data });
+    return;
+  }
+
   try {
-    await db.auditLog.create({
-      data: {
-        actorId: actor.id,
-        actorUsername: actor.username,
-        via: actor.via,
-        apiKeyId: actor.apiKeyId,
-        action: input.action,
-        targetType: input.targetType,
-        targetId: input.targetId,
-        summary: input.summary,
-        diff: input.diff,
-        ip: actor.ip,
-        userAgent: actor.userAgent,
-      },
-    });
+    await db.auditLog.create({ data });
   } catch (e) {
     console.error("[audit] 기록 실패 — 본 작업은 유지됩니다:", input.action, e);
   }

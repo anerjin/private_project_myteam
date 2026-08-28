@@ -31,6 +31,8 @@ const REQUIRED = [
  */
 const SPECIAL = {
   "(public)/change-password/page.tsx": ["getSession", "requireActiveUser"],
+  // PENDING 은 유효한 세션이지만 서비스에 못 들어온다 (DEC-040)
+  "(public)/pending/page.tsx": ["requirePendingUser"],
 };
 
 function pages(dir, base = "", out = []) {
