@@ -334,7 +334,14 @@ export function ResourceForm({
         {editing && <DeleteResourceDialog resource={resource} />}
         <div className="ml-auto flex gap-2">
           {!editing && (
-            <Button type="button" variant="ghost">
+            /*
+              **`disabled` 입니다.** 임시 저장은 아직 없습니다 — `create` 가 항상
+              `PUBLISHED` 로 만듭니다. 누를 수 있으면 눌러 보고 「아무 일도 안
+              일어나네」가 되고, 그건 이 저장소가 반복해서 피한 「있는데 안 된다」
+              입니다(태그 병합·대분류 추가 버튼과 같은 처리).
+              초안을 «보는» 쪽은 이미 됩니다 — 작성자와 `EDITOR` 이상만 봅니다.
+            */
+            <Button type="button" variant="ghost" disabled>
               임시 저장
             </Button>
           )}

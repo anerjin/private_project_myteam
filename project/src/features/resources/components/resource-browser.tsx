@@ -28,6 +28,7 @@ import { TypeBadge } from "@/features/resources/components/badges";
 import { ResourceCard } from "@/features/resources/components/resource-card";
 import { getContentType } from "@/features/resources/content-types";
 import {
+  PAGE_SIZE,
   SORT_KEYS,
   SORT_LABEL,
   toSearchParams,
@@ -310,14 +311,30 @@ export function ResourceBrowser({
       {nextCursor && (
         <div className="flex justify-center pt-2">
           {/*
-            **`Link` 입니다.** 커서를 URL 에 실어야 「이 지점부터」가 공유·새로고침에서
-            살아남습니다. 클라이언트 state 로 누적하면 새로고침에 처음으로 돌아갑니다.
+            **`Link` 이고, 문구가 「다음」입니다.**
+
+            커서를 URL 에 실어야 「이 지점부터」가 공유·새로고침에서 살아남습니다.
+            클라이언트 state 로 누적하면 새로고침에 처음으로 돌아갑니다.
+
+            > 전에는 「더 보기」였는데 **누르면 이어 붙지 않고 다음 24건으로
+            > «바뀝니다».** 문구가 동작과 달랐습니다. 이어 붙이려면 상태를
+            > 클라이언트에 쌓아야 하고 그러면 URL 정본(`DEC-045`)을 잃습니다 —
+            > 동작이 옳으니 **문구를 동작에 맞췄습니다.**
+
+            커서 페이징은 뒤로 갈 수 없어 「이전」이 없습니다. 대신 브라우저
+            뒤로가기가 그 일을 합니다(URL 에 커서가 있으므로) — 그리고 언제든
+            처음으로 돌아갈 수 있게 두 번째 링크를 둡니다.
           */}
+          {query.cursor && (
+            <Button variant="ghost" asChild>
+              <Link href={pathname + toSearchParams(query)}>처음으로</Link>
+            </Button>
+          )}
           <Button variant="outline" asChild>
             <Link
               href={pathname + toSearchParams(query, { cursor: nextCursor })}
             >
-              더 보기
+              다음 {PAGE_SIZE}건
             </Link>
           </Button>
         </div>

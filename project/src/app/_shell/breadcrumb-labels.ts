@@ -1,8 +1,10 @@
 import { headers } from "next/headers";
 
 import { listContentTypes } from "@/features/resources/content-types";
-import { db } from "@/lib/db";
 import { PATHNAME_HEADER } from "@/lib/request-headers";
+import * as collectionService from "@/server/services/collection.service";
+import * as memberService from "@/server/services/member.service";
+import * as resourceService from "@/server/services/resource.service";
 
 /**
  * 브레드크럼의 **동적 세그먼트** 라벨 맵.
@@ -39,19 +41,19 @@ export async function serviceBreadcrumbLabels(): Promise<
   const last = segments[segments.length - 1];
   if (!last || labels[last]) return labels;
 
-  // `/resources/{type}/{slug}` · `/collections/{slug}` 둘 다 마지막이 slug 다
+  /*
+   * `/resources/{type}/{slug}` · `/collections/{slug}` 둘 다 마지막이 slug 다.
+   *
+   * **질의는 service 가 합니다** (`DEV-06 · 6.6`). 이 파일이 app 계층에 있는
+   * 이유는 «여러 도메인을 엮기» 때문이지 «Prisma 를 부르기» 때문이 아닙니다 —
+   * 전에는 여기서 직접 불렀고, `check-deps` 가 이제 그것을 막습니다.
+   */
   if (segments[0] === "resources" && segments.length >= 3) {
-    const r = await db.resource.findUnique({
-      where: { slug: last },
-      select: { title: true },
-    });
-    if (r) labels[last] = r.title;
+    const title = await resourceService.titleBySlug(last);
+    if (title) labels[last] = title;
   } else if (segments[0] === "collections" && segments.length >= 2) {
-    const c = await db.collection.findUnique({
-      where: { slug: last },
-      select: { name: true },
-    });
-    if (c) labels[last] = c.name;
+    const name = await collectionService.nameBySlug(last);
+    if (name) labels[last] = name;
   }
 
   return labels;
@@ -63,9 +65,6 @@ export async function adminBreadcrumbLabels(): Promise<Record<string, string>> {
   // `/admin/members/{id}` — 여기만 동적 세그먼트다
   if (segments[0] !== "admin" || segments[1] !== "members" || !last) return {};
 
-  const member = await db.user.findUnique({
-    where: { id: last },
-    select: { name: true },
-  });
-  return member ? { [last]: member.name } : {};
+  const name = await memberService.nameById(last);
+  return name ? { [last]: name } : {};
 }

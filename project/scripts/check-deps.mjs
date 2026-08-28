@@ -268,6 +268,32 @@ for await (const file of walk(SRC)) {
     }
 
     /*
+     * **화면은 Prisma 를 직접 부르지 않습니다** (`DEV-06 · 6.6`).
+     *
+     * `check-deps` 는 `action → db` 를 이미 막고 있었지만 **page 는 보고 있지
+     * 않았습니다.** 그 틈으로 `admin/settings` 가 `signup.enabled` 를 직접 읽어
+     * 「행이 없으면 열려 있다」를 `auth.service` 와 **따로** 판정했고,
+     * `admin/jobs` 는 `take: 50` 을 화면에 박아 넣었습니다.
+     *
+     * 헬스 체크(`lib/db` 의 `pingDb`)는 Prisma 클라이언트가 아니라 **진단
+     * 헬퍼**라 막지 않습니다 — 막는 것은 `db` 자체를 가져가는 것입니다.
+     */
+    if (fromLayer === "app" && /^@\/lib\/db$|(^|\/)lib\/db$/.test(spec)) {
+      const named = code.match(
+        new RegExp(`import\\s*\\{([^}]*)\\}\\s*from\\s*["']${spec.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`)
+      );
+      const brings = (named?.[1] ?? "db").split(",").map((s) => s.trim());
+      if (brings.some((b) => b === "db" || b.startsWith("db "))) {
+        violations.push({
+          file: rel,
+          spec,
+          rule: `${rel} → db`,
+          why: "화면이 Prisma 를 직접 부르면 조회 조건이 화면마다 갈린다. service 를 통할 것 (DEV-06 · 6.6). 진단 헬퍼(pingDb)는 허용",
+        });
+      }
+    }
+
+    /*
      * **반대 방향도 막습니다** — 누가 `@/proxy` 를 import 하는가.
      *
      * 위 규칙은 proxy 의 «나가는» import 만 봤습니다. 그래서 서버 컴포넌트가

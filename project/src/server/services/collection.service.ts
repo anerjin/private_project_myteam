@@ -133,3 +133,12 @@ export async function getBySlug(
     items: items.map((i) => toResource(i.resource)),
   };
 }
+
+/** 빵부스러기 라벨용 이름 한 개 — `resource.service.titleBySlug` 와 같은 자리·같은 이유 */
+export async function nameBySlug(slug: string): Promise<string | null> {
+  const c = await db.collection.findUnique({
+    where: { slug },
+    select: { name: true },
+  });
+  return c?.name ?? null;
+}

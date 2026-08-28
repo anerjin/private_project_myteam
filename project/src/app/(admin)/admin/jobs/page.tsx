@@ -15,9 +15,9 @@ import {
 } from "@/components/ui/table";
 import { AutoRefresh } from "@/features/jobs/components/auto-refresh";
 import { EmptyState } from "@/components/common/empty-state";
-import { db } from "@/lib/db";
 import type { JobStatus } from "@/types";
 import { requireRole } from "@/server/auth/guards";
+import * as jobService from "@/server/services/job.service";
 
 export const metadata: Metadata = { title: "작업 모니터" };
 
@@ -49,23 +49,7 @@ export default async function AdminJobsPage() {
    * 하드코딩한 안내문은 「작업이 있는가」에 대한 두 번째 출처이고,
    * 워커가 붙은 날 그 문장이 남아 있게 됩니다.
    */
-  const [grouped, jobs] = await Promise.all([
-    db.job.groupBy({ by: ["status"], _count: { _all: true } }),
-    db.job.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 50,
-      include: {
-        resource: { select: { title: true } },
-      },
-    }),
-  ]);
-
-  const byStatus = Object.fromEntries(
-    grouped.map((g) => [g.status, g._count._all])
-  );
-  const counts = (["QUEUED", "RUNNING", "DONE", "FAILED"] as JobStatus[]).map(
-    (s) => ({ status: s, n: byStatus[s] ?? 0 })
-  );
+  const { counts, recent: jobs } = await jobService.board();
 
   return (
     <>

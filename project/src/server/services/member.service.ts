@@ -176,6 +176,12 @@ export async function countPending(): Promise<number> {
 }
 
 /** 전체 회원 수 — 탈퇴자는 뺀다. 「지금 쓸 수 있는 계정」이 궁금한 숫자다 */
+/** 빵부스러기 라벨용 이름 한 개 — `resource.service.titleBySlug` 와 같은 자리·같은 이유 */
+export async function nameById(id: string): Promise<string | null> {
+  const u = await db.user.findUnique({ where: { id }, select: { name: true } });
+  return u?.name ?? null;
+}
+
 export async function countAll(): Promise<number> {
   const rows = await memberRepo.countByStatus();
   return rows

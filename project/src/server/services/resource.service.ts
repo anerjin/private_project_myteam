@@ -74,6 +74,22 @@ async function bookmarkedIds(
 }
 
 /**
+ * 빵부스러기 라벨용 제목 한 개.
+ *
+ * **화면이 `db` 를 직접 부르지 않기 위해 있습니다** (`DEV-06 · 6.6`).
+ * 인가를 보지 않는 것은 의도입니다 — 이 함수는 **이미 열린 페이지의 경로**를
+ * 사람이 읽게 바꿀 뿐이고, 그 페이지가 자기 인가를 먼저 통과했습니다.
+ * 못 찾으면 `null` 이고 화면은 원래 세그먼트를 그대로 보여줍니다.
+ */
+export async function titleBySlug(slug: string): Promise<string | null> {
+  const r = await db.resource.findUnique({
+    where: { slug },
+    select: { title: true },
+  });
+  return r?.title ?? null;
+}
+
+/**
  * 등록자 필터의 선택지.
  *
  * **화면이 가진 자료에서 뽑지 않습니다.** 서버 페이징 뒤에는 「현재 페이지의

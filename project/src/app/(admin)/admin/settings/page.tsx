@@ -10,9 +10,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { db } from "@/lib/db";
 import { getDiskStatus } from "@/lib/disk";
 import { requireRole } from "@/server/auth/guards";
+import * as settingsService from "@/server/services/settings.service";
 
 export const metadata: Metadata = { title: "시스템 설정" };
 
@@ -37,13 +37,15 @@ export default async function AdminSettingsPage() {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
   await requireRole("ADMIN");
 
-  const [signupSetting, disk] = await Promise.all([
-    db.systemSetting.findUnique({ where: { key: "signup.enabled" } }),
+  /*
+   * **`auth.service.signUp` 과 «같은 함수»를 부릅니다.** 전에는 이 page 가
+   * Prisma 를 직접 불러 같은 행을 읽고 「없으면 열려 있다」를 여기서 다시
+   * 판정했습니다 — 열쇠 문자열과 기본값이 두 곳에 있었습니다.
+   */
+  const [signupEnabled, disk] = await Promise.all([
+    settingsService.isSignupEnabled(),
     getDiskStatus(),
   ]);
-
-  // 없으면 열려 있다 — `auth.service.signUp` 과 **같은 판정**이어야 한다
-  const signupEnabled = signupSetting ? signupSetting.value !== false : true;
 
   return (
     <>

@@ -19,6 +19,7 @@ import {
 import * as userRepo from "@/server/repositories/user.repository";
 import * as audit from "@/server/services/audit.service";
 import * as notify from "@/server/services/notification.service";
+import * as settingsService from "@/server/services/settings.service";
 
 /**
  * 인증 비즈니스 규칙 (REQ-02 · 2.6절).
@@ -207,10 +208,7 @@ export async function signUp(input: {
   signupReason: string;
 }): Promise<{ id: string }> {
   // 관리자가 가입을 닫아 두면 받지 않는다 (FR-ADM-015, system_settings)
-  const setting = await db.systemSetting.findUnique({
-    where: { key: "signup.enabled" },
-  });
-  if (setting && setting.value === false) {
+  if (!(await settingsService.isSignupEnabled())) {
     throw new AppError("FORBIDDEN", "현재 신규 가입을 받지 않습니다.");
   }
 

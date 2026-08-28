@@ -85,6 +85,75 @@ const DEBT = [
  * 페이즈만 씁니다(「되살리기는 아직 없다 — `P8`」).
  */
 
+/**
+ * **닫힌 작업표의 요구사항 «집합»을 박아 둡니다.**
+ *
+ * 이 검사는 문서를 파싱합니다 — `check-deps` 와 달리 **서식이 조금만 바뀌어도
+ * 파서가 조용히 아무것도 못 읽습니다.** 실제로 두 자리가 그랬습니다:
+ *
+ * | 던진 것 | 그때 결과 |
+ * | --- | --- |
+ * | `## 7.4 M2 — 자료 코어` → `M2 · 자료 코어` | 「작업표를 찾지 못했습니다」 한 줄 찍고 **exit 0** |
+ * | 표의 한 행을 평문으로 | 요구사항이 **20건 → 16건으로 조용히 줄어듦** |
+ *
+ * 「0건은 증거가 아니다」를 이 저장소가 `DEC-044` 에서 배웠는데, 그걸 배워서
+ * 만든 도구가 같은 구멍을 갖고 있었습니다.
+ *
+ * 끝난 마일스톤의 작업표는 **닫혀서 안 바뀌므로** 고정본을 둘 수 있습니다.
+ * 개수가 아니라 **번호 집합**을 박습니다 — 개수가 같은 채 내용이 바뀌는
+ * 경우까지 잡힙니다. `MOCK_DEBT` 와 같은 철학입니다: 목록이 곧 사실이고,
+ * 사실이 바뀌면 **사람이 목록을 고치는 행위**가 강제됩니다.
+ *
+ * 진행 중인 마일스톤(`M3` 이후)은 여기 없으므로 매일 고쳐도 안 걸립니다.
+ *
+ * 갱신은 `node scripts/check-fr-coverage.mjs --fixture` 가 찍어 줍니다 —
+ * **손으로 세지 마십시오.**
+ */
+const FIXTURE = {
+  M0: ["NFR-BACKUP-007"],
+  "M0.5": ["NFR-SEC-007"],
+  M1: [
+    "FR-ADM-002",
+    "FR-ADM-004",
+    "FR-AUDIT-001",
+    "FR-AUTH-001",
+    "FR-AUTH-002",
+    "FR-AUTH-006",
+    "FR-AUTH-007",
+    "FR-AUTH-011",
+    "FR-AUTH-012",
+    "FR-NOTI-001",
+    "FR-NOTI-002",
+    "FR-USER-006",
+    "FR-USER-008",
+    "NFR-SEC-001",
+    "NFR-SEC-006",
+    "NFR-SEC-017",
+  ],
+  M2: [
+    "FR-ADM-014",
+    "FR-RES-001",
+    "FR-RES-003",
+    "FR-RES-004",
+    "FR-RES-005",
+    "FR-RES-006",
+    "FR-RES-007",
+    "FR-RES-008",
+    "FR-RES-011",
+    "FR-RES-014",
+    "FR-RES-015",
+    "FR-SRCH-001",
+    "FR-SRCH-003",
+    "FR-SRCH-004",
+    "FR-SRCH-005",
+    "FR-SRCH-006",
+    "FR-SRCH-007",
+    "FR-COLL-001",
+    "FR-COLL-002",
+    "NFR-A11Y-006",
+  ],
+};
+
 /** 페이즈 목록 표(7.11)와 같은 사실이므로 여기 적지 않고 문서에서 읽는다 */
 function phasesByMilestone(doc) {
   const map = new Map();
@@ -110,7 +179,13 @@ function parseWorkTable(doc, milestone) {
   );
   if (start < 0) return null;
   const rest = doc.slice(start + 1);
-  const end = rest.search(/^## [\d.]+ M[\d.]+ — /m);
+  /*
+   * **끝은 「다음 `##`」이지 「다음 마일스톤 절」이 아닙니다.**
+   * 마지막 마일스톤(`M6`)은 뒤에 마일스톤 절이 없어 7.9~7.13 (페이즈 목록표 ·
+   * 리스크 · 변경 이력)까지 통째로 구간에 들어옵니다. 지금은 우연히 그 표들이
+   * 3자리 숫자를 안 물어 조용하지만, `P9` 를 닫을 때 터집니다.
+   */
+  const end = rest.search(/^## /m);
   const section = end < 0 ? rest : rest.slice(0, end);
 
   const items = [];
@@ -123,9 +198,20 @@ function parseWorkTable(doc, milestone) {
 
     const ids = [];
     let lastPrefix = null;
-    // `FR-RES-004~008` · `FR-SRCH-006` · `, 007` · `NFR-A11Y-006`
-    const tokenRe = /(?:(N?FR-[A-Z0-9]+)-)?(\d{3})(?:\s*~\s*(\d{3}))?/g;
+    /*
+     * `FR-RES-004~008` 범위 · `FR-SRCH-006` · `, 007` 이어쓰기 · `NFR-A11Y-006`.
+     *
+     * **`lastPrefix` 는 «다른» 접두어를 만나면 끊습니다.** 안 끊으면
+     * 「`DEC-032`, `FR-ADM-014`」 같은 칸에서 순서가 뒤집혔을 때 `DEC-032` 의
+     * `032` 가 `FR-ADM-032` 라는 **유령 번호**가 됩니다.
+     */
+    const tokenRe =
+      /(?:([A-Z]{2,}(?:-[A-Z0-9]+)*)-)?(\d{3})(?:\s*~\s*(\d{3}))?/g;
     for (const t of req.matchAll(tokenRe)) {
+      if (t[1] && !/^N?FR-/.test(t[1])) {
+        lastPrefix = null; // `DEC`·`API`·`SCR` 등 — 이어쓰기를 끊는다
+        continue;
+      }
       const prefix = t[1] ?? lastPrefix;
       if (!prefix) continue;
       lastPrefix = prefix;
@@ -169,18 +255,84 @@ const corpus = loadCorpus();
 const args = process.argv.slice(2);
 /** 끝난 페이즈의 마일스톤 — 새 페이즈를 닫을 때 여기에 더한다 */
 const DONE = ["M0", "M0.5", "M1", "M2"];
+
+/**
+ * `--all` 은 문서의 마일스톤 «절»에서 뽑습니다. 페이즈 목록표(7.11)에서 뽑으면
+ * **`M0.5` 가 빠집니다** — 그 표에 `M0.5` 행이 없어서입니다.
+ * 「전부」라는 이름이 전부가 아닌 채로 두면 안 됩니다.
+ */
+const allMilestones = [...doc.matchAll(/^## [\d.]+ (M[\d.]+) — /gm)].map(
+  (m) => m[1]
+);
+
 const targets = args.includes("--all")
-  ? [...phaseMap.keys()]
+  ? allMilestones
   : args.filter((a) => /^M/.test(a)).length
     ? args.filter((a) => /^M/.test(a))
     : DONE;
+
+let broken = 0;
+
+/*
+ * **7.11 표를 못 읽으면 실패입니다.** 지금까지는 라벨에서 `(P4)` 가 조용히
+ * 사라질 뿐이었는데, 그건 그 표의 서식이 바뀌었다는 신호입니다.
+ */
+if (phaseMap.size === 0) {
+  console.log(
+    "✗ 페이즈 목록표(7.11)를 한 행도 읽지 못했습니다 — 표 서식이 바뀌었습니다"
+  );
+  broken++;
+}
+
+// `--fixture` — 고정본을 손으로 세지 않게 스스로 찍는다
+if (args.includes("--fixture")) {
+  const out = {};
+  for (const m of allMilestones) {
+    const items = parseWorkTable(doc, m) ?? [];
+    out[m] = [...new Set(items.flatMap((i) => i.ids))].sort();
+  }
+  console.log(JSON.stringify(out, null, 2));
+  process.exit(0);
+}
 
 let missingTotal = 0;
 for (const milestone of targets) {
   const items = parseWorkTable(doc, milestone);
   if (!items) {
-    console.log(`\n${milestone} — 작업표를 찾지 못했습니다`);
+    /*
+     * **전에는 여기서 한 줄 찍고 `continue` 했습니다 — exit 0 이었습니다.**
+     * 절 제목 서식이 바뀌면 검사가 「아무 문제 없음」이라고 말했습니다.
+     */
+    console.log(
+      `✗ ${milestone} — 작업표 절을 찾지 못했습니다. 제목 서식(\`## 7.x ${milestone} — 이름\`)이 바뀌었습니까?`
+    );
+    broken++;
     continue;
+  }
+
+  /*
+   * **닫힌 마일스톤은 번호 집합이 고정본과 같아야 합니다.**
+   * 파서가 반쯤 읽으면 요구사항이 조용히 줄어드는데(실측: 20 → 16),
+   * 그때 「16건 전부 인용됨」이 초록으로 찍힙니다.
+   */
+  const fixture = FIXTURE[milestone];
+  if (fixture) {
+    const got = [...new Set(items.flatMap((i) => i.ids))].sort();
+    const want = [...fixture].sort();
+    const gone = want.filter((id) => !got.includes(id));
+    const added = got.filter((id) => !want.includes(id));
+    if (gone.length || added.length) {
+      console.log(
+        `✗ ${milestone} — 닫힌 작업표가 고정본과 다릅니다 (파서가 깨졌거나 표가 바뀌었습니다)`
+      );
+      if (gone.length) console.log(`    사라짐: ${gone.join(", ")}`);
+      if (added.length) console.log(`    새로 생김: ${added.join(", ")}`);
+      console.log(
+        `    표를 «의도적으로» 고쳤다면 \`--fixture\` 로 다시 찍어 FIXTURE 를 갱신하십시오`
+      );
+      broken++;
+      continue;
+    }
   }
   const phases = (phaseMap.get(milestone) ?? [])
     .map((p) => p.phase)
@@ -232,7 +384,21 @@ if (missingTotal > 0) {
   console.log(
     `\n작업표에 있는데 코드에 흔적이 없는 요구사항 ${missingTotal}건.\n` +
       `구현했는데 번호를 안 적었다면 «주석에 번호를 적으십시오» — ` +
-      `그래야 다음 사람이 이 검사를 믿을 수 있습니다.`
+      `그래야 다음 사람이 이 검사를 믿을 수 있습니다.\n` +
+      `아직 안 만든 것이라면 «주석이 아니라 DEBT 에» 적으십시오 — ` +
+      `번호가 코드에 있으면 이 검사는 「만들었다」로 셉니다.`
   );
-  process.exit(1);
 }
+
+/**
+ * **파서가 깨진 것과 요구사항이 빠진 것을 나눠 셉니다.**
+ * 둘 다 실패지만 고치는 사람이 다릅니다 — 앞은 문서/검사기, 뒤는 코드입니다.
+ */
+if (broken > 0) {
+  console.log(
+    `\n검사기가 문서를 제대로 읽지 못한 자리 ${broken}건. ` +
+      `**이건 「위반 0건」이 아니라 「모른다」입니다** — 고치기 전에는 이 검사의 초록을 믿지 마십시오.`
+  );
+}
+
+if (missingTotal > 0 || broken > 0) process.exit(1);
