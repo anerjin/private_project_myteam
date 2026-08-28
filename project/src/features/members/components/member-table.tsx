@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { RoleBadge, UserStatusBadge } from "@/features/members/components/badges";
+import {
+  RoleBadge,
+  UserStatusBadge,
+} from "@/features/members/components/badges";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -69,7 +72,9 @@ function MemberRows({
             <TableHead>소속</TableHead>
             <TableHead>역할</TableHead>
             <TableHead>상태</TableHead>
-            {showPending && <TableHead className="w-[26%]">가입 사유</TableHead>}
+            {showPending && (
+              <TableHead className="w-[26%]">가입 사유</TableHead>
+            )}
             <TableHead>가입일</TableHead>
             <TableHead className="w-32 text-right">처리</TableHead>
           </TableRow>
@@ -115,12 +120,18 @@ function MemberRows({
                   <div className="flex justify-end gap-1">
                     <Button
                       size="sm"
-                      onClick={() => toast.success(`${m.name}님을 승인했습니다.`)}
+                      onClick={() =>
+                        toast.success(`${m.name}님을 승인했습니다.`)
+                      }
                     >
                       <Check className="size-3.5" />
                       승인
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => onReject(m)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onReject(m)}
+                    >
                       <X className="size-3.5" />
                     </Button>
                   </div>
@@ -166,7 +177,9 @@ export function MemberTable() {
   const [role, setRole] = useState("all");
 
   const toggle = (id: string) =>
-    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+    setSelected((s) =>
+      s.includes(id) ? s.filter((x) => x !== id) : [...s, id]
+    );
 
   const filter = (status?: UserStatus) =>
     members.filter((m) => {
@@ -220,7 +233,9 @@ export function MemberTable() {
 
       <Tabs defaultValue="pending">
         <TabsList>
-          <TabsTrigger value="pending">승인 대기 ({pending.length})</TabsTrigger>
+          <TabsTrigger value="pending">
+            승인 대기 ({pending.length})
+          </TabsTrigger>
           <TabsTrigger value="all">전체 ({filter().length})</TabsTrigger>
           <TabsTrigger value="suspended">
             정지 ({filter("SUSPENDED").length})
@@ -256,7 +271,8 @@ export function MemberTable() {
         </TabsContent>
         <TabsContent value="withdrawn" className="mt-4 space-y-3">
           <p className="text-muted-foreground text-sm">
-            탈퇴해도 계정 행은 남습니다. 이름은 즉시 마스킹하고 1년 뒤 익명화하며,
+            탈퇴해도 계정 행은 남습니다. 이름은 즉시 마스킹하고 1년 뒤
+            익명화하며,
             <b> 아이디는 재사용되지 않습니다.</b>
           </p>
           <MemberRows

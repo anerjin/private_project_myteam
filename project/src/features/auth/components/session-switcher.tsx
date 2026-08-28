@@ -8,7 +8,11 @@ export async function SessionSwitcher() {
   const session = await getMockSession();
   const users = SWITCHABLE_USERS.map((username) => {
     const m = members.find((x) => x.username === username)!;
-    return { username: m.username, name: m.name, roleLabel: ROLE_LABEL[m.role] };
+    return {
+      username: m.username,
+      name: m.name,
+      roleLabel: ROLE_LABEL[m.role],
+    };
   });
 
   return <UserSwitcher users={users} current={session.username} />;

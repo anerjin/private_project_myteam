@@ -30,4 +30,8 @@ export const MATERIAL_KIND_LABEL: Record<
   COURSE: "강의",
 };
 
-export const LANGUAGE_LABEL = { KO: "한국어", EN: "영어", ETC: "기타" } as const;
+export const LANGUAGE_LABEL = {
+  KO: "한국어",
+  EN: "영어",
+  ETC: "기타",
+} as const;

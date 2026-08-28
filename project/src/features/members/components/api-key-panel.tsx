@@ -68,8 +68,7 @@ export function ApiKeyPanel() {
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm" disabled={apiKeys.length >= 5}>
-              <Plus className="size-4" />
-              키 발급
+              <Plus className="size-4" />키 발급
             </Button>
           </DialogTrigger>
           <DialogContent>
@@ -88,10 +87,15 @@ export function ApiKeyPanel() {
                 <Label>스코프</Label>
                 {SCOPES.map((s) => (
                   <div key={s.id} className="flex items-center gap-2">
-                    <Checkbox id={s.id} defaultChecked={s.id !== "archive:run"} />
+                    <Checkbox
+                      id={s.id}
+                      defaultChecked={s.id !== "archive:run"}
+                    />
                     <Label htmlFor={s.id} className="font-normal">
                       {s.label}{" "}
-                      <code className="text-muted-foreground text-xs">{s.id}</code>
+                      <code className="text-muted-foreground text-xs">
+                        {s.id}
+                      </code>
                     </Label>
                   </div>
                 ))}
@@ -151,7 +155,9 @@ export function ApiKeyPanel() {
                     </Badge>
                   )}
                 </div>
-                <code className="text-muted-foreground text-xs">{k.keyPrefix}…</code>
+                <code className="text-muted-foreground text-xs">
+                  {k.keyPrefix}…
+                </code>
                 <div className="flex flex-wrap gap-1">
                   {k.scopes.map((s) => (
                     <Badge key={s} variant="secondary" className="text-[10px]">
@@ -164,7 +170,8 @@ export function ApiKeyPanel() {
                 <p>생성 {k.createdAt.slice(0, 10)}</p>
                 <p>만료 {k.expiresAt.slice(0, 10)}</p>
                 <p>
-                  마지막 사용 {k.lastUsedAt ? k.lastUsedAt.slice(0, 10) : "없음"}
+                  마지막 사용{" "}
+                  {k.lastUsedAt ? k.lastUsedAt.slice(0, 10) : "없음"}
                 </p>
               </div>
               <Button

@@ -3,7 +3,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { RoleBadge, UserStatusBadge } from "@/features/members/components/badges";
+import {
+  RoleBadge,
+  UserStatusBadge,
+} from "@/features/members/components/badges";
 import { PageHeader } from "@/components/common/page-header";
 import {
   Breadcrumb,
@@ -64,7 +67,8 @@ export default async function AdminMemberDetailPage({
 
   const mine = resources.filter((r) => r.author.id === member.id);
   const logs = auditLogs.filter((l) => l.actorUsername === member.username);
-  const keys = member.apiKeyCount > 0 ? apiKeys.slice(0, member.apiKeyCount) : [];
+  const keys =
+    member.apiKeyCount > 0 ? apiKeys.slice(0, member.apiKeyCount) : [];
   const byChannel = {
     web: mine.filter((r) => r.sourceChannel === "WEB").length,
     mcp: mine.filter((r) => r.sourceChannel === "MCP").length,
@@ -120,13 +124,21 @@ export default async function AdminMemberDetailPage({
             <CardTitle className="text-base">계정</CardTitle>
           </CardHeader>
           <CardContent className="divide-y">
-            <Row label="아이디" value={<code className="text-xs">@{member.username}</code>} />
+            <Row
+              label="아이디"
+              value={<code className="text-xs">@{member.username}</code>}
+            />
             <Row label="역할" value={<RoleBadge role={member.role} />} />
-            <Row label="상태" value={<UserStatusBadge status={member.status} />} />
+            <Row
+              label="상태"
+              value={<UserStatusBadge status={member.status} />}
+            />
             <Row label="가입일" value={member.createdAt.slice(0, 10)} />
             <Row
               label="최근 로그인"
-              value={member.lastLoginAt?.slice(0, 16).replace("T", " ") ?? "없음"}
+              value={
+                member.lastLoginAt?.slice(0, 16).replace("T", " ") ?? "없음"
+              }
             />
           </CardContent>
         </Card>
@@ -158,15 +170,23 @@ export default async function AdminMemberDetailPage({
           </CardHeader>
           <CardContent className="space-y-2">
             {keys.length === 0 ? (
-              <p className="text-muted-foreground text-sm">발급한 키가 없습니다.</p>
+              <p className="text-muted-foreground text-sm">
+                발급한 키가 없습니다.
+              </p>
             ) : (
               keys.map((k) => (
                 <div key={k.id} className="space-y-1 text-sm">
                   <p className="font-medium">{k.name}</p>
-                  <code className="text-muted-foreground text-xs">{k.keyPrefix}…</code>
+                  <code className="text-muted-foreground text-xs">
+                    {k.keyPrefix}…
+                  </code>
                   <div className="flex flex-wrap gap-1">
                     {k.scopes.map((s) => (
-                      <Badge key={s} variant="secondary" className="text-[10px]">
+                      <Badge
+                        key={s}
+                        variant="secondary"
+                        className="text-[10px]"
+                      >
                         {s}
                       </Badge>
                     ))}
@@ -202,7 +222,9 @@ export default async function AdminMemberDetailPage({
         </CardHeader>
         <CardContent className="p-0">
           {mine.length === 0 ? (
-            <p className="text-muted-foreground p-6 text-sm">등록한 자료가 없습니다.</p>
+            <p className="text-muted-foreground p-6 text-sm">
+              등록한 자료가 없습니다.
+            </p>
           ) : (
             <Table>
               <TableHeader>

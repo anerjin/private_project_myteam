@@ -58,7 +58,9 @@ export function ResourceForm({ resource }: { resource?: Resource }) {
                 <CardContent className="space-y-2 p-5">
                   <t.icon className="text-muted-foreground size-5" />
                   <p className="font-medium">{t.label}</p>
-                  <p className="text-muted-foreground text-sm">{t.description}</p>
+                  <p className="text-muted-foreground text-sm">
+                    {t.description}
+                  </p>
                 </CardContent>
               </Card>
             </button>
@@ -88,7 +90,12 @@ export function ResourceForm({ resource }: { resource?: Resource }) {
       }}
     >
       {!editing && (
-        <Button type="button" variant="ghost" size="sm" onClick={() => setType(null)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setType(null)}
+        >
           <ArrowLeft className="size-4" />
           타입 다시 고르기
         </Button>
@@ -98,8 +105,8 @@ export function ResourceForm({ resource }: { resource?: Resource }) {
         <Alert>
           <AlertTitle>타입은 바꿀 수 없습니다</AlertTitle>
           <AlertDescription>
-            등록 후 타입 변경은 허용하지 않습니다. 다른 타입이 맞다면 새로 등록하고
-            «대체함» 으로 연결하세요.
+            등록 후 타입 변경은 허용하지 않습니다. 다른 타입이 맞다면 새로
+            등록하고 «대체함» 으로 연결하세요.
           </AlertDescription>
         </Alert>
       )}

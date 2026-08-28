@@ -14,11 +14,7 @@ export type SourceChannel = "WEB" | "MCP" | "IMPORT";
 
 export type Role = "MEMBER" | "EDITOR" | "ADMIN";
 export type UserStatus =
-  | "PENDING"
-  | "ACTIVE"
-  | "REJECTED"
-  | "SUSPENDED"
-  | "WITHDRAWN";
+  "PENDING" | "ACTIVE" | "REJECTED" | "SUSPENDED" | "WITHDRAWN";
 
 export type JobStatus = "QUEUED" | "RUNNING" | "DONE" | "FAILED";
 export type UsageStatus = "REVIEWING" | "ADOPTED" | "DEPRECATED";

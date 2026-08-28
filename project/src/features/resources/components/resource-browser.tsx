@@ -174,8 +174,7 @@ export function ResourceBrowser({ resources }: { resources: Resource[] }) {
               </Button>
               <Button size="sm" asChild>
                 <Link href="/resources/new">
-                  <Plus className="size-4" />
-                  이 주제로 자료 등록하기
+                  <Plus className="size-4" />이 주제로 자료 등록하기
                 </Link>
               </Button>
             </div>
@@ -215,7 +214,10 @@ export function ResourceBrowser({ resources }: { resources: Resource[] }) {
                     <TypeBadge type={r.type} />
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
-                    {r.tags.slice(0, 3).map((t) => `#${t}`).join(" ")}
+                    {r.tags
+                      .slice(0, 3)
+                      .map((t) => `#${t}`)
+                      .join(" ")}
                   </TableCell>
                   <TableCell className="text-sm">{r.author.name}</TableCell>
                   <TableCell className="text-right tabular-nums">

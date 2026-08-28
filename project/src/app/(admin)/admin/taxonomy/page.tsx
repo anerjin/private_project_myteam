@@ -4,7 +4,13 @@ import type { Metadata } from "next";
 import { TypeBadge } from "@/features/resources/components/badges";
 import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CATEGORIES } from "@/config/site";
@@ -24,10 +30,12 @@ const SUBCATEGORIES: Record<string, string[]> = {
 /** SCR-231 분류 · 콘텐츠 타입 관리 */
 export default function AdminTaxonomyPage() {
   const tagCounts = Object.entries(
-    resources.flatMap((r) => r.tags).reduce<Record<string, number>>((acc, t) => {
-      acc[t] = (acc[t] ?? 0) + 1;
-      return acc;
-    }, {})
+    resources
+      .flatMap((r) => r.tags)
+      .reduce<Record<string, number>>((acc, t) => {
+        acc[t] = (acc[t] ?? 0) + 1;
+        return acc;
+      }, {})
   ).sort((a, b) => b[1] - a[1]);
 
   return (
@@ -64,14 +72,19 @@ export default function AdminTaxonomyPage() {
                   <div className="flex items-center gap-2">
                     <GripVertical className="text-muted-foreground size-4" />
                     <span className="font-medium">{c.name}</span>
-                    <code className="text-muted-foreground text-xs">{c.slug}</code>
+                    <code className="text-muted-foreground text-xs">
+                      {c.slug}
+                    </code>
                     <span className="text-muted-foreground ml-auto text-xs">
                       {resources.filter((r) => r.category === c.slug).length}건
                     </span>
                   </div>
                   <div className="ml-6 flex flex-wrap gap-1.5">
                     {SUBCATEGORIES[c.slug]?.map((s) => (
-                      <span key={s} className="bg-muted rounded px-2 py-0.5 text-xs">
+                      <span
+                        key={s}
+                        className="bg-muted rounded px-2 py-0.5 text-xs"
+                      >
                         {s}
                       </span>
                     ))}
@@ -88,7 +101,8 @@ export default function AdminTaxonomyPage() {
               <div>
                 <CardTitle className="text-base">태그</CardTitle>
                 <CardDescription>
-                  CLI 수집이 늘면 유사 태그가 빠르게 늘어납니다. 주기적으로 병합하세요.
+                  CLI 수집이 늘면 유사 태그가 빠르게 늘어납니다. 주기적으로
+                  병합하세요.
                 </CardDescription>
               </div>
               <Button size="sm" variant="outline">
@@ -103,7 +117,9 @@ export default function AdminTaxonomyPage() {
                   className="bg-muted inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm"
                 >
                   #{tag}
-                  <span className="text-muted-foreground text-xs tabular-nums">{n}</span>
+                  <span className="text-muted-foreground text-xs tabular-nums">
+                    {n}
+                  </span>
                 </span>
               ))}
             </CardContent>
@@ -115,23 +131,31 @@ export default function AdminTaxonomyPage() {
             <CardHeader>
               <CardTitle className="text-base">콘텐츠 타입</CardTitle>
               <CardDescription>
-                타입의 <b>필드 구조는 코드</b>에 있습니다. 여기서는 노출 설정만 바꿉니다.
+                타입의 <b>필드 구조는 코드</b>에 있습니다. 여기서는 노출 설정만
+                바꿉니다.
               </CardDescription>
             </CardHeader>
             <CardContent className="divide-y">
               {listContentTypes().map((t) => (
-                <div key={t.code} className="flex flex-wrap items-center gap-4 py-3">
+                <div
+                  key={t.code}
+                  className="flex flex-wrap items-center gap-4 py-3"
+                >
                   <GripVertical className="text-muted-foreground size-4" />
                   <TypeBadge type={t.code} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm">{t.description}</p>
-                    <code className="text-muted-foreground text-xs">{t.code}</code>
+                    <code className="text-muted-foreground text-xs">
+                      {t.code}
+                    </code>
                   </div>
                   <span className="text-muted-foreground text-xs">
                     {resources.filter((r) => r.type === t.code).length}건
                   </span>
                   <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground text-xs">사이드바</span>
+                    <span className="text-muted-foreground text-xs">
+                      사이드바
+                    </span>
                     <Switch defaultChecked />
                   </div>
                   <div className="flex items-center gap-2">

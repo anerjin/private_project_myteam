@@ -4,4 +4,9 @@ import { Form } from "@/features/resources/content-types/github-repo/form";
 import { meta } from "@/features/resources/content-types/github-repo/meta";
 import type { ContentTypeDefinition } from "@/features/resources/content-types/types";
 
-export const githubRepo: ContentTypeDefinition = { ...meta, Card, Detail, Form };
+export const githubRepo: ContentTypeDefinition = {
+  ...meta,
+  Card,
+  Detail,
+  Form,
+};

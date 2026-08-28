@@ -53,8 +53,8 @@ export function QuickAddUrl() {
             </>
           ) : (
             <>
-              대부분의 자료는 Claude Code에서 수집합니다. 웹 등록은 손으로 정리하는
-              자료(MCP·Skill·노트)에 씁니다.
+              대부분의 자료는 Claude Code에서 수집합니다. 웹 등록은 손으로
+              정리하는 자료(MCP·Skill·노트)에 씁니다.
             </>
           )}
         </p>

@@ -22,7 +22,9 @@ export default async function EditResourcePage({
 }: PageProps<"/resources/[type]/[slug]/edit">) {
   const { type, slug } = await params;
   const meta = getContentTypeBySlug(type);
-  const resource = resources.find((r) => r.slug === slug && r.type === meta?.code);
+  const resource = resources.find(
+    (r) => r.slug === slug && r.type === meta?.code
+  );
   if (!meta || !resource) notFound();
 
   // 인가는 화면 진입에서도 확인한다. 버튼을 숨기는 것만으로는 인가가 아니다 (REQ-02 · 2.1절)

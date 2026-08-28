@@ -33,11 +33,7 @@ export function AutoRefresh() {
         </span>
       )}
       <div className="flex items-center gap-2 text-sm">
-        <Switch
-          id="job-auto-refresh"
-          checked={on}
-          onCheckedChange={setOn}
-        />
+        <Switch id="job-auto-refresh" checked={on} onCheckedChange={setOn} />
         <Label htmlFor="job-auto-refresh" className="text-muted-foreground">
           10초 자동 갱신
         </Label>

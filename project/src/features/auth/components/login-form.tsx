@@ -61,7 +61,10 @@ export function LoginForm() {
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader className="text-center">
-          <BrandMark className="mx-auto mb-2 size-11 rounded-xl" iconClassName="size-6" />
+          <BrandMark
+            className="mx-auto mb-2 size-11 rounded-xl"
+            iconClassName="size-6"
+          />
           <CardTitle className="text-xl">{SITE.name}</CardTitle>
           <CardDescription>{SITE.description}</CardDescription>
         </CardHeader>

@@ -27,7 +27,8 @@ export default function GlobalError({
       <div className="space-y-1.5">
         <h1 className="text-xl font-semibold">일시적인 오류가 발생했습니다</h1>
         <p className="text-muted-foreground max-w-sm text-sm">
-          잠시 후 다시 시도해 주세요. 계속 같은 문제가 생기면 관리자에게 알려주세요.
+          잠시 후 다시 시도해 주세요. 계속 같은 문제가 생기면 관리자에게
+          알려주세요.
         </p>
         {error.digest && (
           <p className="text-muted-foreground pt-2 font-mono text-xs">

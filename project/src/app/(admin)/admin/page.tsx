@@ -28,7 +28,9 @@ export const metadata: Metadata = { title: "관리자" };
 
 /** SCR-201 관리자 대시보드 */
 export default function AdminDashboardPage() {
-  const archivePct = Math.round((stats.archiveUsedGb / stats.archiveLimitGb) * 100);
+  const archivePct = Math.round(
+    (stats.archiveUsedGb / stats.archiveLimitGb) * 100
+  );
 
   return (
     <>
@@ -64,14 +66,24 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="전체 회원" value={stats.totalMembers} unit="명" icon={Users} />
+        <StatCard
+          label="전체 회원"
+          value={stats.totalMembers}
+          unit="명"
+          icon={Users}
+        />
         <StatCard
           label="승인 대기"
           value={stats.pendingMembers}
           unit="명"
           icon={UserPlus}
         />
-        <StatCard label="전체 자료" value={stats.totalResources} unit="건" icon={Library} />
+        <StatCard
+          label="전체 자료"
+          value={stats.totalResources}
+          unit="건"
+          icon={Library}
+        />
         <StatCard
           label="디스크 여유"
           value={stats.diskFreeGb}
@@ -98,13 +110,19 @@ export default function AdminDashboardPage() {
               <Archive className="size-4" />
               아카이브 사용량
             </CardTitle>
-            <CardDescription>총량 상한 {stats.archiveLimitGb}GB</CardDescription>
+            <CardDescription>
+              총량 상한 {stats.archiveLimitGb}GB
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <Progress value={archivePct} />
             <div className="flex justify-between text-sm">
-              <span className="tabular-nums">{stats.archiveUsedGb} GB 사용</span>
-              <span className="text-muted-foreground tabular-nums">{archivePct}%</span>
+              <span className="tabular-nums">
+                {stats.archiveUsedGb} GB 사용
+              </span>
+              <span className="text-muted-foreground tabular-nums">
+                {archivePct}%
+              </span>
             </div>
             <p className="text-muted-foreground text-xs">
               80GB에서 경고, 100GB에서 신규 아카이브를 차단합니다.

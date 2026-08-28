@@ -136,11 +136,15 @@ export function AuditTable({ logs }: { logs: AuditLog[] }) {
                       @{l.actorUsername}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={l.via === "MCP" ? "default" : "secondary"}>
+                      <Badge
+                        variant={l.via === "MCP" ? "default" : "secondary"}
+                      >
                         {l.via}
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{l.action}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {l.action}
+                    </TableCell>
                     <TableCell className="text-sm">{l.summary}</TableCell>
                     <TableCell className="text-muted-foreground text-xs">
                       {l.ip}

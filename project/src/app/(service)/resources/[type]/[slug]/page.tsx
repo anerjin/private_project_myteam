@@ -12,10 +12,7 @@ import { TypeBadge } from "@/features/resources/components/badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CATEGORIES } from "@/config/site";
-import {
-  canEditResource,
-  getMockSession,
-} from "@/features/auth/mock-session";
+import { canEditResource, getMockSession } from "@/features/auth/mock-session";
 import { DeleteResourceDialog } from "@/features/resources/components/delete-resource-dialog";
 import { ExternalLinkButton } from "@/features/resources/components/external-link-button";
 import { TypeDetail } from "@/features/resources/components/type-detail";
@@ -39,7 +36,9 @@ export default async function ResourceDetailPage({
 }: PageProps<"/resources/[type]/[slug]">) {
   const { type, slug } = await params;
   const meta = getContentTypeBySlug(type);
-  const resource = resources.find((r) => r.slug === slug && r.type === meta?.code);
+  const resource = resources.find(
+    (r) => r.slug === slug && r.type === meta?.code
+  );
   if (!meta || !resource) notFound();
   const category = CATEGORIES.find((c) => c.slug === resource.category);
   const toc = resource.body ? extractToc(resource.body) : [];
@@ -47,7 +46,10 @@ export default async function ResourceDetailPage({
   const session = await getMockSession();
   const canEdit = canEditResource(session, resource.author.id);
   const related = resources
-    .filter((r) => r.id !== resource.id && r.tags.some((t) => resource.tags.includes(t)))
+    .filter(
+      (r) =>
+        r.id !== resource.id && r.tags.some((t) => resource.tags.includes(t))
+    )
     .slice(0, 3);
 
   return (
@@ -74,7 +76,9 @@ export default async function ResourceDetailPage({
             <Button variant="outline" size="sm">
               <Bookmark
                 className={
-                  resource.bookmarked ? "size-4 fill-amber-400 text-amber-500" : "size-4"
+                  resource.bookmarked
+                    ? "size-4 fill-amber-400 text-amber-500"
+                    : "size-4"
                 }
               />
               북마크
@@ -127,7 +131,10 @@ export default async function ResourceDetailPage({
                 <span className="text-muted-foreground">등록자</span>
                 <span>
                   {resource.author.name}
-                  <span className="text-muted-foreground"> @{resource.author.username}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    @{resource.author.username}
+                  </span>
                 </span>
               </div>
               <div className="flex justify-between gap-2">
@@ -151,7 +158,9 @@ export default async function ResourceDetailPage({
               </div>
               <div className="flex justify-between gap-2">
                 <span className="text-muted-foreground">등록 경로</span>
-                <span>{resource.sourceChannel === "MCP" ? "CLI (MCP)" : "웹"}</span>
+                <span>
+                  {resource.sourceChannel === "MCP" ? "CLI (MCP)" : "웹"}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -162,10 +171,7 @@ export default async function ResourceDetailPage({
             </CardHeader>
             <CardContent className="flex flex-wrap gap-1.5">
               {resource.tags.map((t) => (
-                <span
-                  key={t}
-                  className="bg-muted rounded px-2 py-0.5 text-xs"
-                >
+                <span key={t} className="bg-muted rounded px-2 py-0.5 text-xs">
                   #{t}
                 </span>
               ))}

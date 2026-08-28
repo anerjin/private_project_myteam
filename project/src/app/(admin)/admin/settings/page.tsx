@@ -42,7 +42,9 @@ function SettingRow({
 
 /** SCR-261 시스템 설정 */
 export default function AdminSettingsPage() {
-  const archivePct = Math.round((stats.archiveUsedGb / stats.archiveLimitGb) * 100);
+  const archivePct = Math.round(
+    (stats.archiveUsedGb / stats.archiveLimitGb) * 100
+  );
 
   return (
     <>
@@ -116,7 +118,10 @@ export default function AdminSettingsPage() {
                   <span className="text-muted-foreground text-sm">%</span>
                 </div>
               </SettingRow>
-              <SettingRow label="최소 디스크 여유" hint={`현재 ${stats.diskFreeGb}GB`}>
+              <SettingRow
+                label="최소 디스크 여유"
+                hint={`현재 ${stats.diskFreeGb}GB`}
+              >
                 <div className="flex items-center gap-2">
                   <Input defaultValue="20" className="w-20 text-right" />
                   <span className="text-muted-foreground text-sm">GB</span>
@@ -173,7 +178,11 @@ export default function AdminSettingsPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="banner">전체 공지 배너</Label>
-              <Textarea id="banner" rows={2} placeholder="비워두면 표시하지 않습니다" />
+              <Textarea
+                id="banner"
+                rows={2}
+                placeholder="비워두면 표시하지 않습니다"
+              />
             </div>
             <div className="divide-y">
               <SettingRow label="휴지통 보관">

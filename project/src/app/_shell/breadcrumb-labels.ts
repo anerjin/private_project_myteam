@@ -12,7 +12,8 @@ import { collections, members, resources } from "@/mocks";
 export function serviceBreadcrumbLabels(): Record<string, string> {
   const labels: Record<string, string> = {};
   for (const type of listContentTypes()) labels[type.slug] = type.label;
-  for (const collection of collections) labels[collection.slug] = collection.name;
+  for (const collection of collections)
+    labels[collection.slug] = collection.name;
   for (const resource of resources) labels[resource.slug] = resource.title;
   return labels;
 }

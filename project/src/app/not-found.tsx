@@ -14,7 +14,9 @@ export default function NotFound() {
         <FileQuestion className="size-7" />
       </div>
       <div className="space-y-1.5">
-        <p className="text-muted-foreground text-sm font-medium tabular-nums">404</p>
+        <p className="text-muted-foreground text-sm font-medium tabular-nums">
+          404
+        </p>
         <h1 className="text-xl font-semibold">찾는 화면이 없습니다</h1>
         <p className="text-muted-foreground max-w-sm text-sm">
           주소가 바뀌었거나 자료가 삭제되었을 수 있습니다. 삭제된 자료는 관리자

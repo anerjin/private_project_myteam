@@ -43,7 +43,10 @@ export function Detail({ resource }: { resource: Resource }) {
         </CardHeader>
         <CardContent>
           <dl className="divide-y">
-            <DetailRow label="형식" value={MATERIAL_KIND_LABEL[d.materialKind]} />
+            <DetailRow
+              label="형식"
+              value={MATERIAL_KIND_LABEL[d.materialKind]}
+            />
             <DetailRow label="출처" value={d.sourceName ?? "-"} />
             <DetailRow label="저자" value={d.authors?.join(", ") ?? "-"} />
             <DetailRow label="발행일" value={d.publishedAt ?? "-"} />

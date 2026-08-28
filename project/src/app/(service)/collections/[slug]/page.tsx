@@ -42,7 +42,8 @@ export default async function CollectionDetailPage({
   }));
 
   const session = await getMockSession();
-  const isOwner = collection.owner.id === session.id || session.role !== "MEMBER";
+  const isOwner =
+    collection.owner.id === session.id || session.role !== "MEMBER";
 
   return (
     <>
@@ -115,7 +116,11 @@ export default async function CollectionDetailPage({
               </div>
 
               {isOwner && (
-                <Button variant="ghost" size="icon" aria-label="컬렉션에서 빼기">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="컬렉션에서 빼기"
+                >
                   <X className="size-4" />
                 </Button>
               )}

@@ -30,7 +30,8 @@ export function Detail({ resource }: { resource: Resource }) {
           <AlertTriangle />
           <AlertTitle>원본이 사라졌습니다</AlertTitle>
           <AlertDescription>
-            저장소가 삭제되었거나 비공개로 전환되었습니다. 아래 아카이브를 이용하세요.
+            저장소가 삭제되었거나 비공개로 전환되었습니다. 아래 아카이브를
+            이용하세요.
           </AlertDescription>
         </Alert>
       )}
@@ -51,7 +52,10 @@ export function Detail({ resource }: { resource: Resource }) {
             </span>
           </div>
           <dl className="divide-y">
-            <DetailRow label="소유자 / 저장소" value={`${d.owner} / ${d.repo}`} />
+            <DetailRow
+              label="소유자 / 저장소"
+              value={`${d.owner} / ${d.repo}`}
+            />
             <DetailRow label="주 언어" value={d.primaryLanguage ?? "-"} />
             <DetailRow label="라이선스" value={d.license ?? "확인 필요"} />
             <DetailRow label="토픽" value={d.topics?.join(", ") ?? "-"} />

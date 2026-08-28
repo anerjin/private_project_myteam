@@ -16,19 +16,19 @@ export default function SearchPage() {
     count: resources.filter((r) => r.type === t.code).length,
   }));
   const tagCounts = Object.entries(
-    resources.flatMap((r) => r.tags).reduce<Record<string, number>>((acc, t) => {
-      acc[t] = (acc[t] ?? 0) + 1;
-      return acc;
-    }, {})
+    resources
+      .flatMap((r) => r.tags)
+      .reduce<Record<string, number>>((acc, t) => {
+        acc[t] = (acc[t] ?? 0) + 1;
+        return acc;
+      }, {})
   )
     .sort((a, b) => b[1] - a[1])
     .slice(0, 12);
 
   return (
     <>
-      <PageHeader
-        description="제목 · 요약 · 본문 · 태그를 한 번에 찾습니다. 헤더에서 Ctrl+K 로도 열 수 있습니다."
-      />
+      <PageHeader description="제목 · 요약 · 본문 · 태그를 한 번에 찾습니다. 헤더에서 Ctrl+K 로도 열 수 있습니다." />
 
       <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
         <aside className="space-y-4">
@@ -44,7 +44,9 @@ export default function SearchPage() {
                   className="hover:bg-muted/60 -mx-2 flex items-center justify-between rounded px-2 py-1 text-sm"
                 >
                   <span>{meta.label}</span>
-                  <span className="text-muted-foreground tabular-nums">{count}</span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {count}
+                  </span>
                 </Link>
               ))}
             </CardContent>
@@ -56,7 +58,10 @@ export default function SearchPage() {
             </CardHeader>
             <CardContent className="flex flex-wrap gap-1.5">
               {tagCounts.map(([tag, n]) => (
-                <span key={tag} className="bg-muted rounded px-2 py-0.5 text-xs">
+                <span
+                  key={tag}
+                  className="bg-muted rounded px-2 py-0.5 text-xs"
+                >
                   #{tag} <span className="text-muted-foreground">{n}</span>
                 </span>
               ))}

@@ -89,7 +89,9 @@ export function AppSidebar({
 
         {groups.map((group, i) => (
           <SidebarGroup key={group.label ?? `g${i}`}>
-            {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
+            {group.label && (
+              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            )}
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => (

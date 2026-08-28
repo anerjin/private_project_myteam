@@ -23,7 +23,8 @@ const RULES = [
   {
     label: "영문·숫자·특수문자 중 2종 이상",
     test: (p: string) =>
-      [/[a-zA-Z]/, /[0-9]/, /[^a-zA-Z0-9]/].filter((r) => r.test(p)).length >= 2,
+      [/[a-zA-Z]/, /[0-9]/, /[^a-zA-Z0-9]/].filter((r) => r.test(p)).length >=
+      2,
   },
   {
     label: "이전 비밀번호와 다름",
@@ -59,7 +60,9 @@ export function ChangePasswordForm() {
           <FieldGroup>
             <Alert>
               <ShieldAlert />
-              <AlertTitle>변경하기 전에는 다른 화면으로 갈 수 없습니다</AlertTitle>
+              <AlertTitle>
+                변경하기 전에는 다른 화면으로 갈 수 없습니다
+              </AlertTitle>
               <AlertDescription>
                 임시 비밀번호는 관리자도 알고 있는 값입니다.
               </AlertDescription>

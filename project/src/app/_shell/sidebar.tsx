@@ -41,9 +41,7 @@ export function ServiceSidebar({
       variant="service"
       groups={groups}
       user={user}
-      adminEntry={
-        isAdmin ? { ...adminEntry, badge: pendingCount } : undefined
-      }
+      adminEntry={isAdmin ? { ...adminEntry, badge: pendingCount } : undefined}
     />
   );
 }

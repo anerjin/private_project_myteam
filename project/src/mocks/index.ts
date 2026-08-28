@@ -22,10 +22,25 @@ export const currentUser: Author & { role: "ADMIN" } = {
 };
 
 const A = {
-  jaehyun: { id: "u1", username: "jaehyun", name: "김재현", department: "개발팀" },
+  jaehyun: {
+    id: "u1",
+    username: "jaehyun",
+    name: "김재현",
+    department: "개발팀",
+  },
   minsu: { id: "u2", username: "minsu", name: "박민수", department: "개발팀" },
-  seoyeon: { id: "u3", username: "seoyeon", name: "이서연", department: "공간정보팀" },
-  hyunwoo: { id: "u4", username: "hyunwoo", name: "정현우", department: "개발팀" },
+  seoyeon: {
+    id: "u3",
+    username: "seoyeon",
+    name: "이서연",
+    department: "공간정보팀",
+  },
+  hyunwoo: {
+    id: "u4",
+    username: "hyunwoo",
+    name: "정현우",
+    department: "개발팀",
+  },
 } satisfies Record<string, Author>;
 
 export const resources: Resource[] = [
@@ -171,7 +186,8 @@ description: 주제를 받아 자료를 찾고 QueenBee에 등록한다
 - 한 대화에서 10건을 넘기지 않는다`,
       triggerCondition:
         "사용자가 특정 주제의 자료를 찾아 QueenBee에 등록해 달라고 요청할 때",
-      usageExample: '"MCP 서버 보안 관련 자료 최근 6개월 것으로 찾아서 등록해줘"',
+      usageExample:
+        '"MCP 서버 보안 관련 자료 최근 6개월 것으로 찾아서 등록해줘"',
       targetClients: ["Claude Code"],
       usageStatus: "ADOPTED",
       version: "1.0.0",
@@ -267,7 +283,8 @@ volumes:
     type: "GITHUB_REPO",
     slug: "open-drone-map",
     title: "OpenDroneMap/ODM",
-    summary: "드론 사진에서 포인트클라우드·정사영상·DSM을 생성하는 오픈소스 툴킷.",
+    summary:
+      "드론 사진에서 포인트클라우드·정사영상·DSM을 생성하는 오픈소스 툴킷.",
     url: "https://github.com/OpenDroneMap/ODM",
     status: "PUBLISHED",
     sourceChannel: "WEB",
@@ -397,7 +414,8 @@ volumes:
     type: "GITHUB_REPO",
     slug: "pdal",
     title: "PDAL/PDAL",
-    summary: "포인트클라우드 처리 파이프라인 라이브러리. 좌표 변환·필터링에 사용.",
+    summary:
+      "포인트클라우드 처리 파이프라인 라이브러리. 좌표 변환·필터링에 사용.",
     url: "https://github.com/PDAL/PDAL",
     status: "PUBLISHED",
     sourceChannel: "WEB",

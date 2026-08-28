@@ -9,7 +9,8 @@ const USER_STATUS_CLASS: Record<UserStatus, string> = {
     "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
   REJECTED: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
   SUSPENDED: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-  WITHDRAWN: "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
+  WITHDRAWN:
+    "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
 };
 
 export function UserStatusBadge({ status }: { status: UserStatus }) {

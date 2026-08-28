@@ -37,10 +37,12 @@ const JOB_LABEL: Record<string, string> = {
 
 /** SCR-241 수집 작업 모니터 */
 export default function AdminJobsPage() {
-  const counts = (["QUEUED", "RUNNING", "DONE", "FAILED"] as JobStatus[]).map((s) => ({
-    status: s,
-    n: jobs.filter((j) => j.status === s).length,
-  }));
+  const counts = (["QUEUED", "RUNNING", "DONE", "FAILED"] as JobStatus[]).map(
+    (s) => ({
+      status: s,
+      n: jobs.filter((j) => j.status === s).length,
+    })
+  );
 
   return (
     <>
@@ -54,7 +56,9 @@ export default function AdminJobsPage() {
         {counts.map(({ status, n }) => (
           <Card key={status}>
             <CardContent className="p-4">
-              <p className="text-muted-foreground text-sm">{STATUS_LABEL[status]}</p>
+              <p className="text-muted-foreground text-sm">
+                {STATUS_LABEL[status]}
+              </p>
               <p className="text-2xl font-semibold tabular-nums">{n}</p>
             </CardContent>
           </Card>
@@ -90,7 +94,9 @@ export default function AdminJobsPage() {
                   <div>
                     <p className="truncate text-sm">{j.targetTitle}</p>
                     {j.errorMessage && (
-                      <p className="text-destructive text-xs">{j.errorMessage}</p>
+                      <p className="text-destructive text-xs">
+                        {j.errorMessage}
+                      </p>
                     )}
                   </div>
                 </TableCell>
@@ -107,7 +113,9 @@ export default function AdminJobsPage() {
                     {STATUS_LABEL[j.status]}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-right tabular-nums">{j.attempts}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {j.attempts}
+                </TableCell>
                 <TableCell className="text-muted-foreground text-right text-xs tabular-nums">
                   {j.durationMs ? `${(j.durationMs / 1000).toFixed(1)}s` : "-"}
                 </TableCell>

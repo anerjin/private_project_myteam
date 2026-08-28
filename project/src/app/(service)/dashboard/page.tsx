@@ -45,10 +45,30 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="전체 자료" value={stats.totalResources} unit="건" icon={Library} />
-        <StatCard label="이번 주 신규" value={stats.weeklyNew} unit="건" icon={FilePlus2} />
-        <StatCard label="내 북마크" value={stats.myBookmarks} unit="건" icon={BookMarked} />
-        <StatCard label="내가 등록" value={stats.myResources} unit="건" icon={PenLine} />
+        <StatCard
+          label="전체 자료"
+          value={stats.totalResources}
+          unit="건"
+          icon={Library}
+        />
+        <StatCard
+          label="이번 주 신규"
+          value={stats.weeklyNew}
+          unit="건"
+          icon={FilePlus2}
+        />
+        <StatCard
+          label="내 북마크"
+          value={stats.myBookmarks}
+          unit="건"
+          icon={BookMarked}
+        />
+        <StatCard
+          label="내가 등록"
+          value={stats.myResources}
+          unit="건"
+          icon={PenLine}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

@@ -23,7 +23,10 @@ export const CONTENT_TYPES = {
   PROMPT: prompt,
 } satisfies Record<ResourceType, ContentTypeDefinition>;
 
-export type { ContentTypeDefinition, ContentTypeMeta } from "@/features/resources/content-types/types";
+export type {
+  ContentTypeDefinition,
+  ContentTypeMeta,
+} from "@/features/resources/content-types/types";
 
 export function getContentType(code: ResourceType): ContentTypeDefinition {
   return CONTENT_TYPES[code];

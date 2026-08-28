@@ -17,7 +17,9 @@ export default function PendingPage() {
         </div>
 
         <div className="space-y-1.5">
-          <h1 className="text-lg font-semibold">관리자 승인을 기다리고 있습니다</h1>
+          <h1 className="text-lg font-semibold">
+            관리자 승인을 기다리고 있습니다
+          </h1>
           <p className="text-muted-foreground text-sm">
             승인되면 이 화면에서 바로 이용할 수 있습니다.
             <br />

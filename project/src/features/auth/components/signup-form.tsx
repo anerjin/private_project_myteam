@@ -44,7 +44,8 @@ export function SignupForm() {
 
   const valid = USERNAME_RE.test(username);
   const taken = TAKEN.includes(username);
-  const usernameState = !touched || !username ? null : !valid ? "invalid" : taken ? "taken" : "ok";
+  const usernameState =
+    !touched || !username ? null : !valid ? "invalid" : taken ? "taken" : "ok";
 
   const s = strength(password);
   const bars = ["매우 약함", "약함", "보통", "강함", "매우 강함"];
@@ -78,7 +79,8 @@ export function SignupForm() {
               />
               {usernameState === "ok" ? (
                 <FieldDescription className="text-emerald-600 dark:text-emerald-400">
-                  <Check className="inline size-3" /> 사용할 수 있는 아이디입니다
+                  <Check className="inline size-3" /> 사용할 수 있는
+                  아이디입니다
                 </FieldDescription>
               ) : usernameState === "taken" ? (
                 <FieldDescription className="text-destructive">
@@ -86,7 +88,8 @@ export function SignupForm() {
                 </FieldDescription>
               ) : (
                 <FieldDescription>
-                  영문 소문자·숫자·<code>_</code>·<code>.</code> 4~20자, 첫 글자는 영문
+                  영문 소문자·숫자·<code>_</code>·<code>.</code> 4~20자, 첫
+                  글자는 영문
                 </FieldDescription>
               )}
             </Field>
@@ -119,13 +122,20 @@ export function SignupForm() {
                 ))}
               </div>
               <FieldDescription>
-                {password ? bars[s] : "최소 10자, 영문·숫자·특수문자 중 2종 이상"}
+                {password
+                  ? bars[s]
+                  : "최소 10자, 영문·숫자·특수문자 중 2종 이상"}
               </FieldDescription>
             </Field>
 
             <Field>
               <FieldLabel htmlFor="password2">비밀번호 확인 *</FieldLabel>
-              <Input id="password2" type="password" autoComplete="new-password" required />
+              <Input
+                id="password2"
+                type="password"
+                autoComplete="new-password"
+                required
+              />
             </Field>
 
             <Field>

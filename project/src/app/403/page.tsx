@@ -14,11 +14,15 @@ export default function ForbiddenPage() {
         <ShieldX className="size-7" />
       </div>
       <div className="space-y-1.5">
-        <p className="text-muted-foreground text-sm font-medium tabular-nums">403</p>
-        <h1 className="text-xl font-semibold">이 화면에 접근할 권한이 없습니다</h1>
+        <p className="text-muted-foreground text-sm font-medium tabular-nums">
+          403
+        </p>
+        <h1 className="text-xl font-semibold">
+          이 화면에 접근할 권한이 없습니다
+        </h1>
         <p className="text-muted-foreground max-w-sm text-sm">
-          관리자 영역은 <b>ADMIN</b> 역할만 볼 수 있습니다. 권한이 필요하면 관리자에게
-          요청하세요.
+          관리자 영역은 <b>ADMIN</b> 역할만 볼 수 있습니다. 권한이 필요하면
+          관리자에게 요청하세요.
         </p>
       </div>
       <div className="flex gap-2">

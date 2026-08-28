@@ -22,8 +22,18 @@ export function TrendChart() {
     <ChartContainer config={config} className="h-[220px] w-full">
       <AreaChart data={registrationTrend} margin={{ left: -20, right: 8 }}>
         <CartesianGrid vertical={false} strokeDasharray="3 3" />
-        <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
-        <YAxis tickLine={false} axisLine={false} width={32} allowDecimals={false} />
+        <XAxis
+          dataKey="date"
+          tickLine={false}
+          axisLine={false}
+          tickMargin={8}
+        />
+        <YAxis
+          tickLine={false}
+          axisLine={false}
+          width={32}
+          allowDecimals={false}
+        />
         <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
         <Area
           dataKey="mcp"

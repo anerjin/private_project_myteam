@@ -3,7 +3,10 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
-import { MOCK_SESSION_COOKIE, SWITCHABLE_USERS } from "@/features/auth/mock-session";
+import {
+  MOCK_SESSION_COOKIE,
+  SWITCHABLE_USERS,
+} from "@/features/auth/mock-session";
 
 /**
  * 프로토타입용 사용자 전환. 인증이 붙으면 삭제합니다.

@@ -1,7 +1,10 @@
 import { Monitor } from "lucide-react";
 import type { Metadata } from "next";
 
-import { RoleBadge, UserStatusBadge } from "@/features/members/components/badges";
+import {
+  RoleBadge,
+  UserStatusBadge,
+} from "@/features/members/components/badges";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -103,8 +106,16 @@ export default async function MePage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {[
-                { device: "Windows · Chrome", ip: "192.168.0.14", current: true },
-                { device: "macOS · Safari", ip: "192.168.0.51", current: false },
+                {
+                  device: "Windows · Chrome",
+                  ip: "192.168.0.14",
+                  current: true,
+                },
+                {
+                  device: "macOS · Safari",
+                  ip: "192.168.0.51",
+                  current: false,
+                },
               ].map((s) => (
                 <div key={s.ip} className="flex items-center gap-3">
                   <Monitor className="text-muted-foreground size-4" />
@@ -131,7 +142,9 @@ export default async function MePage() {
         </TabsContent>
 
         <TabsContent value="activity" className="mt-4 space-y-4">
-          <h2 className="text-sm font-medium">내가 등록한 자료 {mine.length}건</h2>
+          <h2 className="text-sm font-medium">
+            내가 등록한 자료 {mine.length}건
+          </h2>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {mine.map((r) => (
               <ResourceCard key={r.id} resource={r} />
@@ -149,9 +162,21 @@ export default async function MePage() {
             </CardHeader>
             <CardContent className="divide-y">
               {[
-                { label: "가입 신청 알림", hint: "관리자에게만 해당", on: true },
-                { label: "승인·거부 결과", hint: "내 계정 상태가 바뀔 때", on: true },
-                { label: "작업 완료·실패", hint: "아카이브·메타 수집 결과", on: true },
+                {
+                  label: "가입 신청 알림",
+                  hint: "관리자에게만 해당",
+                  on: true,
+                },
+                {
+                  label: "승인·거부 결과",
+                  hint: "내 계정 상태가 바뀔 때",
+                  on: true,
+                },
+                {
+                  label: "작업 완료·실패",
+                  hint: "아카이브·메타 수집 결과",
+                  on: true,
+                },
               ].map((n) => (
                 <div
                   key={n.label}
@@ -213,7 +238,9 @@ export default async function MePage() {
 
           <Card className="border-destructive/40">
             <CardHeader>
-              <CardTitle className="text-destructive text-base">회원 탈퇴</CardTitle>
+              <CardTitle className="text-destructive text-base">
+                회원 탈퇴
+              </CardTitle>
               <CardDescription>
                 등록한 자료는 남고 작성자 표기만 «탈퇴한 사용자»로 바뀝니다.
                 아이디는 재사용할 수 없습니다.

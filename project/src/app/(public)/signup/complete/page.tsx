@@ -52,7 +52,9 @@ export default function SignupCompletePage() {
         <div className="bg-muted/50 w-full rounded-lg p-4 text-left text-xs">
           <p className="mb-1 font-medium">알아두실 점</p>
           <ul className="text-muted-foreground list-inside list-disc space-y-1">
-            <li>승인 결과는 메일로 보내지 않습니다. 로그인해서 확인해 주세요.</li>
+            <li>
+              승인 결과는 메일로 보내지 않습니다. 로그인해서 확인해 주세요.
+            </li>
             <li>승인 전에 로그인하면 «승인 대기» 화면이 나타납니다.</li>
           </ul>
         </div>

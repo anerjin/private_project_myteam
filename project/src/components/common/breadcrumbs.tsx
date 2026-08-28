@@ -11,7 +11,11 @@ import {
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { BREADCRUMB_ROOT, PATH_LABEL, SEGMENT_LABEL } from "@/config/navigation";
+import {
+  BREADCRUMB_ROOT,
+  PATH_LABEL,
+  SEGMENT_LABEL,
+} from "@/config/navigation";
 
 /**
  * 모든 화면 공통 브레드크럼 (DEV-03 · 3.4절).
@@ -68,7 +72,9 @@ export function Breadcrumbs({
       */}
       <BreadcrumbList className="flex-nowrap">
         <BreadcrumbItem
-          className={rootIsCurrent ? "min-w-0" : "hidden shrink-0 md:inline-flex"}
+          className={
+            rootIsCurrent ? "min-w-0" : "hidden shrink-0 md:inline-flex"
+          }
         >
           {rootIsCurrent ? (
             <CurrentPage label={root.label} heading={heading} />
