@@ -1,0 +1,649 @@
+// QueenBee 데이터 모델
+// 정본: _docs/02.개발설계/02_데이터_모델.md (DEV-02)
+//
+// 명명 규칙: 테이블 snake_case 복수형 / 모델 PascalCase 단수 / 필드 camelCase + @map
+// tsvector · GIN 인덱스 · 트리거는 Prisma 로 표현할 수 없어 마이그레이션 SQL 에 직접 씁니다
+// (DEV-02 · 2.5절).
+
+generator client {
+  provider = "prisma-client-js"
+  // 이 줄이 없으면 아래 datasource 의 `extensions` 가 유효하지 않아
+  // `prisma validate` 가 바로 실패합니다. 빠뜨리기 쉬운 자리입니다.
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+// Prisma 7 부터 `url` 은 스키마에 두지 않습니다.
+// 마이그레이션용 접속 URL은 `prisma.config.ts`, 런타임은 driver adapter(`src/lib/db.ts`).
+datasource db {
+  provider   = "postgresql"
+  extensions = [pgTrgm(map: "pg_trgm"), unaccent]
+}
+
+// ───────── enum ─────────
+enum Role {
+  MEMBER
+  EDITOR
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  SUSPENDED
+  WITHDRAWN
+}
+
+enum ResourceType {
+  AI_MATERIAL
+  GITHUB_REPO
+  MCP_SERVER
+  SKILL
+  DEV_NOTE
+  PROMPT
+}
+
+enum ResourceStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+/// 자료가 들어온 경로. CLI 등록분을 구분하는 유일한 값 (DEC-029)
+enum SourceChannel {
+  WEB
+  MCP
+  IMPORT
+}
+
+/// 감사 로그의 수행 경로
+enum ActorVia {
+  WEB
+  MCP
+}
+
+/// 컬렉션 전용. 자료에는 쓰지 않는다 (DEC-018)
+enum Visibility {
+  TEAM
+  PRIVATE
+}
+
+enum SourceStatus {
+  OK
+  MOVED
+  GONE
+}
+
+enum FileRole {
+  ATTACHMENT
+  ARCHIVE
+  THUMBNAIL
+}
+
+enum RelationType {
+  RELATED
+  SOURCE_OF
+  SUPERSEDES
+  PART_OF
+}
+
+enum ArchiveStatus {
+  NONE
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum JobType {
+  FETCH_URL_META
+  FETCH_GITHUB_META
+  ARCHIVE_GITHUB
+  REFRESH_GITHUB_META
+  CHECK_LINK
+  GENERATE_THUMBNAIL
+  CLEANUP_TRASH
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum UsageStatus {
+  REVIEWING
+  ADOPTED
+  DEPRECATED
+}
+
+enum MaterialKind {
+  PAPER
+  ARTICLE
+  VIDEO
+  MODEL
+  SERVICE
+  COURSE
+}
+
+enum Language {
+  KO
+  EN
+  ETC
+}
+
+enum McpTransport {
+  STDIO
+  SSE
+  HTTP
+}
+
+enum NoteKind {
+  CONVENTION
+  TROUBLESHOOT
+  TIP
+  RETRO
+}
+
+enum NotificationType {
+  SIGNUP_REQUEST
+  APPROVED
+  REJECTED
+  JOB_DONE
+  JOB_FAILED
+  SYSTEM
+}
+
+// ───────── 계정 ─────────
+model User {
+  id                 String     @id @default(cuid())
+  /// 로그인 아이디 (소문자 정규화). 이메일은 수집하지 않는다 (DEC-014)
+  username           String     @unique
+  passwordHash       String     @map("password_hash")
+  name               String
+  department         String?
+  avatarUrl          String?    @map("avatar_url")
+  bio                String?
+  role               Role       @default(MEMBER)
+  status             UserStatus @default(PENDING)
+  signupReason       String?    @map("signup_reason")
+  statusReason       String?    @map("status_reason")
+  statusChangedAt    DateTime?  @map("status_changed_at")
+  statusChangedById  String?    @map("status_changed_by")
+  mustChangePassword Boolean    @default(false) @map("must_change_password")
+  passwordChangedAt  DateTime?  @map("password_changed_at")
+  lastLoginAt        DateTime?  @map("last_login_at")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+
+  sessions          Session[]
+  apiKeys           ApiKey[]
+  resources         Resource[]         @relation("ResourceAuthor")
+  bookmarks         Bookmark[]
+  collections       Collection[]
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+  uploadedFiles     File[]
+  passwordHistories PasswordHistory[]
+  revisions         ResourceRevision[]
+
+  @@index([status])
+  @@index([role])
+  @@map("users")
+}
+
+/// 탈퇴한 계정의 아이디를 재사용하지 못하게 막는다 (DEC-021).
+/// 아이디 중복 검사는 users 와 이 테이블을 **모두** 조회한다 (FR-AUTH-002).
+model ReservedUsername {
+  username   String   @id
+  reservedAt DateTime @default(now()) @map("reserved_at")
+  reason     String?
+
+  @@map("reserved_usernames")
+}
+
+/// 비밀번호 재사용 방지 — 사용자별 최근 3개만 보관
+model PasswordHistory {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("password_histories")
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  name       String
+  /// `qb_live_a1b2c3d4` — 조회·표시용 앞 자리
+  keyPrefix  String    @unique @map("key_prefix")
+  /// SHA-256. 원문은 저장하지 않는다 (NFR-SEC-017)
+  keyHash    String    @map("key_hash")
+  scopes     String[]
+  lastUsedAt DateTime? @map("last_used_at")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  revokedBy  String?   @map("revoked_by")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  auditLogs AuditLog[]
+
+  @@index([userId])
+  @@map("api_keys")
+}
+
+/// 자체 세션 (DEC-030 — Auth.js 를 쓰지 않는다).
+/// 토큰 원문은 쿠키에만 있고 여기에는 SHA-256 해시만 둔다.
+model Session {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique @map("token_hash")
+  userId     String    @map("user_id")
+  expires    DateTime
+  ip         String?
+  userAgent  String?   @map("user_agent")
+  lastSeenAt DateTime? @map("last_seen_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expires])
+  @@map("sessions")
+}
+
+// ───────── 분류 ─────────
+model Category {
+  id          String  @id @default(cuid())
+  parentId    String? @map("parent_id")
+  name        String
+  slug        String  @unique
+  description String?
+  /// lucide 아이콘명
+  icon        String?
+  sortOrder   Int     @default(0) @map("sort_order")
+  isActive    Boolean @default(true) @map("is_active")
+
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  resources Resource[]
+
+  @@map("categories")
+}
+
+model Tag {
+  id         String @id @default(cuid())
+  slug       String @unique
+  label      String
+  usageCount Int    @default(0) @map("usage_count")
+
+  resources ResourceTag[]
+
+  @@map("tags")
+}
+
+// ───────── 자료 ─────────
+model Resource {
+  id              String         @id @default(cuid())
+  type            ResourceType
+  slug            String         @unique
+  title           String
+  summary         String?
+  body            String?
+  url             String?
+  urlNormalized   String?        @map("url_normalized")
+  thumbnailUrl    String?        @map("thumbnail_url")
+  status          ResourceStatus @default(PUBLISHED)
+  sourceChannel   SourceChannel  @default(WEB) @map("source_channel")
+  categoryId      String?        @map("category_id")
+  authorId        String         @map("author_id")
+  /// 타입별 비정형 부가 정보. 구조가 정해진 값은 상세 테이블에 둔다
+  metadata        Json?
+  viewCount       Int            @default(0) @map("view_count")
+  bookmarkCount   Int            @default(0) @map("bookmark_count")
+  sourceStatus    SourceStatus?  @map("source_status")
+  sourceCheckedAt DateTime?      @map("source_checked_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  deletedAt       DateTime?      @map("deleted_at")
+
+  author   User      @relation("ResourceAuthor", fields: [authorId], references: [id])
+  category Category? @relation(fields: [categoryId], references: [id])
+
+  aiMaterial AiMaterial?
+  githubRepo GithubRepo?
+  mcpServer  McpServer?
+  skill      Skill?
+  devNote    DevNote?
+  prompt     Prompt?
+
+  tags            ResourceTag[]
+  files           ResourceFile[]
+  bookmarks       Bookmark[]
+  revisions       ResourceRevision[]
+  jobs            Job[]
+  relationsFrom   ResourceRelation[] @relation("RelFrom")
+  relationsTo     ResourceRelation[] @relation("RelTo")
+  collectionItems CollectionItem[]
+
+  @@index([type, createdAt(sort: Desc)])
+  @@index([categoryId])
+  @@index([authorId])
+  @@index([status])
+  @@index([sourceChannel])
+  @@map("resources")
+}
+
+// search_vector 컬럼 · GIN 인덱스 · 갱신 트리거 · 부분 유니크 인덱스는
+// Prisma 가 표현하지 못하므로 마이그레이션 SQL 에 직접 작성한다 (DEV-02 · 2.5절).
+
+// ───────── 타입별 상세 ─────────
+model AiMaterial {
+  resourceId    String       @id @map("resource_id")
+  materialKind  MaterialKind @map("material_kind")
+  sourceName    String?      @map("source_name")
+  authors       String[]
+  publishedAt   DateTime?    @map("published_at")
+  language      Language?
+  readingTime   Int?         @map("reading_time")
+  keyPoints     String?      @map("key_points")
+  /// 사내 적용 아이디어. 이 시스템의 실제 가치다 (REQ-04 · 4.4절)
+  applicability String?
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@map("ai_materials")
+}
+
+model GithubRepo {
+  resourceId       String        @id @map("resource_id")
+  owner            String
+  repo             String
+  defaultBranch    String?       @map("default_branch")
+  stars            Int?
+  forks            Int?
+  primaryLanguage  String?       @map("primary_language")
+  license          String?
+  /// text[]. JSONB 안의 배열은 GIN 으로 검색되지 않는다
+  topics           String[]
+  pushedAt         DateTime?     @map("pushed_at")
+  readmeContent    String?       @map("readme_content")
+  readmeFetchedAt  DateTime?     @map("readme_fetched_at")
+  latestRelease    String?       @map("latest_release")
+  archiveStatus    ArchiveStatus @default(NONE) @map("archive_status")
+  archivedSha      String?       @map("archived_sha")
+  /// 표시용 캐시. 정본은 files.size_bytes (role=ARCHIVE) — DEV-02 · 2.7절
+  archiveSizeBytes BigInt?       @map("archive_size_bytes")
+  isGone           Boolean       @default(false) @map("is_gone")
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([owner, repo])
+  @@map("github_repos")
+}
+
+model McpServer {
+  resourceId     String       @id @map("resource_id")
+  packageName    String?      @map("package_name")
+  transport      McpTransport
+  installCommand String?      @map("install_command")
+  configJson     String       @map("config_json")
+  /// [{key, description, required, example}] — **값은 저장하지 않는다** (NFR-SEC-008)
+  envVars        Json?        @map("env_vars")
+  /// [{name, description}]
+  providedTools  Json?        @map("provided_tools")
+  clientSupport  String[]     @map("client_support")
+  usageStatus    UsageStatus  @default(REVIEWING) @map("usage_status")
+  ownerUserId    String?      @map("owner_user_id")
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@map("mcp_servers")
+}
+
+model Skill {
+  resourceId       String      @id @map("resource_id")
+  skillName        String      @map("skill_name")
+  /// Skill 정의 원문(마크다운). PROMPT 의 prompt_text 와 같은 자리
+  definition       String
+  triggerCondition String      @map("trigger_condition")
+  targetClients    String[]    @map("target_clients")
+  usageExample     String      @map("usage_example")
+  usageStatus      UsageStatus @default(REVIEWING) @map("usage_status")
+  version          String?
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@map("skills")
+}
+
+model DevNote {
+  resourceId     String    @id @map("resource_id")
+  noteKind       NoteKind  @map("note_kind")
+  relatedProject String?   @map("related_project")
+  occurredAt     DateTime? @map("occurred_at")
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@map("dev_notes")
+}
+
+model Prompt {
+  resourceId  String      @id @map("resource_id")
+  promptText  String      @map("prompt_text")
+  useCase     String      @map("use_case")
+  targetModel String?     @map("target_model")
+  /// [{ name, description }]
+  variables   Json?
+  usageStatus UsageStatus @default(REVIEWING) @map("usage_status")
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@map("prompts")
+}
+
+// ───────── 연결 테이블 ─────────
+model ResourceTag {
+  resourceId String @map("resource_id")
+  tagId      String @map("tag_id")
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([resourceId, tagId])
+  @@map("resource_tags")
+}
+
+model ResourceRelation {
+  id           String       @id @default(cuid())
+  fromId       String       @map("from_resource_id")
+  toId         String       @map("to_resource_id")
+  relationType RelationType @map("relation_type")
+  createdById  String?      @map("created_by")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  from Resource @relation("RelFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to   Resource @relation("RelTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@unique([fromId, toId, relationType])
+  @@map("resource_relations")
+}
+
+model File {
+  id             String   @id @default(cuid())
+  /// STORAGE_ROOT 아래 상대 경로. **서버가 생성한다** (NFR-SEC-019)
+  storageKey     String   @unique @map("storage_key")
+  originalName   String   @map("original_name")
+  mimeType       String   @map("mime_type")
+  sizeBytes      BigInt   @map("size_bytes")
+  /// 중복 제거 키
+  checksumSha256 String   @map("checksum_sha256")
+  uploadedById   String   @map("uploaded_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  uploadedBy User           @relation(fields: [uploadedById], references: [id])
+  resources  ResourceFile[]
+
+  @@index([checksumSha256])
+  @@map("files")
+}
+
+model ResourceFile {
+  resourceId String   @map("resource_id")
+  fileId     String   @map("file_id")
+  role       FileRole
+  sortOrder  Int      @default(0) @map("sort_order")
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  file     File     @relation(fields: [fileId], references: [id])
+
+  @@id([resourceId, fileId, role])
+  @@map("resource_files")
+}
+
+model Bookmark {
+  userId     String   @map("user_id")
+  resourceId String   @map("resource_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, resourceId])
+  @@map("bookmarks")
+}
+
+model Collection {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  description String?
+  ownerId     String     @map("owner_id")
+  visibility  Visibility @default(PRIVATE)
+  coverUrl    String?    @map("cover_url")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  deletedAt   DateTime?  @map("deleted_at")
+
+  owner User             @relation(fields: [ownerId], references: [id])
+  items CollectionItem[]
+
+  @@map("collections")
+}
+
+model CollectionItem {
+  collectionId String  @map("collection_id")
+  resourceId   String  @map("resource_id")
+  sortOrder    Int     @default(0) @map("sort_order")
+  /// 담은 이유 메모
+  note         String?
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  resource   Resource   @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, resourceId])
+  @@map("collection_items")
+}
+
+/// 전체 스냅샷이 아니라 변경된 필드만 저장한다
+model ResourceRevision {
+  id            String   @id @default(cuid())
+  resourceId    String   @map("resource_id")
+  editorId      String   @map("editor_id")
+  /// { field: {before, after} }
+  changedFields Json     @map("changed_fields")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  editor   User     @relation(fields: [editorId], references: [id])
+
+  @@index([resourceId, createdAt(sort: Desc)])
+  @@map("resource_revisions")
+}
+
+// ───────── 운영 ─────────
+/// BullMQ 가 실제 큐를 관리하고, 이 테이블은 관리자 화면에서 보기 위한 기록이다
+model Job {
+  id            String    @id @default(cuid())
+  type          JobType
+  status        JobStatus @default(QUEUED)
+  resourceId    String?   @map("resource_id")
+  payload       Json?
+  result        Json?
+  errorMessage  String?   @map("error_message")
+  attempts      Int       @default(0)
+  startedAt     DateTime? @map("started_at")
+  finishedAt    DateTime? @map("finished_at")
+  requestedById String?   @map("requested_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  resource Resource? @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt(sort: Desc)])
+  @@map("jobs")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  body      String?
+  linkUrl   String?          @map("link_url")
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  actorId       String?  @map("actor_id")
+  /// 스냅샷. 계정이 익명화돼도 추적할 수 있게 남긴다
+  actorUsername String?  @map("actor_username")
+  via           ActorVia @default(WEB)
+  apiKeyId      String?  @map("api_key_id")
+  action        String
+  targetType    String?  @map("target_type")
+  targetId      String?  @map("target_id")
+  summary       String?
+  diff          Json?
+  ip            String?
+  userAgent     String?  @map("user_agent")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  actor  User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  apiKey ApiKey? @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([actorId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+/// 운영 설정만 담는다. 라벨·설명·아이콘은 코드 레지스트리가 단일 출처다 (DEC-032).
+model ContentTypeSetting {
+  type      ResourceType @id
+  isActive  Boolean      @default(true) @map("is_active")
+  showInNav Boolean      @default(true) @map("show_in_nav")
+  sortOrder Int          @default(0) @map("sort_order")
+
+  @@map("content_type_settings")
+}
+
+model SystemSetting {
+  key         String   @id
+  value       Json
+  updatedById String?  @map("updated_by")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}

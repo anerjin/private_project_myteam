@@ -16,13 +16,19 @@ docker compose -f docker/docker-compose.dev.yml up -d
 Copy-Item .env.example project\.env      # 값을 채운 뒤 진행
 
 # 3) 파일 저장 경로 (저장소 밖 — DEC-016)
-New-Item -ItemType Directory -Force E:\queenbee-data\files
+New-Item -ItemType Directory -Force E:\queenbee-data\files\tmp
+New-Item -ItemType Directory -Force E:\queenbee-data\files\attachments
+New-Item -ItemType Directory -Force E:\queenbee-data\files\archives
 
-# 4) 앱
+# 4) 앱 + DB 스키마
 cd project
 npm install
-npm run dev            # http://localhost:3100
+npx prisma migrate dev     # 스키마 적용
+npx prisma db seed         # 분류·설정 시드 (여러 번 돌려도 안전)
+npm run dev                # http://localhost:3100
 ```
+
+`http://localhost:3100/api/health` 가 `db`·`redis`·`storage`·`disk` 모두 `ok` 면 준비 끝입니다.
 
 ## 자주 쓰는 명령
 
@@ -49,7 +55,11 @@ E:\queenbee-data\   DB · 파일 데이터 — 저장소 밖. 커밋하지 않�
 
 ## 알아둘 것
 
-- **포트는 3100** 입니다. 이 PC에서 다른 프로젝트가 3000을 씁니다 (`DEC-028`).
+- **포트는 3100 · 5433 · 6380** 입니다. 이 PC의 다른 프로젝트가 3000·5432·6379를 씁니다
+  (`DEC-028`·`DEC-033`). **Docker 엔진이 꺼져 있으면 포트가 «비어 있음»으로 보이니**
+  확인은 엔진을 켠 뒤 `docker ps` 로 하세요.
+- **Prisma 는 7.10.0 고정**입니다 (`DEC-034`). `prisma@latest` 는 릴리스 후보를 물어옵니다.
+  접속 URL은 스키마가 아니라 `prisma.config.ts`(CLI)와 driver adapter(런타임)에 있습니다.
 - **Auth.js 를 쓰지 않습니다.** 세션은 자체 구현입니다 (`DEC-030`).
 - **`proxy.ts` 는 낙관적 검사만** 합니다. 인가는 Server Action 진입부에서 합니다 (`DEC-031`).
 - 아이콘은 **lucide-react 만** 씁니다. 이모지는 쓰지 않습니다 (`DEV-04 · 4.5절`).

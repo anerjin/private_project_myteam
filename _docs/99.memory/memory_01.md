@@ -870,3 +870,102 @@ Next.js 16 번들 문서(`node_modules/next/dist/docs`)를 직접 열어 확인�
 `P1` 범위: `prisma/schema.prisma` 전체 + 수동 마이그레이션 SQL(`DEV-02 · 2.5`) ·
 `lib/db.ts` · `lib/redis.ts` · `prisma/seed.ts` · `/api/health` 에 `db`·`redis` 추가.
 **DoD:** `/api/health` 가 네 항목 모두 `ok` 이고 `pending` 이 빈다.
+
+---
+
+## [017] 2026-08-28 · `P1` 데이터 계층 완료 — Prisma 7 이 전제를 바꿨다
+
+**DoD 달성:** `GET /api/health` → `{"status":"ok","checks":{"db":"ok","redis":"ok","storage":"ok","disk":"ok"}}`
+
+### 설계 전제를 바꾼 것 둘
+
+**① `DEC-033` — 컨테이너 포트 5433 · 6380**
+
+`docker compose up` 이 «port is already allocated» 로 실패했다. **JIDO 프로젝트가 5432·6379 를
+둘 다 쓰고 있었다**(`poc-postgres`·`poc-redis`). `DEC-028` 에서 포트 3000→3100 으로 비켜간 것과
+같은 상황이라 같은 판단을 했다 — **QueenBee 가 비켜간다.** 남의 프로젝트를 내리라고 하면
+개발할 때마다 둘 중 하나를 꺼야 한다.
+
+> **함정:** `P0` 에서 포트를 확인했을 때 5432·6379 가 «비어 있음»으로 보였다.
+> **Docker 엔진이 꺼져 있으면 컨테이너가 잡은 포트는 `Get-NetTCPConnection` 에 안 잡힌다.**
+> 포트 확인은 엔진을 켠 뒤 `docker ps` 로 해야 한다. → `DEV-01 · 1.9` 주의사항에 추가.
+
+**② `DEC-034` — Prisma 7 채택 (`DEV-02` 초안이 그대로는 안 돌았다)**
+
+`prisma validate` 가 바로 거부했다 — **Prisma 7 은 `datasource { url }` 을 스키마에서 없앴다.**
+`DEV-02 · 2.4` 초안은 Prisma 6 이하 기준이었다.
+
+| 바뀐 것 | 대응 |
+| --- | --- |
+| 접속 URL 이 스키마에서 사라짐 | CLI 용은 **`prisma.config.ts`**, 런타임은 **driver adapter**(`@prisma/adapter-pg`) |
+| `.env` 자동 로딩 없음 | `process.loadEnvFile()` — Node 내장이라 `dotenv` 를 늘리지 않았다 |
+| 시드 실행 | **`tsx`** (아래 참조) |
+
+**버전에서 한 번 걸렸다.** `npm install prisma@latest` 가 **`8.0.0-rc.12`(릴리스 후보)** 를
+물어왔는데 `@prisma/client@latest` 는 `7.10.0` 이었다. **CLI 와 클라이언트가 어긋난 채로 두면
+생성 클라이언트와 CLI 가 따로 논다.** 둘 다 `7.10.0` 으로 `--save-exact` 고정했다.
+`latest` 태그가 항상 안정판인 것은 아니다.
+
+### 스스로 만든 함정 하나 — `*/` 가 주석을 조기 종료했다
+
+시드가 파싱되지 않았다. Node 의 타입 스트리퍼와 esbuild **둘 다** 177행에서
+`Expected ";" but found "시드"` 를 냈다. 한글 때문에 위치가 어긋난 줄 알고
+인코딩·BOM·템플릿 리터럴을 한참 뒤졌는데, **파서 둘이 가리킨 위치가 정확했고 원인은 32행**이었다.
+
+```
+ * 순서는 `features/resources/content-types/*/meta.ts` 의 sortOrder 와 맞춥니다.
+                                            ^^ 여기서 블록 주석이 끝난다
+```
+
+경로의 글로브 `*` 와 `/` 가 붙어 `*/` 가 되면서 `/** */` 주석이 조기 종료됐고,
+그 뒤 백틱이 템플릿을 열어 **177행 백틱까지 삼켰다.** 그래서 177행이 «닫는 백틱»으로 읽혔다.
+
+**남길 것:**
+- **블록 주석 안에 `*/` 가 생기는 문자열을 쓰지 말 것.** 경로에 글로브를 쓰지 말고 `<type>` 으로 적는다.
+- **파서가 가리킨 위치를 먼저 믿을 것.** 서로 다른 파서 둘이 같은 곳을 가리키면 그건 진짜다.
+  나는 «한글 때문에 위치가 밀렸을 것»이라는 가설에 매달려 시간을 버렸다.
+- 저장소 전체를 훑어 같은 패턴이 더 없는지 확인했다 (`*/` 뒤에 문자가 붙는 경우) — 0건.
+
+### 시드를 `tsx` 로 돌리기로 한 이유
+
+Node 내장 타입 스트리퍼(`--experimental-strip-types`)는 실험적이고 버전마다 동작이 다르다.
+그렇다고 시드를 순수 JS 로 내리면 **`ResourceType` enum 값이 어긋나도 실행 전까지 모른다.**
+시드 데이터는 enum 과 정확히 맞아야 하므로 타입을 포기할 수 없다 → dev 의존성 하나(`tsx`)를 받았다.
+
+### 코드리뷰어 지적 → 수정 (1건, 실행으로 확인)
+
+| 지적 | 확인 방법 | 수정 |
+| --- | --- | --- |
+| **Redis 가 죽으면 `/api/health` 가 응답을 못 한다.** `NFR-AVAIL-004`(캐시 미스로 처리하고 DB 폴백)가 성립하지 않는다 | `docker stop queenbee-redis` 후 호출 → 응답 없음 | `enableOfflineQueue: false` — 기본값 `true` 면 끊긴 동안 명령을 **큐에 쌓아 재연결까지 기다린다.** `maxRetriesPerRequest` 로는 못 막는다 |
+
+고친 뒤 다시 재면 **503 · 8.9초**. 503 은 맞지만 **헬스 체크가 8.9초는 안 된다** —
+감시하는 쪽이 «죽었는지 느린 건지» 구분하지 못한다. **검사당 2초 상한**을 라우트에 못 박았다.
+라이브러리 타임아웃 설정에 기대지 않는다. → **2,019ms** 로 수렴.
+
+**같이 확인한 것:** 헬스체크 6회 호출 후 `pg_stat_activity` **연결 2개** — 핫 리로드
+커넥션 누수 없음. Redis 중지 중에도 `/dashboard` 는 **200** — 서비스는 계속 돈다.
+
+### 아키텍처 최종 확인
+
+- `DEV-01` v0.8 — 스택 표(Prisma 7.10.0 고정·adapter·tsx), 포트 5433·6380, 구성도,
+  Windows 주의사항(엔진 꺼짐 함정·named volume), 1.11 에 **2초 상한**과
+  **`enableOfflineQueue`** 규칙 명시
+- `DEV-02` v0.8 — **정본을 `project/prisma/schema.prisma` 로 이관**하고 2.4 는 발췌로 전환.
+  **Prisma 7 차이표** 신설. 2.5 에 «확장은 Prisma 가 자동 생성 / 재생성 시 블록을 옮길 것»,
+  2.6 에 **멱등성**과 `Prisma.JsonNull` 주의 추가
+- `DCS-01` v0.8 — `DEC-033` · `DEC-034` 등록
+- **승인.**
+
+### 확인
+
+- `npm run verify` 통과 (의존 위반 0건, 43 라우트)
+- 마이그레이션 `20260828081541_init` 적용 — **28 테이블**
+- 수동 SQL 9개 객체 실재 확인 — 트리거 2(`trg_resources_search`·`trg_categories_depth`) ·
+  인덱스 3(GIN 2 + 부분 유니크 1) · CHECK 1 · `search_vector` 컬럼 · 확장 2
+- 시드 **멱등** — 두 번 돌려 `콘텐츠 타입 6 · 카테고리 27 · 시스템 설정 10` 동일
+
+### 다음 — `P2` 인증 · 세션
+
+`server/auth/{password,session,cookie,guards}.ts` · 로그인·로그아웃 Server Action(`API-004`·`005`) ·
+`proxy.ts` 낙관적 검사 · `features/auth/schema.ts`(zod) · 관리자 시드 계정.
+**DoD:** 실계정으로 로그인해 대시보드 진입, **`features/auth/mock-session.ts` 제거.**

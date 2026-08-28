@@ -21,7 +21,9 @@ services:
       # 한국어 정렬·비교를 위해 초기화 옵션을 명시한다. 나중에 바꾸려면 재초기화가 필요하다.
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     ports:
-      - "5432:5432"
+      # 호스트 5433 → 컨테이너 5432. 이 PC의 다른 프로젝트(JIDO)가 5432 를 쓰고 있어
+      # QueenBee 가 비켜갑니다 (DEC-033 — 포트 3000→3100 과 같은 이유).
+      - "5433:5432"
     volumes:
       # named volume 을 쓴다. 프로젝트 폴더에 바인드 마운트하면
       # WSL2 ↔ Windows 파일시스템 왕복으로 눈에 띄게 느려진다 (DEV-01 · 1.9절 주의사항).
@@ -39,7 +41,8 @@ services:
     # 큐(BullMQ)가 올라가므로 메모리가 차도 키를 임의로 버리면 안 된다.
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     ports:
-      - "6379:6379"
+      # 호스트 6380 → 컨테이너 6379 (DEC-033)
+      - "6380:6379"
     volumes:
       - queenbee-redis:/data
     healthcheck:
