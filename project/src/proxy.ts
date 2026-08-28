@@ -36,24 +36,43 @@ function isPublic(pathname: string): boolean {
   );
 }
 
+/**
+ * 서버 컴포넌트에 **현재 경로**를 알려 준다.
+ *
+ * 레이아웃은 `usePathname` 을 쓸 수 없고 `params` 도 못 받습니다. 그런데 빵부스러기의
+ * 동적 세그먼트 라벨(`/resources/ai-material/{slug}` → 자료 제목)은 **레이아웃이**
+ * 만들어 넘겨야 합니다.
+ *
+ * 전에는 그걸 위해 **전체 자료의 slug→제목 맵**을 만들고 있었습니다. 1만 건이면
+ * 매 요청 1만 행을 읽어 맵을 만들고 그중 하나를 씁니다.
+ * 경로를 알면 **그 경로에 있는 세그먼트만** 조회하면 됩니다.
+ */
+export const PATHNAME_HEADER = "x-queenbee-pathname";
+
+function pass(request: NextRequest) {
+  const headers = new Headers(request.headers);
+  headers.set(PATHNAME_HEADER, request.nextUrl.pathname);
+  return NextResponse.next({ request: { headers } });
+}
+
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   // Server Action·폼 POST 는 통과시킨다 (위 주석). 307 리다이렉트는 메서드와 본문을
   // 유지하므로 액션 응답 자리에 HTML 이 들어가 버린다.
   if (request.method !== "GET" && request.method !== "HEAD") {
-    return NextResponse.next();
+    return pass(request);
   }
 
   // API 는 각자 인증한다. Ingest 는 API 키(server/auth/api-key.ts),
   // 나머지는 핸들러 진입부에서 DAL 을 부른다. 여기서 막으면 401 대신
   // 로그인 HTML 이 돌아가 호출자가 더 헷갈린다.
-  if (pathname.startsWith("/api/")) return NextResponse.next();
+  if (pathname.startsWith("/api/")) return pass(request);
 
-  if (isPublic(pathname)) return NextResponse.next();
+  if (isPublic(pathname)) return pass(request);
 
   const hasSession = request.cookies.has(sessionCookieName());
-  if (hasSession) return NextResponse.next();
+  if (hasSession) return pass(request);
 
   /*
    * **단방향입니다.** «쿠키가 있으니 /login 에서 /dashboard 로» 같은 반대 방향

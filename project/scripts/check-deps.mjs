@@ -108,30 +108,19 @@ const writeCall = (model) =>
   new RegExp(`\\w+\\.${model}\\.(?:${WRITE_VERBS})\\s*\\(`);
 
 /**
- * `@/mocks` 를 아직 읽는 파일 (`P4` DoD: **`src/mocks/` 삭제**).
+ * `@/mocks` 를 읽는 파일 — **`P4` DoD 로 0이 됐고, 0으로 유지합니다.**
  *
- * **이 목록이 곧 진행률입니다.** `P4` 마지막에 폴더를 지우면 그때 20군데가 한꺼번에
- * 터지므로, 게이트를 **먼저** 켜고 목록을 줄여 나갑니다 — 새 파일이 목을 읽으면
- * 곧바로 막히고, 목록이 비면 `P4` DoD 의 그 줄이 달성된 것입니다.
+ * 시작할 때 20개였습니다. 마지막에 폴더를 지우면 20군데가 한꺼번에 터지므로
+ * 게이트를 **먼저** 켜고 목록을 줄여 나갔습니다. 정리된 항목이 목록에 남으면
+ * 「남은 20개」가 영원히 20개라서, **낡은 항목도 위반으로** 잡게 했습니다.
  *
- * **줄이기만 합니다. 여기에 파일을 «추가»하는 커밋은 되돌리십시오.**
+ * **폴더는 지웠습니다.** 규칙을 남겨 두는 이유는 **되돌아오는 것을 막기 위해서**입니다 —
+ * 「임시로 목 하나만」이 다시 20개가 되는 길입니다.
+ * 화면이 데이터를 못 구하면 목을 만들지 말고 **빈 상태를 보여주십시오**:
+ * `admin/jobs` 가 그 예입니다 — 진짜 질의를 붙이니 빈 상태가 저절로 나왔고,
+ * `P6` 는 화면을 건드리지 않고 워커만 붙이면 됩니다.
  */
-const MOCK_DEBT = [
-  "app/(admin)/admin/audit-logs/page.tsx",
-  "app/(admin)/admin/jobs/page.tsx",
-  "app/(admin)/admin/page.tsx",
-  "app/(admin)/admin/resources/page.tsx",
-  "app/(admin)/admin/settings/page.tsx",
-  "app/(admin)/admin/taxonomy/page.tsx",
-  "app/(admin)/layout.tsx",
-  "app/(service)/collections/[slug]/page.tsx",
-  "app/(service)/collections/page.tsx",
-  "app/(service)/dashboard/page.tsx",
-  "app/(service)/layout.tsx",
-  "app/(service)/me/page.tsx",
-  "app/_shell/breadcrumb-labels.ts",
-  "features/dashboard/components/trend-chart.tsx",
-];
+const MOCK_DEBT = [];
 
 /*
  * 이 규칙은 `BYPASS`(파일 내용 정규식)가 아니라 **import 루프**에 있습니다 —
@@ -241,8 +230,8 @@ for await (const file of walk(SRC)) {
       violations.push({
         file: rel,
         spec,
-        rule: `→ mocks (남은 부채 ${MOCK_DEBT.length}개)`,
-        why: "목 데이터는 P4 에서 전부 걷어낸다 (DEV-07 · 7.4 DoD). 새로 읽는 파일을 만들지 말고 scripts/check-deps.mjs 의 MOCK_DEBT 목록을 줄일 것",
+        rule: "→ mocks",
+        why: "목 데이터는 P4 에서 전부 걷어냈다 (DEV-07 · 7.4 DoD). 화면이 데이터를 못 구하면 목을 만들지 말고 빈 상태를 보여줄 것 — admin/jobs 가 그 예다",
       });
     }
 

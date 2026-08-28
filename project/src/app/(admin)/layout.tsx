@@ -8,8 +8,8 @@ import { adminBreadcrumbLabels } from "@/app/_shell/breadcrumb-labels";
 import { AdminSidebar } from "@/app/_shell/sidebar";
 import { toSearchItems } from "@/features/resources/search-items";
 import * as memberService from "@/server/services/member.service";
-// 자료·알림은 아직 목이다 — P4 에서 `src/mocks/` 를 지운다 (DEV-07 · 7.4)
-import { notifications, resources, stats } from "@/mocks";
+import * as notify from "@/server/services/notification.service";
+import * as resourceService from "@/server/services/resource.service";
 
 export default async function AdminLayout({ children }: LayoutProps<"/">) {
   /*
@@ -28,6 +28,28 @@ export default async function AdminLayout({ children }: LayoutProps<"/">) {
   // 배지는 실데이터다 (DEC-038) — 승인하면 숫자가 바뀌어야 한다
   const pendingMembers = await memberService.countPending();
 
+  // 벨과 배지는 다른 숫자를 센다 — 서비스 레이아웃의 주석 참고 (DEC-038)
+  /*
+   * 커맨드 팔레트(Ctrl+K) 후보. **최근 것 8건만** 싣습니다 —
+   * 전체를 실으면 1만 건이 매 요청 RSC 페이로드로 나갑니다.
+   * 팔레트 안에서 검색하는 것은 `P4` 남은 범위(서버 검색 연결)이고,
+   * 지금은 「최근 자료로 바로 가기」입니다.
+   */
+  const recent = await resourceService.list(
+    { sort: "recent" },
+    { kind: "cursor", size: 8 },
+    session.userId
+  );
+  const recentResources = recent.items;
+
+  const rows = await notify.listFor(session.userId, 20);
+  const notifications = rows.map((n) => ({
+    id: n.id,
+    title: n.title,
+    body: n.body ?? undefined,
+    read: n.readAt !== null,
+  }));
+
   return (
     <SidebarProvider>
       <AdminSidebar
@@ -39,7 +61,6 @@ export default async function AdminLayout({ children }: LayoutProps<"/">) {
         }}
         badges={{
           "/admin/members": pendingMembers,
-          "/admin/jobs": stats.failedJobs,
         }}
       />
       <SidebarInset>
@@ -47,13 +68,13 @@ export default async function AdminLayout({ children }: LayoutProps<"/">) {
         <div className="h-1 shrink-0 bg-amber-500" />
         <SiteHeader
           title="관리자"
-          searchItems={toSearchItems(resources)}
+          searchItems={toSearchItems(recentResources)}
           notifications={notifications}
           actions={<SignOutButton />}
         />
         <main className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">
           {/* 관리자 영역은 아직 타이틀을 헤더로 옮기지 않았다. 본문 PageHeader 가 h1 을 낸다 */}
-          <Breadcrumbs labels={adminBreadcrumbLabels()} heading={false} />
+          <Breadcrumbs labels={await adminBreadcrumbLabels()} heading={false} />
           {children}
         </main>
       </SidebarInset>

@@ -1,11 +1,4 @@
-import {
-  AlertTriangle,
-  Archive,
-  HardDrive,
-  Library,
-  UserPlus,
-  Users,
-} from "lucide-react";
+import { HardDrive, Library, UserPlus, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -20,38 +13,57 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { TrendChart } from "@/features/dashboard/components/trend-chart";
-// 회원 수는 실데이터, 작업·디스크·자료는 아직 목이다 — P4·P5 에서 걷어낸다
-import { auditLogs, jobs, stats } from "@/mocks";
+import { getDiskStatus } from "@/lib/disk";
 import { requireRole } from "@/server/auth/guards";
+import * as audit from "@/server/services/audit.service";
 import * as memberService from "@/server/services/member.service";
+import * as resourceService from "@/server/services/resource.service";
 
 export const metadata: Metadata = { title: "관리자" };
 
-/** SCR-201 관리자 대시보드 */
+/**
+ * SCR-201 관리자 대시보드.
+ *
+ * ## 카드를 **하나의 `stats` 객체로 묶지 않습니다**
+ *
+ * 전에는 목 `stats` 하나가 회원 수·자료 수·디스크·아카이브 사용량·실패 작업을
+ * 함께 들고 있었고, 그 값들이 **네 페이즈에 흩어져** 있습니다
+ * (자료 P4 · 디스크 지금 · 아카이브 P5 · 작업 P6).
+ * `getStats()` 하나로 만들면 P5·P6 가 그 함수를 고쳐야 하고, 없는 값에 `0` 을 넣게 됩니다.
+ *
+ * **`0` 은 「없다」가 아니라 「0건」이라고 말합니다.** 「아카이브 0GB 사용」이 뜨면
+ * 아카이브가 도는 줄 알고, 「실패한 작업 0건」은 워커가 없어서 0인지 잘 돌아서 0인지
+ * 구분이 안 됩니다.
+ *
+ * 그래서 **지금 있는 것만 보여주고**, `P5`(아카이브)·`P6`(워커)가 각자 자기 카드를
+ * 더합니다. 「빈 섹션을 두는 것」과 「섹션을 안 두는 것」은 다릅니다
+ * (`/me` 프로필·회원 상세에서 내린 것과 같은 판단).
+ */
 export default async function AdminDashboardPage() {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
   await requireRole("ADMIN");
 
-  // 배지와 같은 출처를 본다 (DEC-038) — 두 곳에서 다른 숫자가 나오면 안 된다
-  const [pendingMembers, totalMembers] = await Promise.all([
-    memberService.countPending(),
-    memberService.countAll(),
-  ]);
+  const [pendingMembers, totalMembers, typeCounts, disk, recent] =
+    await Promise.all([
+      // 배지와 같은 출처를 본다 (DEC-038) — 두 곳에서 다른 숫자가 나오면 안 된다
+      memberService.countPending(),
+      memberService.countAll(),
+      resourceService.countByType(),
+      getDiskStatus(),
+      audit.list({ page: 1, size: 5 }),
+    ]);
 
-  const archivePct = Math.round(
-    (stats.archiveUsedGb / stats.archiveLimitGb) * 100
-  );
+  const totalResources = Object.values(typeCounts).reduce((a, b) => a + b, 0);
 
   return (
     <>
       <PageHeader
         title="관리자 대시보드"
-        description="승인 대기 · 실패 작업 · 디스크를 한 화면에서 봅니다."
+        description="승인 대기 · 자료 · 디스크를 한 화면에서 봅니다."
       />
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      {/* 대기 건수가 0이면 알림 자체를 띄우지 않는다 — 「0건 대기」는 할 일이 아니다 */}
+      {pendingMembers > 0 && (
         <Alert>
           <UserPlus />
           <AlertTitle>승인 대기 {pendingMembers}건</AlertTitle>
@@ -62,20 +74,7 @@ export default async function AdminDashboardPage() {
             </Button>
           </AlertDescription>
         </Alert>
-
-        {stats.failedJobs > 0 && (
-          <Alert variant="destructive">
-            <AlertTriangle />
-            <AlertTitle>실패한 작업 {stats.failedJobs}건</AlertTitle>
-            <AlertDescription className="flex items-center gap-3">
-              아카이브·링크 확인 작업이 실패했습니다.
-              <Button size="sm" variant="outline" asChild>
-                <Link href="/admin/jobs">작업 모니터</Link>
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-      </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -92,103 +91,48 @@ export default async function AdminDashboardPage() {
         />
         <StatCard
           label="전체 자료"
-          value={stats.totalResources}
+          value={totalResources}
           unit="건"
           icon={Library}
         />
         <StatCard
           label="디스크 여유"
-          value={stats.diskFreeGb}
+          value={Math.round(disk.freeGb)}
           unit="GB"
-          hint="임계치 20GB"
+          hint={disk.ok ? "여유 있음" : "임계치 미만"}
           icon={HardDrive}
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">자료 등록 추이</CardTitle>
-            <CardDescription>웹 등록과 CLI 수집을 나눠 봅니다.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <TrendChart />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Archive className="size-4" />
-              아카이브 사용량
-            </CardTitle>
-            <CardDescription>
-              총량 상한 {stats.archiveLimitGb}GB
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Progress value={archivePct} />
-            <div className="flex justify-between text-sm">
-              <span className="tabular-nums">
-                {stats.archiveUsedGb} GB 사용
-              </span>
-              <span className="text-muted-foreground tabular-nums">
-                {archivePct}%
-              </span>
-            </div>
-            <p className="text-muted-foreground text-xs">
-              80GB에서 경고, 100GB에서 신규 아카이브를 차단합니다.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">최근 활동</CardTitle>
-            <CardDescription>감사 로그 최신 5건</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {auditLogs.slice(0, 5).map((l) => (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">최근 활동</CardTitle>
+          <CardDescription>감사 로그 최신 5건</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {recent.items.length === 0 ? (
+            <p className="text-muted-foreground text-sm">기록이 없습니다.</p>
+          ) : (
+            recent.items.map((l) => (
               <div key={l.id} className="flex items-start gap-3 text-sm">
                 <span className="text-muted-foreground w-24 shrink-0 text-xs">
-                  {l.createdAt.slice(5, 16).replace("T", " ")}
+                  {l.createdAt.toISOString().slice(5, 16).replace("T", " ")}
                 </span>
                 <span className="flex-1">{l.summary}</span>
                 <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
                   {l.via}
                 </span>
               </div>
-            ))}
-          </CardContent>
-        </Card>
+            ))
+          )}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">작업 현황</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-4 gap-2 text-center">
-              {(
-                [
-                  ["대기", "QUEUED"],
-                  ["실행", "RUNNING"],
-                  ["완료", "DONE"],
-                  ["실패", "FAILED"],
-                ] as const
-              ).map(([label, status]) => (
-                <div key={status} className="bg-muted/50 rounded-lg p-3">
-                  <p className="text-2xl font-semibold tabular-nums">
-                    {jobs.filter((j) => j.status === status).length}
-                  </p>
-                  <p className="text-muted-foreground text-xs">{label}</p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/*
+        여기 있던 「자료 등록 추이」·「아카이브 사용량」·「작업 현황」 카드는
+        **뺐습니다.** 추이는 파생 질의(P4 남은 범위), 아카이브는 P5, 작업은 P6 라
+        지금은 셋 다 데이터가 없습니다. 각 페이즈가 자기 카드를 더합니다.
+      */}
     </>
   );
 }

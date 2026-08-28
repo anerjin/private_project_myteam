@@ -1,17 +1,9 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -51,48 +43,18 @@ function DiffPanel({ diff }: { diff: NonNullable<AuditLog["diff"]> }) {
 /** SCR-251 감사 로그 — 행을 누르면 변경 전·후를 펼친다 */
 export function AuditTable({ logs }: { logs: AuditLog[] }) {
   const [open, setOpen] = useState<string | null>(null);
-  const [q, setQ] = useState("");
-  const [via, setVia] = useState("all");
+  const filtered = logs;
 
-  const filtered = useMemo(
-    () =>
-      logs.filter((l) => {
-        if (via !== "all" && l.via !== via) return false;
-        if (!q.trim()) return true;
-        const n = q.trim().toLowerCase();
-        return (
-          l.summary.toLowerCase().includes(n) ||
-          l.actorUsername.toLowerCase().includes(n) ||
-          l.action.toLowerCase().includes(n)
-        );
-      }),
-    [logs, q, via]
-  );
+  /*
+   * **필터를 두지 않습니다.** 전에는 여기서 클라이언트 필터를 걸었는데,
+   * 서버 페이징이 붙은 지금 그건 **현재 페이지 안에서만** 걸립니다 —
+   * 「행위자로 걸렀는데 그 사람 기록이 안 나온다」가 됩니다.
+   * 행위자·기간 필터는 서버가 해야 하고 그건 `P8`(`FR-AUDIT-002`)입니다.
+   * 자료 목록의 등록자 필터에서 내린 것과 같은 판단입니다.
+   */
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="행위자 · 요약 · 행위 검색"
-          className="w-full sm:w-64"
-        />
-        <Select value={via} onValueChange={setVia}>
-          <SelectTrigger className="w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 경로</SelectItem>
-            <SelectItem value="WEB">웹</SelectItem>
-            <SelectItem value="MCP">CLI (MCP)</SelectItem>
-          </SelectContent>
-        </Select>
-        <span className="text-muted-foreground ml-auto text-sm">
-          {filtered.length}건
-        </span>
-      </div>
-
       <div className="overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader>

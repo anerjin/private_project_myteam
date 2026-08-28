@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CATEGORIES } from "@/config/site";
 import { listContentTypes } from "@/features/resources/content-types";
-import { resources } from "@/mocks";
+import * as resourceService from "@/server/services/resource.service";
 import { requireRole } from "@/server/auth/guards";
 
 export const metadata: Metadata = { title: "분류 · 타입 관리" };
@@ -33,14 +33,16 @@ export default async function AdminTaxonomyPage() {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
   await requireRole("ADMIN");
 
-  const tagCounts = Object.entries(
-    resources
-      .flatMap((r) => r.tags)
-      .reduce<Record<string, number>>((acc, t) => {
-        acc[t] = (acc[t] ?? 0) + 1;
-        return acc;
-      }, {})
-  ).sort((a, b) => b[1] - a[1]);
+  /*
+   * **자료를 전부 읽어 태그를 세지 않습니다.** 1만 건이면 매 요청 1만 행을 읽고
+   * 메모리에서 집계하게 됩니다 — `tags.usage_count` 가 그 일을 하려고 있는
+   * 표시용 캐시이고, 등록·수정이 세어서 씁니다.
+   */
+  const [tagCounts, typeCounts, categoryCounts] = await Promise.all([
+    resourceService.topTags(200),
+    resourceService.countByType(),
+    resourceService.countByCategory(),
+  ]);
 
   return (
     <>
@@ -80,7 +82,7 @@ export default async function AdminTaxonomyPage() {
                       {c.slug}
                     </code>
                     <span className="text-muted-foreground ml-auto text-xs">
-                      {resources.filter((r) => r.category === c.slug).length}건
+                      {categoryCounts[c.slug] ?? 0}건
                     </span>
                   </div>
                   <div className="ml-6 flex flex-wrap gap-1.5">
@@ -109,23 +111,30 @@ export default async function AdminTaxonomyPage() {
                   병합하세요.
                 </CardDescription>
               </div>
-              <Button size="sm" variant="outline">
+              {/* 병합은 아직 없다 — 「있는데 안 된다」보다 disabled 가 정직하다 */}
+              <Button size="sm" variant="outline" disabled>
                 <Merge className="size-4" />
                 태그 병합
               </Button>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              {tagCounts.map(([tag, n]) => (
-                <span
-                  key={tag}
-                  className="bg-muted inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm"
-                >
-                  #{tag}
-                  <span className="text-muted-foreground text-xs tabular-nums">
-                    {n}
+              {tagCounts.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  아직 태그가 없습니다. 자료를 등록하면 여기에 모입니다.
+                </p>
+              ) : (
+                tagCounts.map((t) => (
+                  <span
+                    key={t.slug}
+                    className="bg-muted inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm"
+                  >
+                    #{t.slug}
+                    <span className="text-muted-foreground text-xs tabular-nums">
+                      {t.count}
+                    </span>
                   </span>
-                </span>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -154,17 +163,22 @@ export default async function AdminTaxonomyPage() {
                     </code>
                   </div>
                   <span className="text-muted-foreground text-xs">
-                    {resources.filter((r) => r.type === t.code).length}건
+                    {typeCounts[t.code] ?? 0}건
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground text-xs">
                       사이드바
                     </span>
-                    <Switch defaultChecked />
+                    <Switch defaultChecked={t.showInNav} disabled />
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground text-xs">활성</span>
-                    <Switch defaultChecked />
+                    {/*
+                      `content_type_settings` 저장은 아직 없습니다 (`FR-ADM-014`).
+                      켜고 끌 수 있으면 저장됐다고 믿게 되므로 `disabled` 로 둡니다 —
+                      지금 값은 레지스트리의 상수입니다 (`DEC-032`: 표현은 코드).
+                    */}
+                    <Switch defaultChecked={t.isActive} disabled />
                   </div>
                 </div>
               ))}

@@ -35,9 +35,11 @@ export interface ListPage {
 export async function list(
   query: Partial<ListQuery>,
   page: PageSpec = { kind: "cursor", size: PAGE_SIZE },
-  viewerId?: string
+  viewerId?: string,
+  /** 관리 화면의 휴지통 탭 (`FR-RES-012`) */
+  scope: "live" | "trash" = "live"
 ): Promise<ListPage> {
-  const result = await resourceRepo.list(query, page);
+  const result = await resourceRepo.list(query, page, scope);
   const marked = await bookmarkedIds(
     viewerId,
     result.items.map((r) => r.id)
@@ -107,6 +109,25 @@ export async function findRelated(
   return rows.map((r) => toResource(r));
 }
 
+/** 대시보드 숫자 — **한 객체로 묶되 전부 «지금 있는» 값입니다** (없는 값에 `0` 을 넣지 않음) */
+export async function myCounts(viewerId: string): Promise<{
+  total: number;
+  weeklyNew: number;
+  myBookmarks: number;
+  myResources: number;
+}> {
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const live = { deletedAt: null, status: "PUBLISHED" as const };
+
+  const [total, weeklyNew, myBookmarks, myResources] = await Promise.all([
+    db.resource.count({ where: live }),
+    db.resource.count({ where: { ...live, createdAt: { gte: weekAgo } } }),
+    db.bookmark.count({ where: { userId: viewerId } }),
+    db.resource.count({ where: { ...live, authorId: viewerId } }),
+  ]);
+  return { total, weeklyNew, myBookmarks, myResources };
+}
+
 /** 타입별 건수 — 검색 사이드바 (`groupBy` 한 번, 타입마다 세지 않는다) */
 export async function countByType(): Promise<Record<string, number>> {
   const rows = await db.resource.groupBy({
@@ -115,6 +136,21 @@ export async function countByType(): Promise<Record<string, number>> {
     _count: { _all: true },
   });
   return Object.fromEntries(rows.map((r) => [r.type, r._count._all]));
+}
+
+/** 카테고리별 건수 — 분류 관리 화면 */
+export async function countByCategory(): Promise<Record<string, number>> {
+  const rows = await db.category.findMany({
+    select: {
+      slug: true,
+      _count: {
+        select: {
+          resources: { where: { deletedAt: null, status: "PUBLISHED" } },
+        },
+      },
+    },
+  });
+  return Object.fromEntries(rows.map((c) => [c.slug, c._count.resources]));
 }
 
 /**

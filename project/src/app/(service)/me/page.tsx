@@ -26,7 +26,8 @@ import { requireActiveUser } from "@/server/auth/guards";
 import { listFor as listSessions } from "@/server/auth/session";
 import * as apiKeyService from "@/server/services/api-key.service";
 import { getProfile } from "@/server/services/user.service";
-import { notifications, resources } from "@/mocks";
+import * as notify from "@/server/services/notification.service";
+import * as resourceService from "@/server/services/resource.service";
 
 export const metadata: Metadata = { title: "마이페이지" };
 
@@ -35,12 +36,17 @@ export default async function MePage() {
   const session = await requireActiveUser();
   // 세션 DTO 는 인가용 최소값이다. 가입일·자기소개는 프로필에서 읽는다.
   const me = await getProfile(session.userId);
-  // 목 자료의 author.id 는 실제 계정 id 와 맞지 않는다 — P4 에서 실데이터가 오면 맞는다
-  const mine = resources.filter((r) => r.author.id === me.id);
 
-  const [keys, sessions] = await Promise.all([
+  const [keys, sessions, notificationRows, mine] = await Promise.all([
     apiKeyService.listFor(session.userId),
     listSessions(session.userId),
+    notify.listFor(session.userId, 20),
+    // 내가 등록한 자료 — 「내 활동」 탭 (FR-USER-005)
+    resourceService.list(
+      { author: session.username, sort: "recent" },
+      { kind: "cursor", size: 12 },
+      session.userId
+    ),
   ]);
 
   return (
@@ -147,13 +153,20 @@ export default async function MePage() {
 
         <TabsContent value="activity" className="mt-4 space-y-4">
           <h2 className="text-sm font-medium">
-            내가 등록한 자료 {mine.length}건
+            내가 등록한 자료 {mine.items.length}건
+            {mine.nextCursor && " (최근 12건)"}
           </h2>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {mine.map((r) => (
-              <ResourceCard key={r.id} resource={r} />
-            ))}
-          </div>
+          {mine.items.length === 0 ? (
+            <p className="text-muted-foreground rounded-lg border py-8 text-center text-sm">
+              아직 등록한 자료가 없습니다.
+            </p>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {mine.items.map((r) => (
+                <ResourceCard key={r.id} resource={r} />
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="notifications" className="mt-4 space-y-4">
@@ -203,20 +216,31 @@ export default async function MePage() {
               <CardTitle className="text-base">최근 알림</CardTitle>
             </CardHeader>
             <CardContent className="divide-y">
-              {notifications.map((n) => (
-                <div key={n.id} className="flex items-start gap-3 py-3">
-                  {!n.read && (
-                    <span className="bg-primary mt-1.5 size-2 shrink-0 rounded-full" />
-                  )}
-                  <div className={n.read ? "text-muted-foreground" : undefined}>
-                    <p className="text-sm font-medium">{n.title}</p>
-                    {n.body && <p className="text-xs">{n.body}</p>}
-                    <p className="text-muted-foreground text-xs">
-                      {n.createdAt.slice(0, 16).replace("T", " ")}
-                    </p>
+              {notificationRows.length === 0 ? (
+                <p className="text-muted-foreground py-3 text-sm">
+                  아직 알림이 없습니다.
+                </p>
+              ) : (
+                notificationRows.map((n) => (
+                  <div key={n.id} className="flex items-start gap-3 py-3">
+                    {!n.readAt && (
+                      <span className="bg-primary mt-1.5 size-2 shrink-0 rounded-full" />
+                    )}
+                    <div
+                      className={n.readAt ? "text-muted-foreground" : undefined}
+                    >
+                      <p className="text-sm font-medium">{n.title}</p>
+                      {n.body && <p className="text-xs">{n.body}</p>}
+                      <p className="text-muted-foreground text-xs">
+                        {n.createdAt
+                          .toISOString()
+                          .slice(0, 16)
+                          .replace("T", " ")}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </TabsContent>

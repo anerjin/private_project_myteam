@@ -18,6 +18,7 @@ import {
 } from "@/server/auth/session";
 import * as userRepo from "@/server/repositories/user.repository";
 import * as audit from "@/server/services/audit.service";
+import * as notify from "@/server/services/notification.service";
 
 /**
  * 인증 비즈니스 규칙 (REQ-02 · 2.6절).
@@ -237,6 +238,26 @@ export async function signUp(input: {
     targetType: "user",
     targetId: user.id,
     summary: `가입 신청 — ${user.username} (${user.name})`,
+  });
+
+  /*
+   * 관리자 알림 (`FR-NOTI-001`).
+   *
+   * **`P3` 에서 미뤘던 것이고, 미룬 조건이 채워져서 지금 넣습니다** —
+   * 그때 근거는 「읽는 화면이 없는 곳에 쓰지 않는다」였고, `P4` 에서 헤더 벨이
+   * 실데이터를 읽게 됐습니다. 규칙을 버린 것이 아니라 조건이 채워진 것입니다.
+   *
+   * 액션이 아니라 **service** 에 둡니다 (`DEC-038`) — 가입은 웹 외 경로가
+   * 생길 수 있고, 진입부에 두면 그 경로가 알림 없이 같은 일을 합니다.
+   *
+   * 실패해도 가입을 되돌리지 않습니다: 알림은 트랜잭션 밖입니다(`DEC-038`).
+   * 관리자는 **사이드바 배지**로도 압니다 — 그쪽이 「지금의 사실」이라 더 확실합니다.
+   */
+  await notify.notifyAdmins({
+    type: "SIGNUP_REQUEST",
+    title: "새 가입 신청",
+    body: `${user.name} (@${user.username})`,
+    linkUrl: "/admin/members",
   });
 
   return { id: user.id };

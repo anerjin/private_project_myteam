@@ -11,23 +11,36 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { TrendChart } from "@/features/dashboard/components/trend-chart";
+import { getContentType } from "@/features/resources/content-types";
 import { ResourceCard } from "@/features/resources/components/resource-card";
 import { requireActiveUser } from "@/server/auth/guards";
-import { resources, stats } from "@/mocks";
-import { getContentType } from "@/features/resources/content-types";
+import * as resourceService from "@/server/services/resource.service";
 
 export const metadata: Metadata = { title: "대시보드" };
 
-/** SCR-101 서비스 대시보드 */
+/**
+ * SCR-101 서비스 대시보드.
+ *
+ * 관리자 대시보드와 같은 판단입니다 — **목 `stats` 객체를 하나의 함수로 되살리지
+ * 않습니다.** 「최근 14일 등록 추이」 차트는 뺐습니다: 그 질의는 P4 남은 범위이고,
+ * 데이터 없이 축만 그린 차트는 **있는데 비어 있는 것**처럼 보입니다.
+ */
 export default async function DashboardPage() {
   const session = await requireActiveUser();
-  const recent = [...resources]
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 6);
-  const popular = [...resources]
-    .sort((a, b) => b.viewCount - a.viewCount)
-    .slice(0, 5);
+
+  const [recent, popular, myStats] = await Promise.all([
+    resourceService.list(
+      { sort: "recent" },
+      { kind: "cursor", size: 6 },
+      session.userId
+    ),
+    resourceService.list(
+      { sort: "popular" },
+      { kind: "cursor", size: 5 },
+      session.userId
+    ),
+    resourceService.myCounts(session.userId),
+  ]);
 
   return (
     <>
@@ -40,57 +53,45 @@ export default async function DashboardPage() {
           안녕하세요, {session.name}님
         </p>
         <p className="text-muted-foreground text-sm">
-          팀이 모은 자료 {stats.totalResources}건이 기다리고 있습니다.
+          팀이 모은 자료 {myStats.total}건이 기다리고 있습니다.
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="전체 자료"
-          value={stats.totalResources}
+          value={myStats.total}
           unit="건"
           icon={Library}
         />
         <StatCard
           label="이번 주 신규"
-          value={stats.weeklyNew}
+          value={myStats.weeklyNew}
           unit="건"
           icon={FilePlus2}
         />
         <StatCard
           label="내 북마크"
-          value={stats.myBookmarks}
+          value={myStats.myBookmarks}
           unit="건"
           icon={BookMarked}
         />
         <StatCard
           label="내가 등록"
-          value={stats.myResources}
+          value={myStats.myResources}
           unit="건"
           icon={PenLine}
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">최근 14일 등록 추이</CardTitle>
-            <CardDescription>
-              수집 경로별로 나눠 봅니다. CLI 수집이 주력 경로입니다.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <TrendChart />
-          </CardContent>
-        </Card>
-
+      {popular.items.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">인기 자료</CardTitle>
-            <CardDescription>최근 30일 조회 상위</CardDescription>
+            <CardDescription>조회 상위</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {popular.map((r, i) => (
+            {popular.items.map((r, i) => (
               <Link
                 key={r.id}
                 href={`/resources/${getContentType(r.type).slug}/${r.slug}`}
@@ -108,7 +109,7 @@ export default async function DashboardPage() {
             ))}
           </CardContent>
         </Card>
-      </div>
+      )}
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -117,11 +118,17 @@ export default async function DashboardPage() {
             <Link href="/resources">전체 보기</Link>
           </Button>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {recent.map((r) => (
-            <ResourceCard key={r.id} resource={r} />
-          ))}
-        </div>
+        {recent.items.length === 0 ? (
+          <p className="text-muted-foreground rounded-lg border py-8 text-center text-sm">
+            아직 등록된 자료가 없습니다. 첫 자료를 등록해 보세요.
+          </p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {recent.items.map((r) => (
+              <ResourceCard key={r.id} resource={r} />
+            ))}
+          </div>
+        )}
       </section>
     </>
   );

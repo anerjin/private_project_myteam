@@ -64,10 +64,15 @@ export type ResourceCardRow = Prisma.ResourceGetPayload<{
  * **`deletedAt: null` 이 여기 있습니다.** 소프트 삭제를 호출부마다 기억하게 하면
  * 한 곳은 반드시 빠지고, 그러면 지운 자료가 목록에 나옵니다 (`DEC-036` 과 같은 형태).
  */
-function toWhere(f: Partial<ListQuery>): Prisma.ResourceWhereInput {
+function toWhere(
+  f: Partial<ListQuery>,
+  /** 관리 화면은 휴지통을 봐야 한다 (`FR-RES-012`) */
+  scope: "live" | "trash" = "live"
+): Prisma.ResourceWhereInput {
   return {
-    deletedAt: null,
-    status: "PUBLISHED",
+    ...(scope === "trash"
+      ? { deletedAt: { not: null } }
+      : { deletedAt: null, status: "PUBLISHED" }),
     ...(f.type ? { type: f.type as ResourceType } : {}),
     ...(f.category ? { category: { slug: f.category } } : {}),
     ...(f.tag ? { tags: { some: { tag: { slug: f.tag } } } } : {}),
@@ -128,7 +133,8 @@ export interface ListResult {
 
 export async function list(
   filter: Partial<ListQuery>,
-  page: PageSpec
+  page: PageSpec,
+  scope: "live" | "trash" = "live"
 ): Promise<ListResult> {
   const orderBy = [...orderByFor(filter.sort ?? "recent", filter.dir)];
 
@@ -138,8 +144,8 @@ export async function list(
    * 없으면 «드론» 같은 흔한 말이 전체를 다 끌고 옵니다.
    */
   const where: Prisma.ResourceWhereInput = filter.q
-    ? { ...toWhere(filter), id: { in: await searchIds(filter.q) } }
-    : toWhere(filter);
+    ? { ...toWhere(filter, scope), id: { in: await searchIds(filter.q) } }
+    : toWhere(filter, scope);
 
   if (page.kind === "cursor") {
     /*
@@ -175,6 +181,11 @@ export async function list(
     db.resource.count({ where }),
   ]);
   return { items, total };
+}
+
+/** 휴지통 건수 — 탭 라벨에 쓴다 */
+export function countTrashed(): Promise<number> {
+  return db.resource.count({ where: { deletedAt: { not: null } } });
 }
 
 /** 상세 — 타입별 상세 테이블을 함께 읽는다 (REQ-04 · 4.4) */

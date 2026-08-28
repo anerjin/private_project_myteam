@@ -103,6 +103,65 @@ export async function logDetached(
   }
 }
 
+export interface AuditPage {
+  items: {
+    id: string;
+    actorUsername: string;
+    via: "WEB" | "MCP";
+    action: string;
+    targetType: string | null;
+    summary: string;
+    ip: string | null;
+    diff: unknown;
+    createdAt: Date;
+  }[];
+  total: number;
+}
+
+/**
+ * 감사 로그 조회 (`FR-AUDIT-002`).
+ *
+ * **P3 가 감사 로그를 트랜잭션 필수로 만들었는데 읽을 방법이 없었습니다** —
+ * 두 페이즈 동안 write-only 였습니다. 알림 행에 대해 「읽는 화면 없이 쓰지
+ * 않는다」고 정한 것과 같은 상황이라 여기서 읽기 경로를 붙입니다.
+ *
+ * 행위자·기간 필터와 CSV 내보내기는 `P8` 입니다 — 여기는 **목록 + 페이징**까지.
+ */
+export async function list(page: {
+  page: number;
+  size: number;
+}): Promise<AuditPage> {
+  const [items, total] = await Promise.all([
+    db.auditLog.findMany({
+      select: {
+        id: true,
+        actorUsername: true,
+        via: true,
+        action: true,
+        targetType: true,
+        summary: true,
+        ip: true,
+        diff: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page.page - 1) * page.size,
+      take: page.size,
+    }),
+    db.auditLog.count(),
+  ]);
+
+  return {
+    // DB 의 `null` 을 화면이 매번 처리하지 않도록 경계에서 한 번 메운다
+    items: items.map((l) => ({
+      ...l,
+      actorUsername: l.actorUsername ?? "(알 수 없음)",
+      summary: l.summary ?? l.action,
+    })),
+    total,
+  };
+}
+
 function toRow(actor: Actor, input: AuditInput) {
   return {
     actorId: actor.id,

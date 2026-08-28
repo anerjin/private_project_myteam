@@ -6,9 +6,9 @@ import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { collections, currentUser } from "@/mocks";
 import type { Collection } from "@/types";
 import { requireActiveUser } from "@/server/auth/guards";
+import * as collectionService from "@/server/services/collection.service";
 
 export const metadata: Metadata = { title: "컬렉션" };
 
@@ -65,17 +65,21 @@ function CollectionGrid({ items }: { items: Collection[] }) {
 /** SCR-131 컬렉션 목록 */
 export default async function CollectionsPage() {
   // 인가는 레이아웃이 아니라 page 가 한다 (DEC-035)
-  await requireActiveUser();
+  const session = await requireActiveUser();
 
-  const mine = collections.filter((c) => c.owner.id === currentUser.id);
-  const team = collections.filter((c) => c.visibility === "TEAM");
+  /*
+   * **비공개 컬렉션 판정을 화면에서 하지 않습니다.** 여기서 걸러도 서버가 전부
+   * 보냈다면 남의 비공개 컬렉션이 RSC 페이로드에 실려 나갑니다 — 안 그려도 있습니다.
+   */
+  const { team, mine } = await collectionService.listFor(session.userId);
 
   return (
     <>
       <PageHeader
         description="목적에 따라 자료를 묶습니다. 온보딩 자료 묶음도 여기서 관리합니다."
         action={
-          <Button>
+          // 만들기는 아직 없다 — 「있는데 안 된다」보다 disabled 가 정직하다 (DEC-045)
+          <Button disabled>
             <Plus className="size-4" />
             컬렉션 만들기
           </Button>
@@ -88,10 +92,22 @@ export default async function CollectionsPage() {
           <TabsTrigger value="mine">내 컬렉션 ({mine.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="team" className="mt-4">
-          <CollectionGrid items={team} />
+          {team.length === 0 ? (
+            <p className="text-muted-foreground rounded-lg border py-8 text-center text-sm">
+              팀에 공개된 컬렉션이 없습니다.
+            </p>
+          ) : (
+            <CollectionGrid items={team} />
+          )}
         </TabsContent>
         <TabsContent value="mine" className="mt-4">
-          <CollectionGrid items={mine} />
+          {mine.length === 0 ? (
+            <p className="text-muted-foreground rounded-lg border py-8 text-center text-sm">
+              만든 컬렉션이 없습니다.
+            </p>
+          ) : (
+            <CollectionGrid items={mine} />
+          )}
         </TabsContent>
       </Tabs>
     </>
