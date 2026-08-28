@@ -47,10 +47,24 @@ import type { DuplicateHint } from "@/server/services/resource.write";
  *
  * **타입 분기가 없습니다.** 타입 전용 필드는 레지스트리의 `Form` 이 그립니다.
  */
-export function ResourceForm({ resource }: { resource?: Resource }) {
+export function ResourceForm({
+  resource,
+  initialUrl,
+  initialType,
+}: {
+  resource?: Resource;
+  /** 「URL 빠른 등록」이 넘긴 값 (`FR-RES-005`) */
+  initialUrl?: string;
+  initialType?: ResourceType;
+}) {
   const router = useRouter();
   const editing = !!resource;
-  const [type, setType] = useState<ResourceType | null>(resource?.type ?? null);
+  // 추정한 타입이 아직 저장 불가면 고른 것으로 치지 않는다 — 폼이 열려도 저장이 막힌다
+  const presetType =
+    initialType && isWritableType(initialType) ? initialType : null;
+  const [type, setType] = useState<ResourceType | null>(
+    resource?.type ?? presetType
+  );
   const [body, setBody] = useState(resource?.body ?? "");
   const [error, setError] = useState<string | null>(null);
   const [duplicate, setDuplicate] = useState<DuplicateHint | null>(null);
@@ -236,7 +250,7 @@ export function ResourceForm({ resource }: { resource?: Resource }) {
                 name="url"
                 onBlur={onUrlBlur}
                 type="url"
-                defaultValue={resource?.url}
+                defaultValue={resource?.url ?? initialUrl}
                 placeholder="https://"
               />
             </Field>

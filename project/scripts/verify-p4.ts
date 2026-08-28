@@ -241,6 +241,28 @@ async function run() {
       dup?.id === r.id,
       dup?.title
     );
+
+    /*
+     * **화면이 「그대로 등록해도 됩니다」라고 말하니 실제로 돼야 합니다** (`DEC-047`).
+     * 전에는 `url_normalized` 부분 유니크가 막아 `P2002` → 「처리 중 문제가
+     * 발생했습니다」였고, 다시 시도해도 영원히 같았습니다.
+     */
+    const again = parseResourceInput(
+      formLike({
+        title: "같은 URL 다른 관점",
+        url: "https://example.com/paper",
+      })
+    );
+    if (!again.ok) throw new Error("파싱 실패");
+    const second = await msg(async () => {
+      const created = await resourceWrite.create(actor, again.data);
+      madeResources.push(created.id);
+    });
+    check(
+      "같은 URL 을 그대로 다시 등록할 수 있다",
+      second === "(오류 없음)",
+      second
+    );
   }
 
   console.log("\n★ 수정 — 타입은 못 바꾸고, 남의 자료는 못 고친다");
@@ -366,8 +388,106 @@ async function run() {
     );
   }
 
+  console.log("\n★ 동시 실행 — 단일 스레드 검증이 놓쳤던 것들");
+  {
+    /*
+     * **리뷰가 여기서 셋을 찾았습니다.** 이 스크립트가 `Promise.all` 없이
+     * 순차로만 돌았기 때문에 태그 upsert 경합·카운터 lost update·slug 충돌이
+     * 전부 통과했습니다. 「관통했다」는 말이 **단일 스레드에서만 참**이었습니다.
+     */
+    const u = await mkUser("race");
+    const a = actorOf(u);
+
+    // ① 같은 제목 동시 등록 — slug 유니크 충돌
+    const same = await Promise.allSettled(
+      Array.from({ length: 4 }, () =>
+        (async () => {
+          const p = parseResourceInput(
+            formLike({ title: "동시 제목", tags: "동시태그", url: "" })
+          );
+          if (!p.ok) throw new Error("파싱 실패");
+          return resourceWrite.create(a, p.data);
+        })()
+      )
+    );
+    const created = same.filter((r) => r.status === "fulfilled");
+    for (const r of created) {
+      if (r.status === "fulfilled") madeResources.push(r.value.id);
+    }
+    check(
+      "같은 제목 4건 동시 등록이 전부 성공한다",
+      created.length === 4,
+      `${created.length}/4` +
+        (same.find((r) => r.status === "rejected")
+          ? ` · ${String((same.find((r) => r.status === "rejected") as PromiseRejectedResult).reason).slice(0, 80)}`
+          : "")
+    );
+    const slugs = new Set(
+      created.map(
+        (r) => (r as PromiseFulfilledResult<{ slug: string }>).value.slug
+      )
+    );
+    check(
+      "slug 가 서로 다르다",
+      slugs.size === created.length,
+      `${slugs.size}종`
+    );
+
+    // ② 같은 태그를 동시에 — usage_count lost update
+    const tag = await db.tag.findUnique({ where: { slug: "동시태그" } });
+    const links = await db.resourceTag.count({
+      where: { tagId: tag?.id ?? "" },
+    });
+    check(
+      "태그 usage_count 가 실제 연결 수와 맞는다",
+      tag?.usageCount === links,
+      `usage=${tag?.usageCount} 실제=${links}`
+    );
+
+    // ③ 같은 자료를 동시에 북마크 — bookmark_count lost update
+    const target = madeResources[0];
+    const voters = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => mkUser(`voter${i}`))
+    );
+    await Promise.all(
+      voters.map((v) => resourceService.toggleBookmark(actorOf(v), target))
+    );
+    const row = await db.resource.findUnique({
+      where: { id: target },
+      select: { bookmarkCount: true },
+    });
+    const actual = await db.bookmark.count({ where: { resourceId: target } });
+    check(
+      "bookmark_count 가 실제 북마크 수와 맞는다",
+      row?.bookmarkCount === actual,
+      `캐시=${row?.bookmarkCount} 실제=${actual}`
+    );
+
+    // ④ 같은 사람이 같은 자료를 동시에 두 번 — 캐시가 두 번 오르지 않아야
+    const dbl = voters[0];
+    await Promise.all([
+      resourceService.toggleBookmark(actorOf(dbl), target),
+      resourceService.toggleBookmark(actorOf(dbl), target),
+    ]);
+    const row2 = await db.resource.findUnique({
+      where: { id: target },
+      select: { bookmarkCount: true },
+    });
+    const actual2 = await db.bookmark.count({ where: { resourceId: target } });
+    check(
+      "같은 사람이 동시에 두 번 눌러도 캐시가 정본과 맞는다",
+      row2?.bookmarkCount === actual2,
+      `캐시=${row2?.bookmarkCount} 실제=${actual2}`
+    );
+  }
+
   // ── 정리 ────────────────────────────────────────────
   await db.auditLog.deleteMany({ where: { actorId: { in: made } } });
+  await db.tag.deleteMany({
+    where: { slug: { in: ["ai", "검증", "동시태그"] } },
+  });
+  // 시드 값으로 되돌린다 — 검증이 DB 를 바꿔 놓고 끝나면 안 된다
+  await db.contentTypeSetting.deleteMany({ where: { type: "AI_MATERIAL" } });
   await db.resourceTag.deleteMany({
     where: { resourceId: { in: madeResources } },
   });

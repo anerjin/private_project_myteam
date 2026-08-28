@@ -67,6 +67,7 @@ export function ResourceBrowser({
   authors,
   nextCursor,
   total,
+  controls = true,
 }: {
   resources: Resource[];
   /** 서버가 파싱한 «지금» 조건 */
@@ -75,6 +76,12 @@ export function ResourceBrowser({
   nextCursor?: string;
   /** 관리 화면에서만 온다. 탐색 화면은 세지 않는다 */
   total?: number;
+  /**
+   * 필터·정렬 컨트롤을 그릴지. **서버가 그 조건을 실제로 받는 화면만 `true`** 입니다 —
+   * 북마크 목록처럼 조건을 안 받는 곳에 띄우면 URL 만 바뀌고 목록은 그대로라
+   * 「있는데 안 된다」가 됩니다.
+   */
+  controls?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -91,79 +98,85 @@ export function ResourceBrowser({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        {/*
+        {controls && (
+          <>
+            {/*
           **비제어 입력 + `key`.** 서버가 준 `q` 를 state 로 «복사»하면
           그 복사본을 다시 맞추려고 effect 에서 `setState` 를 하게 되고,
           그건 렌더 연쇄를 만듭니다(그리고 lint 가 막습니다).
           `key` 가 바뀌면 React 가 입력을 새로 만들므로 **복사 없이** 같은 결과입니다 —
           뒤로가기·필터 초기화에서 입력칸이 따라옵니다.
         */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const value = new FormData(e.currentTarget).get("q");
-            go({ q: String(value ?? "").trim() || undefined });
-          }}
-        >
-          <Input
-            key={query.q ?? ""}
-            name="q"
-            defaultValue={query.q ?? ""}
-            placeholder="제목 · 요약 검색"
-            className="w-full sm:w-64"
-            aria-label="자료 검색"
-          />
-        </form>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const value = new FormData(e.currentTarget).get("q");
+                go({ q: String(value ?? "").trim() || undefined });
+              }}
+            >
+              <Input
+                key={query.q ?? ""}
+                name="q"
+                defaultValue={query.q ?? ""}
+                placeholder="제목 · 요약 검색"
+                className="w-full sm:w-64"
+                aria-label="자료 검색"
+              />
+            </form>
 
-        <Select
-          value={query.category ?? "all"}
-          onValueChange={(v) => go({ category: v === "all" ? undefined : v })}
-        >
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="카테고리" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 카테고리</SelectItem>
-            {CATEGORIES.map((c) => (
-              <SelectItem key={c.slug} value={c.slug}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <Select
+              value={query.category ?? "all"}
+              onValueChange={(v) =>
+                go({ category: v === "all" ? undefined : v })
+              }
+            >
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="카테고리" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 카테고리</SelectItem>
+                {CATEGORIES.map((c) => (
+                  <SelectItem key={c.slug} value={c.slug}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-        <Select
-          value={query.author ?? "all"}
-          onValueChange={(v) => go({ author: v === "all" ? undefined : v })}
-        >
-          <SelectTrigger className="w-32">
-            <SelectValue placeholder="등록자" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 등록자</SelectItem>
-            {authors.map((a) => (
-              <SelectItem key={a.username} value={a.username}>
-                {a.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <Select
+              value={query.author ?? "all"}
+              onValueChange={(v) => go({ author: v === "all" ? undefined : v })}
+            >
+              <SelectTrigger className="w-32">
+                <SelectValue placeholder="등록자" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 등록자</SelectItem>
+                {authors.map((a) => (
+                  <SelectItem key={a.username} value={a.username}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-        <Select
-          value={query.sort}
-          onValueChange={(v) => go({ sort: v as SortKey })}
-        >
-          <SelectTrigger className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SORT_KEYS.map((s) => (
-              <SelectItem key={s} value={s}>
-                {SORT_LABEL[s]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <Select
+              value={query.sort}
+              onValueChange={(v) => go({ sort: v as SortKey })}
+            >
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_KEYS.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {SORT_LABEL[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        )}
 
         <div className="ml-auto flex items-center gap-1">
           <Button

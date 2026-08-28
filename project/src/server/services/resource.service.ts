@@ -217,11 +217,18 @@ export interface BookmarkResult {
 }
 
 /**
- * 북마크 토글 (FR-RES-009).
+ * 북마크 토글 (`FR-COLL-001`).
  *
  * **`bookmarkCount` 는 «표시용 캐시»이고 정본은 `bookmarks` 행입니다.**
- * 그래서 둘을 **같은 트랜잭션**에서 바꾸고, 카운트는 세어서 씁니다 —
- * `increment` 로 하면 두 번 누른 요청이 겹칠 때 정본과 캐시가 갈라집니다.
+ *
+ * > **전에는 「세어서 쓴다」였고 주석이 *"`increment` 로 하면 정본과 캐시가
+ * > 갈라집니다"* 라고 근거를 댔습니다 — 정확히 반대였습니다.**
+ * > `count()` → `update()` 는 READ COMMITTED 에서 교과서적 lost update 이고,
+ * > **5명이 동시에 누르면 캐시가 3, 정본이 5로 어긋나는 것을 실측**했습니다.
+ * > `increment` 는 SQL `SET x = x + 1` 이라 **원자적**입니다.
+ * >
+ * > `DEC-036`(advisory 락)·`DEC-043`(트랜잭션)을 세워 놓고 같은 종류의 경합을
+ * > 카운터에서 놓쳤고, 근거를 거꾸로 적어 둬서 **고치려는 사람을 되돌릴 뻔했습니다.**
  */
 export async function toggleBookmark(
   actor: Actor,
@@ -239,53 +246,106 @@ export async function toggleBookmark(
       select: { userId: true },
     });
 
+    /*
+     * **행을 먼저 «조건부로» 바꾸고, 그 결과로 카운터를 움직입니다.**
+     * `count` 가 0/1 이므로 두 요청이 겹쳐도 한쪽만 카운터를 건드립니다 —
+     * 「이미 북마크한 자료를 두 번 누름」이 캐시를 두 번 올리지 않습니다.
+     */
+    let delta = 0;
     if (existing) {
-      await tx.bookmark.delete({
-        where: { userId_resourceId: { userId: actor.id, resourceId } },
+      const { count } = await tx.bookmark.deleteMany({
+        where: { userId: actor.id, resourceId },
       });
+      delta = -count;
     } else {
-      await tx.bookmark.create({ data: { userId: actor.id, resourceId } });
+      // `createMany` + `skipDuplicates` 로 경합에서 유니크 위반 대신 0건을 받는다
+      const { count } = await tx.bookmark.createMany({
+        data: [{ userId: actor.id, resourceId }],
+        skipDuplicates: true,
+      });
+      delta = count;
     }
 
-    // 정본을 세어서 캐시에 쓴다 (증감이 아니라)
-    const bookmarkCount = await tx.bookmark.count({ where: { resourceId } });
-    await tx.resource.update({
-      where: { id: resourceId },
-      data: { bookmarkCount },
-    });
+    const updated =
+      delta === 0
+        ? await tx.resource.findUniqueOrThrow({
+            where: { id: resourceId },
+            select: { bookmarkCount: true },
+          })
+        : await tx.resource.update({
+            where: { id: resourceId },
+            // 원자적 증감 — 세어서 쓰면 lost update 가 난다
+            data: { bookmarkCount: { increment: delta } },
+            select: { bookmarkCount: true },
+          });
 
-    return { bookmarked: !existing, bookmarkCount };
+    return { bookmarked: !existing, bookmarkCount: updated.bookmarkCount };
   });
 }
 
-/** 내 북마크 목록 (SCR-131) */
+/**
+ * 내 북마크 목록 (SCR-133, `FR-COLL-002`).
+ *
+ * > **전에는 북마크 «전량»을 읽고 JS 에서 잘랐습니다.** 24건을 보여주려고 N건을
+ * > 읽었고(타입 상세 6개 LEFT JOIN 포함) `IN` 목록에 상한도 없었습니다 —
+ * > 1만 건 목록을 위해 커서를 도입하고 「전체를 RSC 페이로드로 보내면 성립하지
+ * > 않는다」고 적어 놓고 **여기서 그 짓을 하고 있었습니다.**
+ * > `status` 도 여기만 안 봐서 초안이 섞일 수 있었습니다.
+ *
+ * `bookmark` 를 **기준 테이블로 뒤집어** DB 가 자르게 합니다.
+ * 「북마크한 순서 유지」도 `orderBy` 가 합니다.
+ */
 export async function listBookmarked(
   viewerId: string,
   page: PageSpec = { kind: "cursor", size: PAGE_SIZE }
 ): Promise<ListPage> {
-  const marks = await db.bookmark.findMany({
-    where: { userId: viewerId },
-    select: { resourceId: true },
-    orderBy: { createdAt: "desc" },
+  const where = {
+    userId: viewerId,
+    resource: { deletedAt: null, status: "PUBLISHED" as const },
+  };
+  const include = { resource: { select: resourceRepo.RESOURCE_CARD_SELECT } };
+  const orderBy = [
+    { createdAt: "desc" as const },
+    { resourceId: "desc" as const },
+  ];
+
+  if (page.kind === "offset") {
+    const [rows, total] = await Promise.all([
+      db.bookmark.findMany({
+        where,
+        include,
+        orderBy,
+        skip: (page.page - 1) * page.size,
+        take: page.size,
+      }),
+      db.bookmark.count({ where }),
+    ]);
+    return {
+      items: rows.map((b) => toResource(b.resource, { bookmarked: true })),
+      total,
+    };
+  }
+
+  const rows = await db.bookmark.findMany({
+    where,
+    include,
+    orderBy,
+    take: page.size + 1,
+    ...(page.after
+      ? {
+          cursor: {
+            userId_resourceId: { userId: viewerId, resourceId: page.after },
+          },
+          skip: 1,
+        }
+      : {}),
   });
-  if (marks.length === 0) return { items: [] };
 
-  const ids = marks.map((m) => m.resourceId);
-  const rows = await db.resource.findMany({
-    where: { id: { in: ids }, deletedAt: null },
-    select: resourceRepo.RESOURCE_CARD_SELECT,
-  });
-
-  // 북마크한 «순서»를 유지한다 — DB 순서가 아니라
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  const ordered = ids.map((id) => byId.get(id)).filter((r) => r !== undefined);
-
-  const start = page.kind === "offset" ? (page.page - 1) * page.size : 0;
+  const hasMore = rows.length > page.size;
+  const items = hasMore ? rows.slice(0, page.size) : rows;
   return {
-    items: ordered
-      .slice(start, start + page.size)
-      .map((r) => toResource(r, { bookmarked: true })),
-    total: ordered.length,
+    items: items.map((b) => toResource(b.resource, { bookmarked: true })),
+    nextCursor: hasMore ? items[items.length - 1]?.resourceId : undefined,
   };
 }
 

@@ -2,7 +2,7 @@
 
 import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import {
@@ -17,16 +17,41 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import type { Resource } from "@/types";
 import { getContentType } from "@/features/resources/content-types";
+import { deleteResourceAction } from "@/server/actions/resource.actions";
+import type { Resource } from "@/types";
 
 /**
- * 자료 삭제 — 소프트 삭제(휴지통)입니다. (FR-RES-007)
- * 되돌릴 수 있는 작업이므로 `AlertDialog` 로 확인만 받고, 실행 취소를 토스트로 제공합니다.
+ * 자료 삭제 — 소프트 삭제(휴지통)입니다 (`FR-RES-008`).
+ *
+ * > **전에는 액션을 부르지 않고 토스트만 띄웠습니다.** 「삭제했습니다 · 30일간
+ * > 복구할 수 있습니다」가 뜨고 목록으로 튕기는데 **자료는 그대로 있었습니다.**
+ * > 이 저장소가 반복해서 지킨 「있는데 안 된다」보다 「아직 없다」가 정직하다를
+ * > 여기서만 어겼고, 심지어 「없다」가 아니라 **거짓말**이었습니다.
+ * >
+ * > 「실행 취소」도 `toast.info` 뿐이었습니다 — **복구 액션이 없으므로 문구에서 뺐습니다.**
+ * > 복구는 `P8`(관리자 전체)의 휴지통에서 합니다.
  */
 export function DeleteResourceDialog({ resource }: { resource: Resource }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  function remove() {
+    startTransition(async () => {
+      const r = await deleteResourceAction(resource.id);
+      if (!r.ok) {
+        toast.error(r.message);
+        return;
+      }
+      setOpen(false);
+      toast.success("삭제했습니다.", {
+        description: "휴지통으로 옮겼습니다. 복구는 관리자에게 문의해 주세요.",
+      });
+      router.push(`/resources/${getContentType(resource.type).slug}`);
+      router.refresh();
+    });
+  }
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
@@ -42,25 +67,23 @@ export function DeleteResourceDialog({ resource }: { resource: Resource }) {
           <AlertDialogDescription>
             «{resource.title}» 을(를) 휴지통으로 옮깁니다.
             <br />
-            휴지통에서 <b>30일간 복구</b>할 수 있고, 이후 정리 대상이 됩니다.
+            목록·검색에서 사라지고, 되돌리려면 관리자가 복구해야 합니다.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>취소</AlertDialogCancel>
+          <AlertDialogCancel disabled={pending}>취소</AlertDialogCancel>
+          {/*
+            `onSelect` 로 기본 닫힘을 막습니다 — 액션이 실패했는데 다이얼로그가
+            닫히면 사용자는 「지워졌나?」를 모릅니다.
+          */}
           <AlertDialogAction
-            onClick={() => {
-              toast.success("삭제했습니다.", {
-                description: "휴지통에서 30일간 복구할 수 있습니다.",
-                action: {
-                  label: "실행 취소",
-                  onClick: () => toast.info("삭제를 취소했습니다."),
-                },
-                duration: 5000,
-              });
-              router.push(`/resources/${getContentType(resource.type).slug}`);
+            disabled={pending}
+            onClick={(e) => {
+              e.preventDefault();
+              remove();
             }}
           >
-            삭제
+            {pending ? "삭제 중…" : "삭제"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -68,68 +91,11 @@ export function DeleteResourceDialog({ resource }: { resource: Resource }) {
   );
 }
 
-/**
- * 영구 삭제 — 관리자 전용, 되돌릴 수 없습니다. (FR-RES-009)
- * 제목을 직접 입력해야 버튼이 열립니다. (DEV-04 · 4.5절 다이얼로그 규약)
+/*
+ * **`PurgeResourceDialog` 를 지웠습니다.**
+ *
+ * 호출자가 0이었고 `onClick` 이 `toast.success("영구 삭제했습니다.")` 뿐이었습니다 —
+ * 위와 같은 거짓말이 하나 더 있었던 셈입니다. 영구 삭제는 `FR-RES-009` 이고
+ * `P8`(관리자 전체) 몫이며, 그때 **액션과 함께** 만드는 편이 낫습니다.
+ * 지금 껍데기를 남겨 두면 다음 사람이 「있으니 배선만 하면 되겠네」로 읽습니다.
  */
-export function PurgeResourceDialog({
-  title,
-  trigger,
-}: {
-  title: string;
-  trigger?: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const [typed, setTyped] = useState("");
-  const matched = typed.trim() === title.trim();
-
-  return (
-    <AlertDialog
-      open={open}
-      onOpenChange={(o) => {
-        setOpen(o);
-        if (!o) setTyped("");
-      }}
-    >
-      <AlertDialogTrigger asChild>
-        {trigger ?? (
-          <Button variant="ghost" size="sm" className="text-destructive">
-            <Trash2 className="size-4" />
-            영구 삭제
-          </Button>
-        )}
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>영구 삭제 — 되돌릴 수 없습니다</AlertDialogTitle>
-          <AlertDialogDescription>
-            자료와 연결된 첨부·아카이브 파일까지 함께 지웁니다.
-            <br />
-            확인을 위해 아래에 <b>자료 제목</b>을 그대로 입력해 주세요.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-
-        <div className="space-y-2">
-          <p className="bg-muted rounded px-3 py-2 text-sm">{title}</p>
-          <input
-            className="border-input bg-background focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-            placeholder="자료 제목을 입력하세요"
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            aria-label="확인용 자료 제목"
-          />
-        </div>
-
-        <AlertDialogFooter>
-          <AlertDialogCancel>취소</AlertDialogCancel>
-          <AlertDialogAction
-            disabled={!matched}
-            onClick={() => toast.success("영구 삭제했습니다.")}
-          >
-            영구 삭제
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-}
