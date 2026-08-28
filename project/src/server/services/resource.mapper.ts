@@ -147,7 +147,9 @@ export function toResource(
     summary: u(row.summary),
     body: u(opts.body),
     url: u(row.url),
-    status: "PUBLISHED",
+    // **행의 값을 그대로 씁니다.** 전에는 `"PUBLISHED"` 를 박아 넣어서
+    // 초안이 화면에서 「게시됨」이라고 «단언»했습니다.
+    status: row.status,
     sourceChannel: row.sourceChannel,
     category: u(row.category?.slug),
     tags: row.tags.map((t) => t.tag.slug),

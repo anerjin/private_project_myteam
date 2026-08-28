@@ -175,13 +175,33 @@ export async function topTags(
   }));
 }
 
-/** 상세 (FR-RES-007). 없으면 `NOT_FOUND` — 화면이 `notFound()` 로 바꾼다 */
+/**
+ * 상세 (`FR-RES-003`). 없으면 `NOT_FOUND` — 화면이 `notFound()` 로 바꾼다.
+ *
+ * **초안은 작성자와 `EDITOR` 이상만 봅니다.** 전에는 `status` 를 아예 안 봐서
+ * 목록에는 안 나오는 초안이 **URL 로는 열렸습니다.** 지금은 등록 경로가 없어
+ * 잠복 상태지만, 폼의 「임시 저장」을 붙이는 순간 ① 작성자가 자기 초안을 목록에서
+ * 못 보고 ② 남이 URL 로 읽고 ③ 화면은 「게시됨」이라고 말하게 됩니다.
+ *
+ * 못 보는 경우 `FORBIDDEN` 이 아니라 **`NOT_FOUND`** 입니다 — 「권한이 없습니다」는
+ * *그 slug 의 자료가 존재한다*를 알려 줍니다.
+ */
 export async function getBySlug(
   slug: string,
-  viewerId?: string
+  viewerId?: string,
+  viewerRole?: Actor["role"]
 ): Promise<Resource> {
   const row = await resourceRepo.findBySlug(slug);
   if (!row) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
+
+  if (row.status !== "PUBLISHED") {
+    const isAuthor = viewerId !== undefined && row.author.id === viewerId;
+    const canSeeDrafts =
+      isAuthor || viewerRole === "EDITOR" || viewerRole === "ADMIN";
+    if (!canSeeDrafts) {
+      throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
+    }
+  }
 
   const marked = await bookmarkedIds(viewerId, [row.id]);
   return toResource(row, {

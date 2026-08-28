@@ -10,7 +10,7 @@
 import { randomBytes } from "node:crypto";
 
 import { parseResourceInput } from "@/features/resources/form.schema";
-import { PAGE_SIZE } from "@/features/resources/list.schema";
+import { PAGE_SIZE, parseListQuery } from "@/features/resources/list.schema";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { redis } from "@/lib/redis";
@@ -386,6 +386,81 @@ async function run() {
       "행을 지우면 레지스트리 기본값으로 돌아온다",
       restored.some((t) => t.code === "AI_MATERIAL")
     );
+  }
+
+  console.log("\n★ 규격에 있는데 빠졌던 것 (FR-SRCH-003·004)");
+  {
+    const byBookmark = await resourceService.list(
+      { sort: "bookmarked" },
+      { kind: "cursor", size: PAGE_SIZE },
+      user.id
+    );
+    check("북마크순 정렬이 동작한다", byBookmark.items.length > 0);
+
+    const recent = await resourceService.list(
+      { sort: "recent", days: 1 },
+      { kind: "cursor", size: PAGE_SIZE },
+      user.id
+    );
+    const old = await resourceService.list(
+      { sort: "recent", days: 3650 },
+      { kind: "cursor", size: PAGE_SIZE },
+      user.id
+    );
+    check(
+      "기간 필터가 좁힌다",
+      recent.items.length <= old.items.length,
+      `1일 ${recent.items.length} · 10년 ${old.items.length}`
+    );
+    // 이상한 값은 오류가 아니라 「전체 기간」이어야 한다 (URL 은 사람이 손으로 고친다)
+    const junk = parseListQuery({ days: "abc", sort: "없는정렬" });
+    check(
+      "이상한 URL 값은 기본값으로 떨어진다",
+      junk.days === undefined && junk.sort === "recent",
+      `days=${junk.days} sort=${junk.sort}`
+    );
+  }
+
+  console.log("\n★ 초안은 작성자·EDITOR 만 본다 (M3)");
+  {
+    const draftAuthor = await mkUser("draft");
+    const stranger = await mkUser("draft-stranger");
+    const p = parseResourceInput(formLike({ title: "초안 자료", url: "" }));
+    if (!p.ok) throw new Error("파싱 실패");
+    const d = await resourceWrite.create(actorOf(draftAuthor), p.data);
+    madeResources.push(d.id);
+    await db.resource.update({
+      where: { id: d.id },
+      data: { status: "DRAFT" },
+    });
+    const row = await db.resource.findUniqueOrThrow({ where: { id: d.id } });
+
+    const asAuthor = await resourceService.getBySlug(
+      row.slug,
+      draftAuthor.id,
+      "MEMBER"
+    );
+    check("작성자는 자기 초안을 본다", asAuthor.id === d.id);
+    check(
+      "DTO 가 실제 status 를 싣는다",
+      asAuthor.status === "DRAFT",
+      asAuthor.status
+    );
+
+    const denied = await msg(() =>
+      resourceService.getBySlug(row.slug, stranger.id, "MEMBER")
+    );
+    check(
+      "남은 초안을 URL 로도 못 연다",
+      denied.includes("찾을 수 없습니다"),
+      denied
+    );
+    const asEditor = await resourceService.getBySlug(
+      row.slug,
+      stranger.id,
+      "EDITOR"
+    );
+    check("EDITOR 는 초안을 본다", asEditor.id === d.id);
   }
 
   console.log("\n★ 동시 실행 — 단일 스레드 검증이 놓쳤던 것들");

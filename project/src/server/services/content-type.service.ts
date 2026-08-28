@@ -53,7 +53,14 @@ export async function listSettings(): Promise<TypeSetting[]> {
         // 행이 있으면 DB 가 이기고, 없으면 레지스트리 기본값
         showInNav: row?.showInNav ?? t.showInNav,
         isActive: row?.isActive ?? t.isActive,
-        sortOrder: row?.sortOrder ?? t.sortOrder,
+        /*
+         * **`?? ` 로는 `sortOrder` 를 못 씁니다.** 스키마 기본값이 `0` 이라
+         * `0 ?? 60` 은 `0` 이고, `showInNav` «만» 끄려는 조작이 행을 만드는 순간
+         * **사이드바 순서가 뒤집힙니다** (실측: `prompt` 가 60 → 0 이 되어 맨 앞으로).
+         * 운영자가 순서를 정하지 않았다는 뜻의 `0` 과 「0번으로 두고 싶다」를
+         * 구별할 수 없으므로, **양수일 때만 DB 를 따릅니다.**
+         */
+        sortOrder: row && row.sortOrder > 0 ? row.sortOrder : t.sortOrder,
       };
     })
     .sort((a, b) => a.sortOrder - b.sortOrder);

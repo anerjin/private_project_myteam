@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Collection } from "@/types";
-import { requireActiveUser } from "@/server/auth/guards";
+import { requireActiveUser, toActor } from "@/server/auth/guards";
 import * as collectionService from "@/server/services/collection.service";
 
 export const metadata: Metadata = { title: "컬렉션" };
@@ -71,7 +71,9 @@ export default async function CollectionsPage() {
    * **비공개 컬렉션 판정을 화면에서 하지 않습니다.** 여기서 걸러도 서버가 전부
    * 보냈다면 남의 비공개 컬렉션이 RSC 페이로드에 실려 나갑니다 — 안 그려도 있습니다.
    */
-  const { team, mine } = await collectionService.listFor(session.userId);
+  const { team, mine } = await collectionService.listFor(
+    await toActor(session)
+  );
 
   return (
     <>

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { isEditor, type Actor } from "@/server/auth/actor";
 import { AppError } from "@/lib/errors";
 import type { Collection, Resource } from "@/types";
 import { toResource } from "@/server/services/resource.mapper";
@@ -66,19 +67,27 @@ function toCollection(c: Row): Collection {
  *
  * **`PRIVATE` 은 소유자에게만 보입니다.** 이 판정을 화면이 하면 다른 사람의
  * 비공개 컬렉션이 RSC 페이로드에 실려 나갑니다 — 안 그려도 payload 에는 있습니다.
+ *
+ * > **`EDITOR`·`ADMIN` 은 전부 봅니다** (`REQ-02 · 2.5` 권한 매트릭스:
+ * > 「컬렉션 생성·편집 — MEMBER ⚠️본인 / **EDITOR ✅전체 / ADMIN ✅전체**」).
+ * > 전에는 `viewerId` 만 받아 역할을 몰랐고, 그래서 **관리자가 편집해야 할 컬렉션을
+ * > 볼 수조차 없었습니다.** 목록과 상세가 서로 일관됐을 뿐 둘 다 규격과 어긋났습니다.
  */
-export async function listFor(viewerId: string): Promise<{
+export async function listFor(actor: Actor): Promise<{
   team: Collection[];
   mine: Collection[];
 }> {
   const [team, mine] = await Promise.all([
     db.collection.findMany({
-      where: { visibility: "TEAM", deletedAt: null },
+      // 편집자·관리자에게는 비공개도 「팀」 목록에 함께 보인다
+      where: isEditor(actor)
+        ? { deletedAt: null, NOT: { ownerId: actor.id } }
+        : { visibility: "TEAM", deletedAt: null },
       select: COLLECTION_SELECT,
       orderBy: { updatedAt: "desc" },
     }),
     db.collection.findMany({
-      where: { ownerId: viewerId, deletedAt: null },
+      where: { ownerId: actor.id, deletedAt: null },
       select: COLLECTION_SELECT,
       orderBy: { updatedAt: "desc" },
     }),
@@ -89,7 +98,7 @@ export async function listFor(viewerId: string): Promise<{
 /** 상세 — 담긴 자료를 순서대로 */
 export async function getBySlug(
   slug: string,
-  viewerId: string
+  actor: Actor
 ): Promise<{ collection: Collection; items: Resource[] }> {
   const row = await db.collection.findFirst({
     where: { slug, deletedAt: null },
@@ -97,8 +106,19 @@ export async function getBySlug(
   });
   if (!row) throw new AppError("NOT_FOUND", "컬렉션을 찾을 수 없습니다.");
 
-  // 비공개는 소유자만 — service 에서 판정한다 (데이터를 봐야 알 수 있으므로)
-  if (row.visibility === "PRIVATE" && row.owner.id !== viewerId) {
+  /*
+   * 비공개는 소유자와 `EDITOR` 이상만 — service 에서 판정합니다
+   * (데이터를 봐야 알 수 있으므로, `actor.ts`).
+   *
+   * **`FORBIDDEN` 이 아니라 `NOT_FOUND` 로 위장합니다.** 「권한이 없습니다」는
+   * *그 slug 의 컬렉션이 존재한다*를 알려 줍니다 — 남의 비공개 컬렉션의
+   * 존재 여부를 slug 로 캐낼 수 있게 됩니다.
+   */
+  if (
+    row.visibility === "PRIVATE" &&
+    row.owner.id !== actor.id &&
+    !isEditor(actor)
+  ) {
     throw new AppError("NOT_FOUND", "컬렉션을 찾을 수 없습니다.");
   }
 

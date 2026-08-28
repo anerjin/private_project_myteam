@@ -92,7 +92,7 @@ export function ResourceBrowser({
     router.push(pathname + toSearchParams(query, patch));
 
   const hasFilter = Boolean(
-    query.q || query.category || query.author || query.tag
+    query.q || query.category || query.author || query.tag || query.days
   );
 
   return (

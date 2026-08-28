@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TypeBadge } from "@/features/resources/components/badges";
 import { getContentType } from "@/features/resources/content-types";
 import { AppError } from "@/lib/errors";
-import { requireActiveUser } from "@/server/auth/guards";
+import { requireActiveUser, toActor } from "@/server/auth/guards";
 import * as collectionService from "@/server/services/collection.service";
 
 /*
@@ -40,7 +40,7 @@ export default async function CollectionDetailPage({
 
   let data;
   try {
-    data = await collectionService.getBySlug(slug, session.userId);
+    data = await collectionService.getBySlug(slug, await toActor(session));
   } catch (e) {
     if (e instanceof AppError && e.code === "NOT_FOUND") notFound();
     throw e;

@@ -41,7 +41,7 @@ export default async function BookmarksPage({
         <EmptyState
           icon={BookMarked}
           title="북마크한 자료가 없습니다"
-          description="자료 목록이나 상세 화면에서 별을 눌러 담아두세요."
+          description="자료 상세 화면에서 북마크를 눌러 담아두세요."
           action={
             <Button variant="outline" size="sm" asChild>
               <Link href="/resources">자료 둘러보기</Link>

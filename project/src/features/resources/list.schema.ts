@@ -50,12 +50,20 @@ export const RESOURCE_TYPES = [
  * 해당 타입에서만 노출합니다. 콘텐츠 타입 레지스트리에 흩으면
  * 「어떤 정렬이 가능한가」를 한눈에 볼 수 없게 됩니다.
  */
-export const SORT_KEYS = ["recent", "popular", "title"] as const;
+/**
+ * `FR-SRCH-004` 가 요구하는 네 축입니다 — 최신·조회·**북마크**·제목.
+ *
+ * > **북마크순이 빠져 있었습니다.** P0 이고 `DEV-07 · 7.4` 작업표의 「정렬」에
+ * > 들어 있는데도 DoD 5항목을 통과시키면서 놓쳤습니다.
+ * > 표를 한 곳에 모아 둔 덕에 **추가가 한 줄**이었다는 게 그 설계의 값입니다.
+ */
+export const SORT_KEYS = ["recent", "popular", "bookmarked", "title"] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 
 export const SORT_LABEL: Record<SortKey, string> = {
   recent: "최신순",
   popular: "많이 본 순",
+  bookmarked: "북마크순",
   title: "제목순",
 };
 
@@ -74,9 +82,13 @@ export type SortDir = (typeof SORT_DIRS)[number];
  * 각 축에 **`id` 를 타이브레이커로** 붙입니다. 같은 값이 여럿이면 커서가 흔들려
  * 항목이 중복되거나 건너뛰어집니다.
  */
-const SORT_FIELD: Record<SortKey, "createdAt" | "viewCount" | "title"> = {
+const SORT_FIELD: Record<
+  SortKey,
+  "createdAt" | "viewCount" | "bookmarkCount" | "title"
+> = {
   recent: "createdAt",
   popular: "viewCount",
+  bookmarked: "bookmarkCount",
   title: "title",
 };
 
@@ -84,6 +96,7 @@ const SORT_FIELD: Record<SortKey, "createdAt" | "viewCount" | "title"> = {
 const SORT_DEFAULT_DIR: Record<SortKey, SortDir> = {
   recent: "desc",
   popular: "desc",
+  bookmarked: "desc",
   title: "asc",
 };
 
@@ -115,6 +128,20 @@ export const listQuerySchema = z.object({
   author: z.string().max(30).optional().catch(undefined),
   sort: z.enum(SORT_KEYS).default("recent").catch("recent"),
   dir: z.enum(SORT_DIRS).optional().catch(undefined),
+  /**
+   * 기간 필터 (`FR-SRCH-003`).
+   *
+   * **날짜가 아니라 «최근 N일»로 받습니다.** 사람이 URL 을 손으로 고치는 곳이라
+   * 두 개의 날짜를 짝 맞춰 넣게 하면 틀리기 쉽고, 실제 쓰임은 「최근 것만 보기」입니다.
+   * 표에 없는 값은 오류가 아니라 **전체 기간**입니다.
+   */
+  days: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(3650)
+    .optional()
+    .catch(undefined),
   // ── 여기만 갈립니다 ──
   /** 탐색(커서) — 직전 페이지 마지막 항목의 id */
   cursor: z.string().max(40).optional().catch(undefined),

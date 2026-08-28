@@ -54,7 +54,11 @@ export default async function ResourceDetailPage({
    */
   let resource;
   try {
-    resource = await resourceService.getBySlug(slug, session.userId);
+    resource = await resourceService.getBySlug(
+      slug,
+      session.userId,
+      session.role
+    );
   } catch (e) {
     if (e instanceof AppError && e.code === "NOT_FOUND") notFound();
     throw e;

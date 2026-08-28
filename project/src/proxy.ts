@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { PATHNAME_HEADER } from "@/lib/request-headers";
 import { sessionCookieName } from "@/lib/session-cookie";
 
 /**
@@ -37,18 +38,14 @@ function isPublic(pathname: string): boolean {
 }
 
 /**
- * 서버 컴포넌트에 **현재 경로**를 알려 준다.
+ * 서버 컴포넌트에 **현재 경로**를 알려 준다 (`lib/request-headers.ts`).
  *
- * 레이아웃은 `usePathname` 을 쓸 수 없고 `params` 도 못 받습니다. 그런데 빵부스러기의
- * 동적 세그먼트 라벨(`/resources/ai-material/{slug}` → 자료 제목)은 **레이아웃이**
- * 만들어 넘겨야 합니다.
+ * 전에는 빵부스러기가 **전체 자료의 slug→제목 맵**을 만들고 그중 하나를 썼습니다.
+ * 1만 건이면 매 요청 1만 행입니다. 경로를 알면 **그 세그먼트만** 조회하면 됩니다.
  *
- * 전에는 그걸 위해 **전체 자료의 slug→제목 맵**을 만들고 있었습니다. 1만 건이면
- * 매 요청 1만 행을 읽어 맵을 만들고 그중 하나를 씁니다.
- * 경로를 알면 **그 경로에 있는 세그먼트만** 조회하면 됩니다.
+ * 헤더 «이름»은 `lib/` 에 둡니다 — 서버 컴포넌트가 상수 하나 때문에 이 파일을
+ * import 하면 미들웨어 모듈이 RSC 그래프에 들어옵니다 (쿠키 이름과 같은 이유).
  */
-export const PATHNAME_HEADER = "x-queenbee-pathname";
-
 function pass(request: NextRequest) {
   const headers = new Headers(request.headers);
   headers.set(PATHNAME_HEADER, request.nextUrl.pathname);

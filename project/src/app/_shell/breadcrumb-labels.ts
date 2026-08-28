@@ -1,8 +1,8 @@
 import { headers } from "next/headers";
 
 import { listContentTypes } from "@/features/resources/content-types";
-import { PATHNAME_HEADER } from "@/proxy";
 import { db } from "@/lib/db";
+import { PATHNAME_HEADER } from "@/lib/request-headers";
 
 /**
  * 브레드크럼의 **동적 세그먼트** 라벨 맵.
