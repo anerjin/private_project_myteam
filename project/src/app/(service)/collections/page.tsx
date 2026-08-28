@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { collections, currentUser } from "@/mocks";
 import type { Collection } from "@/types";
+import { requireActiveUser } from "@/server/auth/guards";
 
 export const metadata: Metadata = { title: "컬렉션" };
 
@@ -62,7 +63,10 @@ function CollectionGrid({ items }: { items: Collection[] }) {
 }
 
 /** SCR-131 컬렉션 목록 */
-export default function CollectionsPage() {
+export default async function CollectionsPage() {
+  // 인가는 레이아웃이 아니라 page 가 한다 (DEC-035)
+  await requireActiveUser();
+
   const mine = collections.filter((c) => c.owner.id === currentUser.id);
   const team = collections.filter((c) => c.visibility === "TEAM");
 

@@ -39,8 +39,20 @@ export async function consume(
       await redis.expire(key, windowSeconds);
     }
 
+    /*
+     * **TTL 이 없으면 다시 건다 — 영구 잠금 방지.**
+     *
+     * `INCR` 는 서버에서 성공했는데 클라이언트의 `commandTimeout` 이 먼저 터지면
+     * `EXPIRE` 가 실행되지 않습니다. 그러면 키에 TTL 이 없어 그 아이디는
+     * **시간이 지나도 풀리지 않습니다** (`REQ-02 · 2.6` 은 「시간 경과로 해제」).
+     * 관리자 수동 해제 UI 도 아직 없으므로 스스로 낫게 만듭니다.
+     */
+    const ttl = await redis.ttl(key);
+    if (ttl < 0) {
+      await redis.expire(key, windowSeconds);
+    }
+
     if (count > limit) {
-      const ttl = await redis.ttl(key);
       return {
         allowed: false,
         remaining: 0,

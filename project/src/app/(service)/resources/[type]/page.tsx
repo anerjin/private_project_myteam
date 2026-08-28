@@ -11,6 +11,7 @@ import {
   listContentTypes,
 } from "@/features/resources/content-types";
 import { resources } from "@/mocks";
+import { requireActiveUser } from "@/server/auth/guards";
 
 export async function generateStaticParams() {
   return listContentTypes().map((t) => ({ type: t.slug }));
@@ -27,6 +28,9 @@ export async function generateMetadata({
 export default async function ResourceTypePage({
   params,
 }: PageProps<"/resources/[type]">) {
+  // 인가는 레이아웃이 아니라 page 가 한다 (DEC-035)
+  await requireActiveUser();
+
   const { type } = await params;
   const meta = getContentTypeBySlug(type);
   if (!meta) notFound();

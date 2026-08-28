@@ -13,8 +13,11 @@ import { sessionCookieName } from "@/lib/session-cookie";
  * 실행되고, Next.js 공식 문서도 여기서 DB 를 보지 말라고 명시합니다.
  * 그래서 `lib/env.ts`(`server-only`) 대신 쿠키 이름 상수만 import 합니다.
  *
- * **Server Action 은 별도 라우트가 아니라 그 경로로 오는 POST 라서, `matcher` 가
- * 제외한 경로면 이 파일을 건너뜁니다.** 인가를 여기에 기대면 안 되는 결정적 이유입니다.
+ * **Server Action 은 별도 라우트가 아니라 그 경로로 오는 POST 입니다.**
+ * 아래 `matcher` 는 캐치올이라 액션 POST 도 덮지만 **일부러 통과시킵니다** —
+ * 여기서 리다이렉트(307)하면 클라이언트가 `ActionResult` 대신 로그인 HTML 을 받아
+ * 파싱에 실패하고, 「UNAUTHENTICATED」라는 깔끔한 결과 대신 정체불명의 예외가 됩니다.
+ * 인가는 액션 진입부가 합니다 (`DEV-05 · 5.10`).
  */
 
 /** 로그인하지 않아도 되는 경로 */
@@ -35,6 +38,12 @@ function isPublic(pathname: string): boolean {
 
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+
+  // Server Action·폼 POST 는 통과시킨다 (위 주석). 307 리다이렉트는 메서드와 본문을
+  // 유지하므로 액션 응답 자리에 HTML 이 들어가 버린다.
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return NextResponse.next();
+  }
 
   // API 는 각자 인증한다. Ingest 는 API 키(server/auth/api-key.ts),
   // 나머지는 핸들러 진입부에서 DAL 을 부른다. 여기서 막으면 401 대신

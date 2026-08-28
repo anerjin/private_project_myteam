@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -9,15 +10,19 @@ import {
   signUpSchema,
   usernameSchema,
 } from "@/features/auth/schema";
+import { env } from "@/lib/env";
+import { consume } from "@/lib/rate-limit";
 import { guard, ok, validationError, type ActionResult } from "@/lib/result";
 import {
   clearSessionCookie,
   readSessionToken,
   writeSessionCookie,
 } from "@/server/auth/cookie";
-import { requireActor } from "@/server/auth/guards";
+import { AppError } from "@/lib/errors";
+import { getSession, toActor } from "@/server/auth/guards";
 import { destroy, sessionTtlMs } from "@/server/auth/session";
 import * as userRepo from "@/server/repositories/user.repository";
+import * as audit from "@/server/services/audit.service";
 import * as authService from "@/server/services/auth.service";
 
 /**
@@ -34,22 +39,40 @@ import * as authService from "@/server/services/auth.service";
 async function requestMeta() {
   const h = await headers();
   return {
-    // 1단계에는 리버스 프록시가 없어 x-forwarded-for 를 신뢰할 상황은 아니지만,
-    // 2단계에서 프록시가 붙으면 이 값이 정본이 된다.
-    ip: h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined,
+    /*
+     * **`TRUST_PROXY` 가 켜져 있을 때만 헤더를 믿습니다** (`NFR-SEC-002`).
+     *
+     * 1단계에는 리버스 프록시가 없습니다. 그런데도 헤더를 믿으면 공격자가
+     * 매 요청 `X-Forwarded-For` 를 바꿔 **IP 기준 20회/10분 제한을 완전히 무력화**하고,
+     * `audit_logs.ip` 까지 오염시킵니다. 「막고 있다고 믿는 코드」보다
+     * 「이 단계에서는 IP 제한이 유효하지 않다」고 말하는 코드가 낫습니다.
+     */
+    ip: env.TRUST_PROXY
+      ? (h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined)
+      : undefined,
     userAgent: h.get("user-agent") ?? undefined,
   };
 }
 
 /**
  * 오픈 리다이렉트 방어 (NFR-SEC-011).
- * `//` 와 `/\` 는 브라우저가 프로토콜 상대 URL 로 읽으므로 막는다.
+ *
+ * **문자 접두사 비교를 쓰지 않습니다.** WHATWG URL 파서는 탭·개행(`\t`·`\n`·`\r`)을
+ * **위치와 무관하게 제거**하므로 `/%0A/evil.com` 이 `//evil.com`(프로토콜 상대 URL)로
+ * 해석됩니다. `startsWith("//")` 검사는 이것을 통과시킵니다.
+ * 판정을 파서에 맡기고 **정규화된 값**을 돌려줍니다.
  */
 function safeNext(next: string | undefined): string {
   if (!next) return "/dashboard";
-  if (!next.startsWith("/")) return "/dashboard";
-  if (next.startsWith("//") || next.startsWith("/\\")) return "/dashboard";
-  return next;
+  try {
+    const base = "http://queenbee.invalid";
+    const url = new URL(next, base);
+    // 다른 오리진으로 해석되면 외부 링크다
+    if (url.origin !== base) return "/dashboard";
+    return url.pathname + url.search;
+  } catch {
+    return "/dashboard";
+  }
 }
 
 /** API-004 로그인 */
@@ -83,10 +106,36 @@ export async function signInAction(
 
 /** API-005 로그아웃 */
 export async function signOutAction(): Promise<void> {
+  const session = await getSession();
   const token = await readSessionToken();
+
+  if (session) {
+    await audit.log(toActor(session), {
+      action: "USER_SIGNOUT",
+      summary: `로그아웃 — ${session.username}`,
+    });
+  }
   if (token) await destroy(token);
   await clearSessionCookie();
   redirect("/login");
+}
+
+/**
+ * 비인증 액션의 남용을 막는다 (`NFR-SEC-002`).
+ *
+ * `checkUsername`·`signUp` 은 가드가 없어 **아이디 존재 확인 오라클**이 될 수 있습니다.
+ * 로그인 쪽에서 타이밍·메시지로 아이디 노출을 막아 놓고 옆문을 열어두면 소용이 없습니다.
+ */
+async function limitAnonymous(bucket: string): Promise<void> {
+  const meta = await requestMeta();
+  const key = `rl:anon:${bucket}:${meta.ip ?? "unknown"}`;
+  const result = await consume(key, 30, 60);
+  if (!result.allowed) {
+    throw new AppError(
+      "RATE_LIMITED",
+      "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."
+    );
+  }
 }
 
 /** API-002 회원가입 신청 */
@@ -94,6 +143,7 @@ export async function signUpAction(
   input: unknown
 ): Promise<ActionResult<{ id: string }>> {
   return guard(async () => {
+    await limitAnonymous("signup");
     const parsed = signUpSchema.safeParse(input);
     if (!parsed.success) return validationError(parsed.error);
 
@@ -116,6 +166,7 @@ export async function checkUsernameAction(
   username: unknown
 ): Promise<ActionResult<{ available: boolean }>> {
   return guard(async () => {
+    await limitAnonymous("check-username");
     const parsed = usernameSchema.safeParse(username);
     if (!parsed.success) return validationError(parsed.error);
     const taken = await userRepo.isUsernameTaken(parsed.data);
@@ -128,25 +179,33 @@ export async function changePasswordAction(
   input: unknown
 ): Promise<ActionResult<void>> {
   return guard(async () => {
-    // 1) 인가 — 가장 먼저
-    const actor = await requireActor();
+    /*
+     * 1) 인가 — 가장 먼저.
+     *
+     * **`requireActor()` 가 아니라 `getSession()` 을 씁니다.** `requireActor` 는
+     * `mustChangePassword` 를 막는데(M2 대응), 이 액션은 바로 그 상태를 푸는 액션이라
+     * 유일한 예외입니다.
+     */
+    const session = await getSession();
+    if (!session) {
+      throw new AppError("UNAUTHENTICATED", "로그인이 필요합니다.");
+    }
 
     // 2) 입력 검증
     const parsed = changePasswordSchema.safeParse(input);
     if (!parsed.success) return validationError(parsed.error);
 
-    const token = await readSessionToken();
-    if (!token) {
-      throw new Error("세션 쿠키가 없습니다");
-    }
-
     // 3~5) service 가 규칙·감사 로그를 처리한다
     await authService.changePassword(
-      actor.id,
+      session.userId,
       parsed.data.currentPassword,
       parsed.data.newPassword,
-      token
+      session.sessionId,
+      await requestMeta()
     );
+
+    // 6) 캐시 무효화 — 활성 세션 목록이 바뀌었다
+    revalidatePath("/me");
 
     return ok(undefined);
   });

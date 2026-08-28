@@ -7,11 +7,15 @@ import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { ResourceBrowser } from "@/features/resources/components/resource-browser";
 import { resources } from "@/mocks";
+import { requireActiveUser } from "@/server/auth/guards";
 
 export const metadata: Metadata = { title: "북마크" };
 
 /** SCR-133 내 북마크 */
-export default function BookmarksPage() {
+export default async function BookmarksPage() {
+  // 인가는 레이아웃이 아니라 page 가 한다 (DEC-035)
+  await requireActiveUser();
+
   const list = resources.filter((r) => r.bookmarked);
 
   return (

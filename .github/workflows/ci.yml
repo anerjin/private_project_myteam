@@ -38,6 +38,9 @@ jobs:
       - name: 의존 방향 검사 (DEV-06 · 6.9절)
         run: npm run check:deps
 
+      - name: page 인가 가드 검사 (DEC-035)
+        run: npm run check:guards
+
       - name: 포맷 검사
         run: npm run format:check
 

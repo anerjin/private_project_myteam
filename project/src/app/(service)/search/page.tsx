@@ -6,11 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ResourceBrowser } from "@/features/resources/components/resource-browser";
 import { listContentTypes } from "@/features/resources/content-types";
 import { resources } from "@/mocks";
+import { requireActiveUser } from "@/server/auth/guards";
 
 export const metadata: Metadata = { title: "검색" };
 
 /** SCR-121 검색 결과 */
-export default function SearchPage() {
+export default async function SearchPage() {
+  // 인가는 레이아웃이 아니라 page 가 한다 (DEC-035)
+  await requireActiveUser();
+
   const byType = listContentTypes().map((t) => ({
     meta: t,
     count: resources.filter((r) => r.type === t.code).length,

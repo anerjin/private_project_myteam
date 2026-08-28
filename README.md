@@ -37,6 +37,7 @@ npm run dev                # http://localhost:3100
 | `npm run dev` | 개발 서버 (**포트 3100 고정** — `DEC-028`) |
 | `npm run verify` | typecheck · lint · **check:deps** · build. **페이즈 완료 기준** |
 | `npm run check:deps` | 의존 방향 검사 (`DEV-06 · 6.9절`). 위반 0건이어야 한다 |
+| `npm run check:guards` | **page 인가 가드 누락 검사** (`DEC-035`). 레이아웃이 아니라 page 가 막는다 |
 | `npm run db:up` / `db:down` | 컨테이너 기동 / 정지 |
 | `npm run format` | Prettier |
 | `node _docs/_viewer/build.mjs` | 문서 뷰어 갱신 |

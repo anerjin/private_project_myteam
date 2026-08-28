@@ -158,6 +158,11 @@ async function seedAdmin() {
       "ADMIN_SEED_ID 와 ADMIN_SEED_PASSWORD 는 **둘 다** 있어야 합니다."
     );
   }
+  // `lib/env.ts` 의 규칙(최소 10자)이 시드 경로에는 적용되지 않으므로 여기서 다시 본다.
+  // 이 검사가 없으면 3자짜리 관리자 비밀번호가 조용히 통과한다.
+  if (password.length < 10) {
+    throw new Error("ADMIN_SEED_PASSWORD 는 10자 이상이어야 합니다.");
+  }
 
   const username = id.toLowerCase();
   await db.user.upsert({
@@ -182,9 +187,20 @@ async function seedAdmin() {
  *
  * 프로토타입의 «사용자 전환기»를 대체합니다. 전환기 대신 **실제 로그아웃 → 로그인**으로
  * 확인하면 그 경로가 곧 E2E ①·④ 라 테스트를 따로 만들지 않아도 됩니다.
+ *
+ * **`NODE_ENV !== "production"` 로 판정하지 않습니다.** 시드는 `next` 와 다른
+ * 프로세스(`tsx`)라 `NODE_ENV` 가 대개 비어 있고, `.env` 에 `NODE_ENV=production` 을
+ * 적는 사람도 없습니다. 그러면 **운영 서버에서 관리자 계정을 만들려고 시드를 돌리는 순간**
+ * 공개된 비밀번호를 가진 `EDITOR` 계정이 생깁니다.
+ * 「안 돈다」가 기본값에 대한 낙관이 되지 않도록 **명시적 옵트인**으로 뒤집습니다.
  */
 async function seedDevUsers() {
-  if (process.env.NODE_ENV === "production") return;
+  if (process.env.SEED_DEV_USERS !== "true") return;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "운영 환경에서는 개발 계정을 만들 수 없습니다. SEED_DEV_USERS 를 지우세요."
+    );
+  }
 
   const passwordHash = await hash("queenbee-dev-1234", ARGON2);
   const users = [
@@ -204,9 +220,9 @@ async function seedDevUsers() {
       create: { ...u, passwordHash, status: "ACTIVE" },
     });
   }
-  console.log(
-    "개발 계정: minsu(MEMBER) · seoyeon(EDITOR) — 비밀번호 queenbee-dev-1234"
-  );
+  // 비밀번호를 stdout 에 찍지 않는다 — CI 로그·터미널 기록에 남는다 (NFR-LOG-003).
+  // 값은 `.env.example` 주석에 적어 둔다.
+  console.log("개발 계정: minsu(MEMBER) · seoyeon(EDITOR) 생성/확인");
 }
 
 async function main() {

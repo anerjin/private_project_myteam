@@ -17,7 +17,13 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { changePasswordAction } from "@/server/actions/auth.actions";
 
+/**
+ * 화면에 보여주는 규칙. **판정은 서버가 합니다** (`features/auth/schema.ts`).
+ * 여기 목록은 입력 중 안내일 뿐이고, 「이전 비밀번호와 다름」처럼 서버만 알 수 있는
+ * 조건(직전 3개 재사용 금지)은 제출 후 오류로 돌려받습니다.
+ */
 const RULES = [
   { label: "10자 이상", test: (p: string) => p.length >= 10 },
   {
@@ -26,20 +32,47 @@ const RULES = [
       [/[a-zA-Z]/, /[0-9]/, /[^a-zA-Z0-9]/].filter((r) => r.test(p)).length >=
       2,
   },
-  {
-    label: "이전 비밀번호와 다름",
-    test: (p: string) => p.length > 0 && p !== "queenbee-temp-2026",
-  },
 ];
 
 /** SCR-006 초기 비밀번호 변경 (강제) */
 export function ChangePasswordForm() {
   const router = useRouter();
+  const [current, setCurrent] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   const passed = RULES.map((r) => r.test(pw));
-  const allOk = passed.every(Boolean) && pw === pw2 && pw2.length > 0;
+  const allOk =
+    passed.every(Boolean) && pw === pw2 && pw2.length > 0 && current.length > 0;
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setPending(true);
+
+    const result = await changePasswordAction({
+      currentPassword: current,
+      newPassword: pw,
+      confirmPassword: pw2,
+    });
+
+    if (!result.ok) {
+      // 필드 오류가 있으면 그것을 우선 보여준다 — 어디를 고쳐야 하는지 알려준다
+      const first = result.fieldErrors
+        ? Object.values(result.fieldErrors)[0]?.[0]
+        : undefined;
+      setError(first ?? result.message);
+      setPending(false);
+      return;
+    }
+
+    toast.success("비밀번호를 변경했습니다.");
+    // 세션 캐시가 무효화됐으므로 새 상태(mustChangePassword: false)를 다시 읽게 한다
+    router.replace("/dashboard");
+    router.refresh();
+  }
 
   return (
     <Card className="mx-auto w-full max-w-md">
@@ -50,13 +83,7 @@ export function ChangePasswordForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            toast.success("비밀번호를 변경했습니다.");
-            router.push("/dashboard");
-          }}
-        >
+        <form onSubmit={onSubmit}>
           <FieldGroup>
             <Alert>
               <ShieldAlert />
@@ -68,12 +95,22 @@ export function ChangePasswordForm() {
               </AlertDescription>
             </Alert>
 
+            {error && (
+              <Alert variant="destructive">
+                <ShieldAlert />
+                <AlertTitle>변경하지 못했습니다</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
             <Field>
               <FieldLabel htmlFor="current">현재 (임시) 비밀번호</FieldLabel>
               <Input
                 id="current"
                 type="password"
                 autoComplete="current-password"
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
                 required
               />
             </Field>
@@ -130,8 +167,8 @@ export function ChangePasswordForm() {
             </Field>
 
             <Field>
-              <Button type="submit" disabled={!allOk}>
-                변경하고 시작하기
+              <Button type="submit" disabled={!allOk || pending}>
+                {pending ? "변경 중…" : "변경하고 시작하기"}
               </Button>
             </Field>
           </FieldGroup>

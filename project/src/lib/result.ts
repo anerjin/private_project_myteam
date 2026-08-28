@@ -54,7 +54,19 @@ export async function guard<T>(
     if (isAppError(e)) {
       return fail(e.code, e.message, e.fieldErrors);
     }
-    console.error("[action]", e);
+    /*
+     * **예외를 통째로 찍지 않습니다.** Prisma 예외에는 실패한 쿼리의 `data` 가
+     * 붙어 나올 수 있고, 거기에는 비밀번호 해시 같은 값이 들어 있습니다 (`NFR-LOG-003`).
+     * 종류와 메시지 첫 줄, 스택만 남깁니다.
+     */
+    const err = e instanceof Error ? e : new Error(String(e));
+    console.error(
+      "[action]",
+      err.name,
+      err.message.split("\n")[0],
+      "\n",
+      err.stack?.split("\n").slice(1, 4).join("\n")
+    );
     return fail(
       "INTERNAL_ERROR",
       "처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."

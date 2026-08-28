@@ -57,6 +57,16 @@ export async function requireActor(): Promise<Actor> {
   if (!session) {
     throw new AppError("UNAUTHENTICATED", "로그인이 필요합니다.");
   }
+  /*
+   * **화면만 막으면 안 됩니다.** 임시 비밀번호 상태에서 화면은 `/change-password` 에
+   * 갇히지만, Server Action 은 그 경로로 오는 POST 라 직접 호출하면 통과합니다.
+   * 「임시 비밀번호는 관리자도 아는 값」이라는 전제가 무너집니다 (`FR-AUTH-011`).
+   *
+   * 예외는 `changePasswordAction` 하나이고, 그 액션은 이 함수를 쓰지 않습니다.
+   */
+  if (session.mustChangePassword) {
+    throw new AppError("FORBIDDEN", "비밀번호를 먼저 변경해 주세요.");
+  }
   return toActor(session);
 }
 

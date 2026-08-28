@@ -12,9 +12,10 @@
     "lint": "eslint --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "check:deps": "node scripts/check-deps.mjs",
+    "check:guards": "node scripts/check-page-guards.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "npm run typecheck && npm run lint && npm run check:deps && npm run build",
+    "verify": "npm run typecheck && npm run lint && npm run check:deps && npm run check:guards && npm run build",
     "db:up": "docker compose -f ../docker/docker-compose.dev.yml up -d",
     "db:down": "docker compose -f ../docker/docker-compose.dev.yml down"
   },

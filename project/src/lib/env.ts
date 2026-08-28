@@ -44,6 +44,12 @@ const envSchema = z.object({
   // REQ-02 · 2.7 이 7일로 정했다. 14 로 두었던 것은 문서와 어긋난 값이었다.
   SESSION_TTL_DAYS: numeric(7),
   COOKIE_SECURE: boolish.default(false),
+  /**
+   * `x-forwarded-for` 를 믿을지. **기본은 믿지 않습니다.**
+   * 리버스 프록시 없이 믿으면 누구나 헤더를 위조해 IP 레이트리밋을 무력화하고
+   * 감사 로그의 IP 를 오염시킵니다. 1단계에는 프록시가 없으므로 꺼 둡니다 (`DEC-013`).
+   */
+  TRUST_PROXY: boolish.default(false),
 
   // 파일 저장 (DEC-019)
   STORAGE_DRIVER: z.literal("local").default("local"),

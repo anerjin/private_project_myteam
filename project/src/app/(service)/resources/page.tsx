@@ -6,11 +6,15 @@ import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { ResourceBrowser } from "@/features/resources/components/resource-browser";
 import { resources } from "@/mocks";
+import { requireActiveUser } from "@/server/auth/guards";
 
 export const metadata: Metadata = { title: "전체 자료" };
 
 /** SCR-111 자료 목록 (전체) */
-export default function ResourcesPage() {
+export default async function ResourcesPage() {
+  // 인가는 레이아웃이 아니라 page 가 한다 (DEC-035)
+  await requireActiveUser();
+
   return (
     <>
       <PageHeader

@@ -18,6 +18,8 @@ export type AuditAction =
   | "USER_SIGNUP"
   | "USER_SIGNIN"
   | "USER_SIGNIN_FAILED"
+  /** 비밀번호는 맞았지만 계정 상태로 막힌 경우 — 자격 증명 유출 신호 */
+  | "USER_SIGNIN_BLOCKED"
   | "USER_SIGNOUT"
   | "USER_APPROVE"
   | "USER_REJECT"

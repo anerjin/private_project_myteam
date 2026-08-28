@@ -10,7 +10,7 @@ import {
   hashPassword,
   verifyPassword,
 } from "@/server/auth/password";
-import { hashToken, issue, revokeAllFor } from "@/server/auth/session";
+import { destroy, issue, revokeAllFor } from "@/server/auth/session";
 import * as userRepo from "@/server/repositories/user.repository";
 import * as audit from "@/server/services/audit.service";
 
@@ -105,6 +105,23 @@ export async function signIn(
 
   // 상태 차단은 **인증 성공 후**에 판정한다 — 그래야 상태별 안내를 줄 수 있다
   if (user.status !== "ACTIVE") {
+    // **비밀번호는 맞았다.** 정지된 계정에 올바른 자격 증명으로 들어오려는 시도는
+    // 「퇴사자 자격 증명이 유출됐다」의 신호라 반드시 남긴다 (FR-AUDIT-001).
+    await audit.log(
+      {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        via: "WEB",
+        ...meta,
+      },
+      {
+        action: "USER_SIGNIN_BLOCKED",
+        targetType: "user",
+        targetId: user.id,
+        summary: `상태 차단 로그인 시도 — ${user.username} (${user.status})`,
+      }
+    );
     throw new AppError(
       BLOCKED_CODE[user.status] ?? "ACCOUNT_BLOCKED",
       BLOCKED_MESSAGE[user.status] ?? "이용할 수 없는 계정입니다."
@@ -114,11 +131,14 @@ export async function signIn(
   // 성공했으니 실패 카운터를 지운다
   await reset(account.key);
 
-  // 세션 고정 방지 — 들고 온 세션이 있으면 버리고 새로 발급한다
+  /*
+   * 세션 고정 방지 — 들고 온 세션이 있으면 버리고 새로 발급한다.
+   *
+   * **`db.session.deleteMany` 로 질러가지 않습니다.** 그러면 캐시가 남아
+   * 옛 토큰이 최대 15분 더 살아남습니다. 캐시 정리까지 하는 함수를 씁니다.
+   */
   if (existingToken) {
-    await db.session
-      .deleteMany({ where: { tokenHash: hashToken(existingToken) } })
-      .catch(() => undefined);
+    await destroy(existingToken).catch(() => undefined);
   }
 
   const { token, expires } = await issue(user.id, meta);
@@ -145,6 +165,14 @@ export async function signUp(input: {
   department?: string;
   signupReason: string;
 }): Promise<{ id: string }> {
+  // 관리자가 가입을 닫아 두면 받지 않는다 (FR-ADM-015, system_settings)
+  const setting = await db.systemSetting.findUnique({
+    where: { key: "signup.enabled" },
+  });
+  if (setting && setting.value === false) {
+    throw new AppError("FORBIDDEN", "현재 신규 가입을 받지 않습니다.");
+  }
+
   // users 와 reserved_usernames 를 **모두** 본다 (DEC-021, FR-AUTH-002)
   if (await userRepo.isUsernameTaken(input.username)) {
     throw new AppError("DUPLICATE", "이미 사용 중인 아이디입니다.", {
@@ -184,10 +212,24 @@ export async function changePassword(
   userId: string,
   currentPassword: string,
   newPassword: string,
-  currentToken: string
+  /** 남길 현재 세션. 나머지는 전부 끊는다 */
+  currentSessionId: string,
+  meta: SignInMeta = {}
 ): Promise<void> {
   const user = await userRepo.findById(userId);
   if (!user) throw new AppError("NOT_FOUND", "계정을 찾을 수 없습니다.");
+
+  /*
+   * 현재 비밀번호 대입도 제한한다. 세션을 탈취한 공격자가 여기서 무제한으로
+   * 옛 비밀번호를 찾아낼 수 있으면 `NFR-SEC-002` 의 취지가 무너진다.
+   */
+  const limit = await consume(`rl:pwchange:${userId}`, 5, 10 * 60);
+  if (!limit.allowed) {
+    throw new AppError(
+      "RATE_LIMITED",
+      "시도가 너무 많습니다. 잠시 후 다시 시도해 주세요."
+    );
+  }
 
   if (!(await verifyPassword(user.passwordHash, currentPassword))) {
     throw new AppError(
@@ -244,10 +286,18 @@ export async function changePassword(
     });
   }
 
-  await revokeAllFor(userId, hashToken(currentToken));
+  // 본인의 **다른** 세션을 전부 끊는다. 현재 세션은 DB 행만 남고 캐시는 무효화되므로
+  // 방금 바꾼 `mustChangePassword: false` 가 다음 요청에 바로 반영된다.
+  await revokeAllFor(userId, currentSessionId);
 
   await audit.log(
-    { id: user.id, username: user.username, role: user.role, via: "WEB" },
+    {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      via: "WEB",
+      ...meta,
+    },
     {
       action: "USER_PASSWORD_CHANGE",
       summary: `비밀번호 변경 — ${user.username}`,
