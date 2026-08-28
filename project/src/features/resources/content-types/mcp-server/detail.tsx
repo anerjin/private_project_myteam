@@ -76,6 +76,7 @@ export function Detail({ resource }: { resource: Resource }) {
                 <TableRow>
                   <TableHead>키</TableHead>
                   <TableHead>설명</TableHead>
+                  <TableHead>형태 예시</TableHead>
                   <TableHead className="w-20">필수</TableHead>
                 </TableRow>
               </TableHeader>
@@ -84,6 +85,9 @@ export function Detail({ resource }: { resource: Resource }) {
                   <TableRow key={v.key}>
                     <TableCell className="font-mono text-xs">{v.key}</TableCell>
                     <TableCell className="text-sm">{v.description}</TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-xs">
+                      {v.example ?? "-"}
+                    </TableCell>
                     <TableCell>{v.required ? "필수" : "선택"}</TableCell>
                   </TableRow>
                 ))}

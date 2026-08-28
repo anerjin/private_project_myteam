@@ -13,18 +13,8 @@ export function Detail({ resource }: { resource: Resource }) {
   const d = resource.detail;
   if (d.type !== "SKILL") return null;
 
-  const definition = `---
-name: ${d.skillName}
-description: ${resource.summary ?? ""}
----
-
-## 언제 쓰는가
-
-${d.triggerCondition}
-
-## 사용 예시
-
-${d.usageExample}`;
+  // 등록자가 넣은 원문을 그대로 보여준다. 조각으로 재구성하면 원문과 어긋난다.
+  const definition = d.definition;
 
   return (
     <div className="space-y-4">

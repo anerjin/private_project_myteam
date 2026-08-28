@@ -49,11 +49,13 @@ export interface GithubRepoDetail {
   forks?: number;
   primaryLanguage?: string;
   license?: string;
+  /** `github_repos.topics` (text[]). metadata JSONB 가 아니다 — REQ-04 · 4.4 */
   topics?: string[];
   pushedAt?: string;
   latestRelease?: string;
   archiveStatus: "NONE" | "QUEUED" | "RUNNING" | "DONE" | "FAILED";
-  archiveSizeMb?: number;
+  /** 표시용 캐시. 정본은 files.size_bytes (role=ARCHIVE) — DEV-02 · 2.7 */
+  archiveSizeBytes?: number;
   archivedSha?: string;
   isGone: boolean;
 }
@@ -63,7 +65,13 @@ export interface McpServerDetail {
   transport: "STDIO" | "SSE" | "HTTP";
   installCommand?: string;
   configJson: string;
-  envVars?: { key: string; description: string; required: boolean }[];
+  envVars?: {
+    key: string;
+    description: string;
+    required: boolean;
+    /** 값이 아니라 «형태» 예시만. 실제 토큰은 저장하지 않는다 (NFR-SEC-008) */
+    example?: string;
+  }[];
   providedTools?: { name: string; description: string }[];
   clientSupport?: string[];
   usageStatus: UsageStatus;
@@ -71,6 +79,8 @@ export interface McpServerDetail {
 
 export interface SkillDetail {
   skillName: string;
+  /** Skill 정의 원문(마크다운). REQ-04 · 4.4 에서 필수 — PROMPT 의 promptText 와 같은 자리 */
+  definition: string;
   triggerCondition: string;
   usageExample: string;
   targetClients?: string[];

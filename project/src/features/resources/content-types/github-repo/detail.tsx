@@ -75,7 +75,11 @@ export function Detail({ resource }: { resource: Resource }) {
           {d.archiveStatus === "DONE" ? (
             <div className="flex flex-wrap items-center gap-3">
               <div className="text-sm">
-                <p className="font-medium">보관됨 · {d.archiveSizeMb} MB</p>
+                <p className="font-medium">
+                  보관됨
+                  {d.archiveSizeBytes !== undefined &&
+                    ` · ${(d.archiveSizeBytes / 1024 / 1024).toFixed(1)} MB`}
+                </p>
                 <p className="text-muted-foreground text-xs">
                   커밋 <code>{d.archivedSha}</code> 기준
                 </p>

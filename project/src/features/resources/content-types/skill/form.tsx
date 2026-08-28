@@ -34,7 +34,13 @@ export function Form({ detail }: { detail?: ResourceDetail }) {
 
       <Field>
         <FieldLabel htmlFor="definition">Skill 정의 원문 *</FieldLabel>
-        <Textarea id="definition" rows={8} className="font-mono text-xs" />
+        <Textarea
+          id="definition"
+          rows={8}
+          className="font-mono text-xs"
+          defaultValue={d?.definition}
+          placeholder="SKILL.md 내용을 그대로 붙여넣으세요"
+        />
       </Field>
     </>
   );

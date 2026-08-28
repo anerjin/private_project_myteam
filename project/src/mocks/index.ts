@@ -129,7 +129,7 @@ export const resources: Resource[] = [
       pushedAt: "2026-08-26",
       latestRelease: "v0.9.2",
       archiveStatus: "DONE",
-      archiveSizeMb: 34.2,
+      archiveSizeBytes: 35_861_299,
       archivedSha: "a3f91c7",
       isGone: false,
     },
@@ -152,6 +152,23 @@ export const resources: Resource[] = [
     detail: {
       type: "SKILL",
       skillName: "queenbee-collect",
+      definition: `---
+name: queenbee-collect
+description: 주제를 받아 자료를 찾고 QueenBee에 등록한다
+---
+
+## 절차
+
+1. 웹에서 후보를 찾는다 (공식 문서·논문 원문 우선)
+2. \`queenbee_check_duplicate\` 로 중복을 확인한다
+3. 요약과 **사내 적용 아이디어**를 작성한다
+4. \`queenbee_create_resource\` 로 등록한다
+
+## 품질 규칙
+
+- 2차 요약 기사만으로 등록하지 않는다
+- \`applicability\` 를 비워두지 않는다
+- 한 대화에서 10건을 넘기지 않는다`,
       triggerCondition:
         "사용자가 특정 주제의 자료를 찾아 QueenBee에 등록해 달라고 요청할 때",
       usageExample: '"MCP 서버 보안 관련 자료 최근 6개월 것으로 찾아서 등록해줘"',
@@ -273,7 +290,7 @@ volumes:
       pushedAt: "2026-08-21",
       latestRelease: "v3.5.4",
       archiveStatus: "DONE",
-      archiveSizeMb: 128.7,
+      archiveSizeBytes: 134_951_731,
       archivedSha: "9c41ba0",
       isGone: false,
     },
@@ -313,6 +330,7 @@ volumes:
           key: "DATABASE_URL",
           description: "접속 문자열. 읽기 전용 계정을 쓸 것",
           required: true,
+          example: "postgresql://<user>:<pw>@<host>:5432/<db>",
         },
       ],
       providedTools: [
@@ -422,6 +440,21 @@ volumes:
     detail: {
       type: "SKILL",
       skillName: "code-review",
+      definition: `---
+name: code-review
+description: 변경분을 정확성·중복·단순화 관점에서 점검한다
+---
+
+## 점검 순서
+
+1. \`git diff\` 로 변경 범위를 파악한다
+2. 정확성 → 재사용 → 단순화 순으로 본다
+3. 확신이 서는 것만 보고한다
+
+## 하지 않는 것
+
+- 취향에 가까운 스타일 지적
+- 변경과 무관한 파일 리뷰`,
       triggerCondition: "PR 올리기 전 변경분 점검을 요청할 때",
       usageExample: '"지금 변경분 리뷰해줘"',
       targetClients: ["Claude Code"],

@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | 문서 ID | DEV-05 |
-| 버전 | v0.5 |
+| 버전 | v0.6 |
 | 상태 | Draft |
 | 최종 수정 | 2026-08-28 |
 
@@ -117,19 +117,20 @@ export type ActionResult<T = void> =
 
 ---
 
-## 5.3 인증 (Auth.js)
+## 5.3 인증 (자체 구현 — `DEC-030`)
 
-| ID | 경로 | 설명 |
-| --- | --- | --- |
-| API-001 | `GET/POST /api/auth/[...nextauth]` | Auth.js 핸들러 (로그인·로그아웃·세션) |
-
-그 외 인증 동작은 Server Action으로 처리합니다.
+**Auth.js 를 쓰지 않으므로 `/api/auth/[...nextauth]` 핸들러가 없습니다.**
+로그인·로그아웃도 다른 폼과 같은 **Server Action** 입니다 (`DEC-009` 판단 기준 그대로).
 
 | ID | 액션 | 권한 | 설명 |
 | --- | --- | --- | --- |
+| ~~API-001~~ | ~~`/api/auth/[...nextauth]`~~ | — | **폐기** — Auth.js 미도입 (`DEC-030`). 번호는 재사용하지 않는다 |
 | API-002 | `signUpAction` | GUEST | 회원가입 신청 (`FR-AUTH-001`) |
 | API-003 | `checkUsernameAction` | GUEST | **아이디** 중복 확인 (`FR-AUTH-002`) |
-| API-006 | `changePasswordAction` | 로그인 | 비밀번호 변경 |
+| **API-004** | `signInAction` | GUEST | 로그인 — 시도 제한 확인 → Argon2id 검증 → **세션 재발급** → 쿠키 설정 |
+| **API-005** | `signOutAction` | 로그인 | 로그아웃 — `sessions` 행 삭제 + Redis 무효화 + 쿠키 제거 |
+| API-006 | `changePasswordAction` | 로그인 | 비밀번호 변경. **성공 시 본인의 다른 세션을 모두 끊는다** |
+| **API-007** | `revokeSessionAction` | 본인 | 활성 세션 개별 종료 (`FR-USER-006`) |
 | API-008 | `createApiKeyAction` | MEMBER+ | API 키 발급 — **응답에만 전체 키를 담고 저장하지 않는다** (`FR-USER-008`) |
 | API-009 | `revokeApiKeyAction` | 본인 / ADMIN | API 키 폐기 |
 
@@ -366,6 +367,10 @@ export async function updateResourceAction(
 
 이 6단계 순서를 모든 액션에서 지킵니다. 코드 리뷰 시 확인 항목입니다.
 
+> **1단계를 «어차피 proxy 가 막았을 것»이라며 건너뛰면 안 됩니다.** Server Action 은 별도 라우트가
+> 아니라 그 경로로 들어오는 POST 라서, `matcher` 가 제외한 경로면 `proxy` 를 건너뜁니다.
+> **액션 진입부가 유일한 인가 방어선**입니다 (`DEC-031`, [REQ-02 · 2.9절](../01.요구사항/02_사용자_권한_정책.md)).
+
 ### 금지 사항
 
 | 금지 | 이유 |
@@ -510,3 +515,4 @@ Authorization: Bearer qb_live_<32자>
 | 2026-08-28 | v0.3 | **MinIO 제외**(`DEC-019`) — 5.6 파일 절 재작성. presigned 방식 폐기, 스트리밍 업로드(`API-040`)·스트림 다운로드(`API-042`·`API-032`)로 전환. `API-041` 폐기 |
 | 2026-08-28 | v0.4 | `ARCHIVE_QUOTA_EXCEEDED` 에러 코드 추가 (`DEC-022`) |
 | 2026-08-28 | v0.5 | **검수 폐기 반영**(`DEC-029`) — `API-104` 동작·응답에서 `needsReview` 제거 |
+| 2026-08-28 | v0.6 | **5.3 인증 절 재작성**(`DEC-030`) — Auth.js 미도입으로 **`API-001` 폐기**, 로그인·로그아웃을 Server Action(`API-004`·`API-005`)으로 신설, 세션 개별 종료(`API-007`) 추가. 5.10 액션 6단계가 **유일한 인가 방어선**임을 명시(`DEC-031`) |

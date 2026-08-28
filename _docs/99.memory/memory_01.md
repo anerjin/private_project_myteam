@@ -659,3 +659,134 @@
   - 관리자 영역 «헤더 한 줄» ( `[013]` 의 남은 것과 동일 )
   - `queenbee-collect` Skill 을 M3에서 쓸 때 **품질 규칙을 실제로 빡빡하게** 써야 한다.
     이제 그게 유일한 방어선이다.
+
+---
+
+## [015] 2026-08-28 · 착수 전 설계 검토 → `DEC-030`·`031`·`032` 결정 + 정합 정리
+
+- **지시** — *"현재 만들어진 UI와 개발설계 문서를 기준으로 개발이 가능한지 검토해줘"* →
+  *"아키텍처가 의사결정에 참여하고 검토결과를 메모리에 남기고 권장안으로 개발하기전에 정리해"*
+
+### 검토 결론
+
+**M0(인프라)·M2(자료 코어)는 문서를 그대로 따라가면 된다. 그런데 M1(인증)은 만들 수 없었다.**
+결정 두 개가 서로를 무효화하고 있었기 때문이다.
+
+### 1. 가장 큰 발견 — `DEC-002` 와 `DEC-005` 가 양립하지 않았다
+
+| 결정 | 내용 |
+| --- | --- |
+| `DEC-002` | 인증은 **Auth.js v5 Credentials Provider** |
+| `DEC-005` | 세션은 **Auth.js database 세션** + Redis 캐시 |
+
+**Auth.js 는 Credentials Provider 를 쓰면 세션 전략이 JWT 로 고정된다.** 어댑터의 `Session`
+테이블은 채워지지 않는다. 그런데 이 표에 매달려 있던 설계가 다섯 개였다 —
+`TBL-sessions`, Redis `user:sessions:{userId}`(강제 로그아웃용), `API-063/065`(정지 시 세션 전체 삭제),
+`FR-USER-006`(활성 세션 목록), `REQ-05` E2E ⑤(정지 → 즉시 로그아웃). 전부 같이 무너진다.
+
+**→ `DEC-030`: Auth.js 를 아예 쓰지 않고 세션을 직접 만든다.**
+
+결정적이었던 근거는 «구현이 어렵다/쉽다»가 아니라 **«우리는 Auth.js 가 주는 것을 안 쓴다»** 였다.
+소셜·SSO를 도입하지 않기로 했으므로(`DEC-002`) 프로바이더 생태계·계정 연결·OAuth 흐름이 전부
+불필요하다. **남는 것은 제약뿐이었다.** 직접 짜는 범위도 좁다 — 암호는 Argon2id 라이브러리가 하고
+우리가 만드는 것은 «랜덤 토큰 발급 · 해시 저장 · 조회 · 폐기» 넷뿐이다.
+Next.js 공식 authentication 가이드가 이 형태를 그대로 문서화하고 있다.
+
+- `DEC-005` 는 **폐기가 아니라 «수단만» 폐기**로 적었다. «DB 세션 + 즉시 반영»이라는 **요구는 옳았다.**
+- 세션 토큰은 DB에 **SHA-256 해시로만** 둔다 (API 키와 같은 원칙). Redis 키도 해시를 쓴다 —
+  원문이 캐시에 남으면 DB에만 해시로 둔 의미가 없다.
+
+### 2. `proxy.ts` 를 «인가 1계층»이라 부른 것 — `DEC-031`
+
+Next.js 16 번들 문서(`node_modules/next/dist/docs`)를 직접 열어 확인했다.
+
+- proxy 는 **Node.js 런타임이 기본**(`v16.0.0` 변경)이라 DB 접근이 불가능하진 않다. 그런데
+  공식 문서가 *"full session management or authorization solution 으로 쓰지 말 것"*,
+  *"prefetch 포함 모든 라우트에서 실행되므로 DB 조회를 피할 것"* 이라고 명시한다.
+- **더 결정적인 것:** Server Action 은 별도 라우트가 아니라 **그 경로로 들어오는 POST** 다.
+  `matcher` 가 제외한 경로면 proxy 를 그냥 건너뛴다. 문서가 *"proxy 에만 의존하지 말고 각
+  Server Function 안에서 인증·인가를 확인하라"* 고 못 박고 있다.
+
+→ **1층은 낙관적 걸러내기, 실제 인가는 3층.** `DEV-05 · 5.10` 의 «액션 6단계»가 선택이 아니라
+**유일한 방어선**이 됐다. 그리고 1층이 DB를 안 보므로 `status`·`role` 이 쿠키에 실려야 하는데,
+그 최신성은 `DEC-030` 의 DB 세션이 보장한다 — **두 결정이 맞물린다.**
+
+### 3. 콘텐츠 타입 설정의 이중 출처 — `DEC-032`
+
+`content_type_settings` 에 `label`·`description`·`icon` 컬럼이 있는데 코드 레지스트리에도 같은 값이
+있었다. **`DEC-029`(`needs_review` vs `source_channel`)에서 겪은 것과 똑같은 문제** — 한 사실을
+두 곳에 두면 어긋났을 때 판단 근거가 없다.
+
+→ **표현은 코드, 운영 설정(`is_active`·`show_in_nav`·`sort_order`)만 DB.** 컬럼 3개 제거.
+
+병합 지점도 없었다. `buildResourceNavGroup()` 이 **클라이언트 컴포넌트**에서 레지스트리 상수만
+읽는다(`icon` 이 함수라 서버→클라이언트 경계를 못 넘어서 그렇게 짠 것이고, 그 판단 자체는 옳다).
+그대로 두면 M5의 `FR-ADM-014`(관리자 타입 노출 설정)가 동작하지 않는다.
+→ **서버가 `{code, isActive, showInNav, sortOrder}` 만 넘기고 클라이언트가 `code` 로 병합**한다고
+`REQ-04 · 4.9`·`DEV-06 · 6.5` 에 규칙으로 적었다. `buildResourceNavGroup()` 은 **설정을 인자로 받아야 한다.**
+
+### 4. zod 가 한 줄도 없다 (기록만, 이번에 만들지 않음)
+
+`zod` 는 의존성에 있는데 **소스 전체에서 import 0건**이다. `content-types/*/schema.ts` 도 없다.
+이게 왜 중요한가 — **`API-100`(zod → JSON Schema)이 «타입이 늘어도 MCP 서버 코드를 안 고친다»의
+유일한 근거**이고, `API-104` 의 «웹과 같은 스키마로 검증»도 같은 zod 를 전제한다.
+
+**`M0.5` 가 증명한 것은 화면 쪽 확장성뿐이다.** `PROMPT` 를 넣으니 사이드바·목록·팔레트가 자동으로
+붙은 건 사실이지만, 서버 쪽(zod → service → Prisma)은 한 번도 안 통과했다.
+→ `DEV-07` M2 작업에 **«타입 1종을 폼→zod→service→Prisma 로 관통»** 을 넣고, DoD 주의로 명시했다.
+
+### 5. Prisma 초안은 복붙하면 실패했다
+
+`datasource` 의 `extensions = [pgTrgm, unaccent]` 는 `generator` 에
+**`previewFeatures = ["postgresqlExtensions"]`** 가 있어야 유효하다. 초안에 없었다.
+`prisma validate` 단계에서 바로 걸린다. 한 줄 추가.
+
+### 6. UI 타입 ↔ Prisma 초안 정합 (6건)
+
+| 항목 | 처리 |
+| --- | --- |
+| `GithubRepoDetail.topics` | Prisma 에 `topics String[]` 추가. REQ-04 는 «metadata JSONB»라고 했지만 **JSONB 안 배열은 GIN 으로 검색되지 않는다** → 컬럼으로 승격 |
+| `archiveSizeMb` | `github_repos.archive_size_bytes` 신설 + DTO 도 **bytes 로 통일**. 단위가 층마다 다르면 조용히 틀린다 |
+| REQ-04 `archive_file_id` | **제거.** `resource_files(role=ARCHIVE)` 와 같은 연결을 두 번 표현하고 있었다 |
+| `SkillDetail.definition` | **추가.** Prisma 는 NOT NULL 인데 타입에 없었고, **폼에는 입력칸이 이미 있었다.** 게다가 상세 화면은 저장된 원문 대신 조각으로 **재구성**하고 있었다 → 원문을 그대로 보여주게 고침 |
+| `language` | Prisma `String?` → **`enum Language { KO EN ETC }`** (REQ-04 는 처음부터 enum 이었다) |
+| `Prompt.usageStatus` | `@default(REVIEWING)` 추가 (다른 타입만 기본값이 있었다) |
+| `ResourceRelation.createdBy` | 2.3 표에는 있고 모델에 없었다 → `createdById` 추가 |
+| `envVars.example` | REQ-04 스펙에 있는데 타입·화면에 없었다 → 추가하고 «형태 예시» 열로 렌더 |
+
+### 판단 근거로 남길 것
+
+- **기능이 아니라 «결정끼리의 모순»을 찾는 검토가 값이 컸다.** `DEC-002`·`DEC-005` 는 각각 읽으면
+  둘 다 타당해 보인다. 둘을 **같이** 읽어야 모순이 보인다. 문서가 늘어날수록 이 검토가 필요하다.
+- **라이브러리를 빼는 것도 아키텍처 결정이다.** Auth.js 는 «표준»이라 의심하지 않기 쉬운데,
+  우리 요구(소셜 없음 + 즉시 취소 가능한 세션)에서는 순수한 제약이었다.
+- **프레임워크 문서를 추측하지 말고 `node_modules/next/dist/docs` 를 열어 볼 것.** proxy 의 런타임과
+  Server Action 우회는 기억으로 답했으면 틀렸을 수 있다. (`AGENTS.md` 가 요구하는 것이기도 하다)
+- **`DEC-029` 때 배운 «한 사실을 두 곳에 두지 않는다»가 이번에 두 번 더 적용됐다** —
+  `content_type_settings` 의 표현 컬럼, `archive_file_id`. 같은 냄새를 계속 찾을 것.
+
+### 문서 갱신
+
+`DCS-01` v0.7(**`DEC-030`·`031`·`032` 신설**, `DEC-005` 폐기·`DEC-002` 개정·`DEC-004` 근거 무효) ·
+`REQ-01`~`REQ-04`·`DEV-01`·`DEV-02`·`DEV-05`·`DEV-06`·`DEV-07` 전부 반영.
+버전: `REQ-02` v0.6 · `REQ-04` v0.6 · `DEV-01` v0.6 · `DEV-02` v0.7 · `DEV-05` v0.6 ·
+`DEV-06` v0.5 · `DEV-07` v0.7.
+
+### 확인
+
+- `tsc --noEmit` · `eslint` 통과, `next build` 성공(43 라우트)
+- 자료 상세 3종 스모크 — Skill 정의 **원문**이 렌더되고, 아카이브 크기가 bytes→MB 로 표시되며,
+  MCP 환경변수 «형태 예시» 열이 나온다
+
+### 남은 것 (M0 착수 전 실행 항목)
+
+- `docker/` · `.env.example` · 루트 `README.md` 없음
+- `project/` 에 `prisma/` · `packages/` · `tests/` · `src/server/` · `src/workers/` · `proxy.ts` 없음
+- `package.json` 에 **`workspaces` 없음** → M3에서 `@queenbee/mcp` 를 붙일 수 없다
+- `tsconfig paths` 가 `@/*` 하나뿐 (`DEV-06 · 6.10` 은 7개)
+- **`[011]` 의 의존 방향 검사 스크립트가 저장소에 없다.** `NFR-MAINT-002` 는 «위반 0건 CI 게이트»인데
+  CI 도 스크립트도 없다 → `npm run check:deps` 로 커밋할 것
+- 미설치 17종 중 **`react-hook-form`**(현재 폼이 전부 비제어 — M1에서 다시 쓰게 된다)과
+  **`shiki`**(마크다운 코드 하이라이트 없음)는 지금 화면에 영향이 있다
+- **일정 12.5주는 낙관적이다.** M1에 자체 세션이 얹혔고 M3는 API 8종+MCP 패키지+Skill 을 2주에 담고 있다.
+  `DEV-07 · 7.10` 위험표에 적어 두었다
