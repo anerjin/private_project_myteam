@@ -12,7 +12,8 @@ import { TypeBadge } from "@/features/resources/components/badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CATEGORIES } from "@/config/site";
-import { canEditResource, getMockSession } from "@/features/auth/mock-session";
+import { canEditResource } from "@/server/auth/actor";
+import { requireActiveUser, toActor } from "@/server/auth/guards";
 import { DeleteResourceDialog } from "@/features/resources/components/delete-resource-dialog";
 import { ExternalLinkButton } from "@/features/resources/components/external-link-button";
 import { TypeDetail } from "@/features/resources/components/type-detail";
@@ -43,8 +44,10 @@ export default async function ResourceDetailPage({
   const category = CATEGORIES.find((c) => c.slug === resource.category);
   const toc = resource.body ? extractToc(resource.body) : [];
 
-  const session = await getMockSession();
-  const canEdit = canEditResource(session, resource.author.id);
+  const session = await requireActiveUser();
+  // 목 자료의 author.id 는 실제 계정 id 와 맞지 않아 P2~P3 동안 EDITOR+ 에게만 보인다.
+  // **버그가 아니라 목 경계가 드러난 것이므로 목 데이터를 맞추지 않는다** — P4 에서 저절로 맞는다.
+  const canEdit = canEditResource(toActor(session), resource.author.id);
   const related = resources
     .filter(
       (r) =>

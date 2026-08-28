@@ -17,6 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { stats } from "@/mocks";
+import { requireRole } from "@/server/auth/guards";
 
 export const metadata: Metadata = { title: "시스템 설정" };
 
@@ -41,7 +42,10 @@ function SettingRow({
 }
 
 /** SCR-261 시스템 설정 */
-export default function AdminSettingsPage() {
+export default async function AdminSettingsPage() {
+  // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
+  await requireRole("ADMIN");
+
   const archivePct = Math.round(
     (stats.archiveUsedGb / stats.archiveLimitGb) * 100
   );

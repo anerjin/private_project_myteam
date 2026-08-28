@@ -2,6 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 
+import { DEFAULT_SESSION_COOKIE_NAME } from "@/lib/session-cookie";
+
 /**
  * 환경 변수 검증 (DEV-01 · 1.8절, NFR-MAINT-006).
  *
@@ -38,8 +40,9 @@ const envSchema = z.object({
   REDIS_URL: z.string().startsWith("redis://"),
 
   // 세션 (DEC-030). Auth.js 를 쓰지 않으므로 서명 키가 없다.
-  SESSION_COOKIE_NAME: z.string().min(1).default("qb_session"),
-  SESSION_TTL_DAYS: numeric(14),
+  SESSION_COOKIE_NAME: z.string().min(1).default(DEFAULT_SESSION_COOKIE_NAME),
+  // REQ-02 · 2.7 이 7일로 정했다. 14 로 두었던 것은 문서와 어긋난 값이었다.
+  SESSION_TTL_DAYS: numeric(7),
   COOKIE_SECURE: boolish.default(false),
 
   // 파일 저장 (DEC-019)

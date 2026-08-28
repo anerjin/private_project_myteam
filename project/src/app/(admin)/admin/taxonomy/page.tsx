@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CATEGORIES } from "@/config/site";
 import { listContentTypes } from "@/features/resources/content-types";
 import { resources } from "@/mocks";
+import { requireRole } from "@/server/auth/guards";
 
 export const metadata: Metadata = { title: "분류 · 타입 관리" };
 
@@ -28,7 +29,10 @@ const SUBCATEGORIES: Record<string, string[]> = {
 };
 
 /** SCR-231 분류 · 콘텐츠 타입 관리 */
-export default function AdminTaxonomyPage() {
+export default async function AdminTaxonomyPage() {
+  // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
+  await requireRole("ADMIN");
+
   const tagCounts = Object.entries(
     resources
       .flatMap((r) => r.tags)

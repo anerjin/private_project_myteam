@@ -3,11 +3,15 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/common/page-header";
 import { MemberTable } from "@/features/members/components/member-table";
 import { members } from "@/mocks";
+import { requireRole } from "@/server/auth/guards";
 
 export const metadata: Metadata = { title: "회원 관리" };
 
 /** SCR-211 회원 관리 */
-export default function AdminMembersPage() {
+export default async function AdminMembersPage() {
+  // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
+  await requireRole("ADMIN");
+
   return (
     <>
       <PageHeader

@@ -23,11 +23,15 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { TrendChart } from "@/features/dashboard/components/trend-chart";
 import { auditLogs, jobs, stats } from "@/mocks";
+import { requireRole } from "@/server/auth/guards";
 
 export const metadata: Metadata = { title: "관리자" };
 
 /** SCR-201 관리자 대시보드 */
-export default function AdminDashboardPage() {
+export default async function AdminDashboardPage() {
+  // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
+  await requireRole("ADMIN");
+
   const archivePct = Math.round(
     (stats.archiveUsedGb / stats.archiveLimitGb) * 100
   );

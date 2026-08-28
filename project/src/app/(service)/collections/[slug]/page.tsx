@@ -7,7 +7,7 @@ import { TypeBadge } from "@/features/resources/components/badges";
 import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getMockSession } from "@/features/auth/mock-session";
+import { requireActiveUser } from "@/server/auth/guards";
 import { collections, resources } from "@/mocks";
 import { getContentType } from "@/features/resources/content-types";
 
@@ -41,9 +41,9 @@ export default async function CollectionDetailPage({
           : undefined,
   }));
 
-  const session = await getMockSession();
+  const session = await requireActiveUser();
   const isOwner =
-    collection.owner.id === session.id || session.role !== "MEMBER";
+    collection.owner.id === session.userId || session.role !== "MEMBER";
 
   return (
     <>

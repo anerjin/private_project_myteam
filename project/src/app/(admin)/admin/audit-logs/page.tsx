@@ -5,11 +5,15 @@ import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { AuditTable } from "@/features/audit/components/audit-table";
 import { auditLogs } from "@/mocks";
+import { requireRole } from "@/server/auth/guards";
 
 export const metadata: Metadata = { title: "감사 로그" };
 
 /** SCR-251 감사 로그 */
-export default function AdminAuditLogsPage() {
+export default async function AdminAuditLogsPage() {
+  // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
+  await requireRole("ADMIN");
+
   return (
     <>
       <PageHeader

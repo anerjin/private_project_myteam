@@ -19,14 +19,27 @@ const globalForRedis = globalThis as unknown as {
 
 function createClient(): Redis {
   const client = new Redis(env.REDIS_URL, {
-    // **핵심.** 기본값(true)이면 연결이 끊긴 동안 명령을 오프라인 큐에 쌓아두고
-    // 재연결까지 기다립니다. 그러면 Redis 가 죽었을 때 요청이 통째로 매달려
-    // 「캐시 미스로 처리하고 DB 로 폴백」(NFR-AVAIL-004)이 성립하지 않습니다.
-    // 끊긴 상태에서는 **즉시 던지게** 해서 호출부가 폴백할 기회를 줍니다.
-    enableOfflineQueue: false,
-    maxRetriesPerRequest: 1,
+    /*
+     * **오프라인 큐는 켜두고, 대신 명령에 타임아웃을 겁니다.**
+     *
+     * 처음에는 `enableOfflineQueue: false` 로 두었는데 실측해 보니 한 버그를
+     * 다른 버그로 바꾼 것이었습니다 — 이 옵션은 연결이 «아직» 맺히지 않은
+     * 기동 직후의 첫 명령까지 실패시킵니다. 그러면 서버 재시작 직후 요청이
+     * 레이트리밋을 그냥 통과합니다.
+     *
+     * | 설정 | Redis 정상 | Redis 중지 |
+     * | --- | --- | --- |
+     * | `enableOfflineQueue: false` | 첫 명령 **실패 1ms** | 실패 1ms |
+     * | 큐 유지 + `commandTimeout` | **성공 14ms** | **실패 1,014ms** |
+     *
+     * 큐를 켜두면 짧은 끊김은 재연결로 흡수되고, 정말 죽었을 때는
+     * `commandTimeout` 이 상한을 만들어 「캐시 미스로 처리하고 DB 폴백」
+     * (`NFR-AVAIL-004`)이 성립합니다.
+     */
+    commandTimeout: 1000,
     connectTimeout: 2000,
-    // 끊긴 뒤에도 계속 재연결을 시도하되 간격을 벌린다
+    maxRetriesPerRequest: 1,
+    // 끊긴 뒤에도 재연결을 계속 시도하되 간격을 벌린다
     retryStrategy: (times) => Math.min(times * 200, 3000),
   });
 

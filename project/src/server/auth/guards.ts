@@ -1,0 +1,90 @@
+import "server-only";
+
+import { redirect } from "next/navigation";
+import { cache } from "react";
+
+import { AppError } from "@/lib/errors";
+import { readSessionToken } from "@/server/auth/cookie";
+import { resolve, type SessionUser } from "@/server/auth/session";
+import type { Actor } from "@/server/auth/actor";
+import { isEditor } from "@/server/auth/actor";
+
+/**
+ * 인가의 정본 — DAL (DEC-035).
+ *
+ * **각 `page.tsx` 와 모든 Server Action·Route Handler 진입부에서 부릅니다.**
+ * **레이아웃에서는 부르지 않습니다** — Next.js 16 의 Partial Rendering 때문에
+ * 레이아웃은 네비게이션 시 재실행되지 않고, 레이아웃의 `redirect()` 는
+ * page 세그먼트 렌더와 RSC Payload 를 막지 못합니다.
+ *
+ * `proxy.ts` 는 쿠키 유무만 보는 낙관적 검사라 **가드가 아닙니다.**
+ */
+
+/**
+ * 한 렌더 패스에서 한 번만 조회합니다.
+ * 페이지·컴포넌트가 각자 불러도 DB 를 여러 번 때리지 않습니다.
+ */
+export const getSession = cache(async (): Promise<SessionUser | null> => {
+  const token = await readSessionToken();
+  if (!token) return null;
+  return resolve(token);
+});
+
+/** 화면용 — 로그인 안 했으면 로그인으로 (REQ-02 · 2.9절) */
+export async function requireActiveUser(): Promise<SessionUser> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  if (session.mustChangePassword) redirect("/change-password");
+  return session;
+}
+
+export async function requireRole(
+  role: "EDITOR" | "ADMIN"
+): Promise<SessionUser> {
+  const session = await requireActiveUser();
+  const allowed =
+    role === "ADMIN" ? session.role === "ADMIN" : isEditor(toActor(session));
+  if (!allowed) redirect("/403");
+  return session;
+}
+
+/**
+ * 액션·핸들러용 — 리다이렉트가 아니라 **예외**를 던집니다.
+ * 액션은 `guard()` 로 감싸 `ActionResult` 로 바뀝니다 (`DEV-05 · 5.2절`).
+ */
+export async function requireActor(): Promise<Actor> {
+  const session = await getSession();
+  if (!session) {
+    throw new AppError("UNAUTHENTICATED", "로그인이 필요합니다.");
+  }
+  return toActor(session);
+}
+
+export async function requireAdminActor(): Promise<Actor> {
+  const actor = await requireActor();
+  if (actor.role !== "ADMIN") {
+    throw new AppError("FORBIDDEN", "권한이 없습니다.");
+  }
+  return actor;
+}
+
+export function toActor(session: SessionUser): Actor {
+  return {
+    id: session.userId,
+    username: session.username,
+    role: session.role,
+    via: "WEB",
+  };
+}
+
+/**
+ * 자료 수정 권한 (REQ-02 · 2.5절).
+ *
+ * 목 세션에 있던 판정을 그대로 옮겼습니다 — **이건 목이 아니라 실제 정책**이고
+ * `NFR-MAINT-004` 가 요구하는 「인가 판정 단위 테스트」의 대상입니다.
+ */
+export function assertCanEditResource(actor: Actor, authorId: string): void {
+  if (!isEditor(actor) && actor.id !== authorId) {
+    throw new AppError("FORBIDDEN", "이 자료를 수정할 권한이 없습니다.");
+  }
+}

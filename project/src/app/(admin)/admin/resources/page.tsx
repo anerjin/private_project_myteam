@@ -16,11 +16,15 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PurgeResourceDialog } from "@/features/resources/components/delete-resource-dialog";
 import { resources } from "@/mocks";
+import { requireRole } from "@/server/auth/guards";
 
 export const metadata: Metadata = { title: "자료 관리" };
 
 /** SCR-221 자료 관리 · 휴지통 */
-export default function AdminResourcesPage() {
+export default async function AdminResourcesPage() {
+  // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
+  await requireRole("ADMIN");
+
   return (
     <>
       <PageHeader

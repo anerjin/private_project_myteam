@@ -6,10 +6,11 @@
  * **여러 번 돌려도 결과가 같아야 합니다.** 개발 중 스키마를 고치고 다시 돌리는 일이
  * 잦은데, 그때마다 중복 행이 쌓이면 시드를 못 믿게 됩니다. 전부 upsert 로 씁니다.
  *
- * 비밀번호 해시는 `P2`(인증)에서 Argon2id 로 넣습니다. 지금은 관리자 계정을
- * 만들지 않고, 계정 없이도 확인할 수 있는 **설정·분류만** 채웁니다.
+ * 관리자 계정도 여기서 만듭니다. 별도 스크립트로 빼지 않는 이유:
+ * **«돌려야 하는 것»이 두 개가 되면 온보딩에서 하나를 빠뜨립니다.**
  */
 
+import { hash } from "@node-rs/argon2";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient, type ResourceType } from "@prisma/client";
 
@@ -130,7 +131,88 @@ const SYSTEM_SETTINGS: {
   { key: "notice.banner", value: Prisma.JsonNull },
 ];
 
+/** `server/auth/password.ts` 와 **같은 파라미터**여야 합니다 (측정 기준 49ms) */
+const ARGON2 = {
+  algorithm: 2,
+  memoryCost: 65_536,
+  timeCost: 3,
+  parallelism: 1,
+} as const;
+
+/**
+ * 최초 관리자 (REQ-02 · 2.2절, FR-AUTH-011).
+ *
+ * **둘 중 하나만 있으면 명시적으로 죽습니다.** 조용히 건너뛰면
+ * 「시드했는데 로그인이 안 된다」가 됩니다.
+ */
+async function seedAdmin() {
+  const id = process.env.ADMIN_SEED_ID;
+  const password = process.env.ADMIN_SEED_PASSWORD;
+
+  if (!id && !password) {
+    console.log("관리자 시드: ADMIN_SEED_* 가 없어 건너뜁니다.");
+    return;
+  }
+  if (!id || !password) {
+    throw new Error(
+      "ADMIN_SEED_ID 와 ADMIN_SEED_PASSWORD 는 **둘 다** 있어야 합니다."
+    );
+  }
+
+  const username = id.toLowerCase();
+  await db.user.upsert({
+    where: { username },
+    // **이미 있으면 비밀번호를 되돌리지 않습니다.** 관리자가 바꾼 값을 시드가 초기화하면 안 됩니다.
+    update: {},
+    create: {
+      username,
+      passwordHash: await hash(password, ARGON2),
+      name: "관리자",
+      role: "ADMIN",
+      status: "ACTIVE",
+      // 최초 로그인 시 변경 강제 (FR-AUTH-011)
+      mustChangePassword: true,
+    },
+  });
+  console.log(`관리자 시드: ${username} (최초 로그인 시 비밀번호 변경 강제)`);
+}
+
+/**
+ * 개발 전용 계정 — 역할별 화면을 확인할 때 씁니다.
+ *
+ * 프로토타입의 «사용자 전환기»를 대체합니다. 전환기 대신 **실제 로그아웃 → 로그인**으로
+ * 확인하면 그 경로가 곧 E2E ①·④ 라 테스트를 따로 만들지 않아도 됩니다.
+ */
+async function seedDevUsers() {
+  if (process.env.NODE_ENV === "production") return;
+
+  const passwordHash = await hash("queenbee-dev-1234", ARGON2);
+  const users = [
+    { username: "minsu", name: "박민수", department: "개발팀", role: "MEMBER" },
+    {
+      username: "seoyeon",
+      name: "이서연",
+      department: "공간정보팀",
+      role: "EDITOR",
+    },
+  ] as const;
+
+  for (const u of users) {
+    await db.user.upsert({
+      where: { username: u.username },
+      update: {},
+      create: { ...u, passwordHash, status: "ACTIVE" },
+    });
+  }
+  console.log(
+    "개발 계정: minsu(MEMBER) · seoyeon(EDITOR) — 비밀번호 queenbee-dev-1234"
+  );
+}
+
 async function main() {
+  await seedAdmin();
+  await seedDevUsers();
+
   // ── 콘텐츠 타입 운영 설정 ──────────────────────────────
   for (const { type, sortOrder } of CONTENT_TYPES) {
     await db.contentTypeSetting.upsert({
@@ -186,7 +268,6 @@ async function main() {
   console.log(
     `시드 완료 — 콘텐츠 타입 ${types} · 카테고리 ${categories} · 시스템 설정 ${settings}`
   );
-  console.log("관리자 계정은 P2(인증)에서 Argon2id 해시와 함께 넣습니다.");
 }
 
 main()

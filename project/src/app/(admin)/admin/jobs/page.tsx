@@ -16,6 +16,7 @@ import {
 import { AutoRefresh } from "@/features/jobs/components/auto-refresh";
 import { jobs } from "@/mocks";
 import type { JobStatus } from "@/types";
+import { requireRole } from "@/server/auth/guards";
 
 export const metadata: Metadata = { title: "작업 모니터" };
 
@@ -36,7 +37,10 @@ const JOB_LABEL: Record<string, string> = {
 };
 
 /** SCR-241 수집 작업 모니터 */
-export default function AdminJobsPage() {
+export default async function AdminJobsPage() {
+  // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
+  await requireRole("ADMIN");
+
   const counts = (["QUEUED", "RUNNING", "DONE", "FAILED"] as JobStatus[]).map(
     (s) => ({
       status: s,

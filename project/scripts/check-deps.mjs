@@ -75,6 +75,20 @@ for await (const file of walk(SRC)) {
       }
     }
 
+    // proxy.ts 는 server-only 모듈을 끌어오면 안 된다 (DEC-035).
+    // 쿠키 이름은 lib/session-cookie.ts 에서 가져온다.
+    if (rel === "proxy.ts") {
+      const banned = ["server", "mocks", "features"];
+      if (banned.includes(toLayer) || spec === "@/lib/env") {
+        violations.push({
+          file: rel,
+          spec,
+          rule: `proxy.ts → ${spec}`,
+          why: "proxy 는 prefetch 포함 모든 라우트에서 돌고 DB·Redis 를 보면 안 된다. server-only 모듈을 그래프에 넣지 말 것 (DEC-035)",
+        });
+      }
+    }
+
     // features/A → features/B 금지. 같은 feature 안은 허용한다.
     if (fromLayer === "features" && toLayer === "features") {
       const fromFeature = rel.split("/")[1];

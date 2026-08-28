@@ -22,7 +22,8 @@ import {
 export interface NavUserData {
   name: string;
   username: string;
-  department: string;
+  /** DB 에서 nullable 이다 (TBL-users). 없는 사람이 있다 */
+  department?: string;
   roleLabel: string;
 }
 

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { TrendChart } from "@/features/dashboard/components/trend-chart";
 import { ResourceCard } from "@/features/resources/components/resource-card";
-import { getMockSession } from "@/features/auth/mock-session";
+import { requireActiveUser } from "@/server/auth/guards";
 import { resources, stats } from "@/mocks";
 import { getContentType } from "@/features/resources/content-types";
 
@@ -21,7 +21,7 @@ export const metadata: Metadata = { title: "대시보드" };
 
 /** SCR-101 서비스 대시보드 */
 export default async function DashboardPage() {
-  const session = await getMockSession();
+  const session = await requireActiveUser();
   const recent = [...resources]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 6);

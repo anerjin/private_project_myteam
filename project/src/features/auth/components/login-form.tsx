@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { SITE } from "@/config/site";
+import { signInAction } from "@/server/actions/auth.actions";
 
 /**
  * shadcn `login-03` 블록 기반. DEV-04 · 4.3절의 필수 수정 사항을 반영했다.
@@ -32,29 +33,35 @@ import { SITE } from "@/config/site";
  *   · "비밀번호를 잊으셨나요?" 링크 제거 + 안내 문구 (DEC-015)
  *   · 로그인 상태 유지 체크박스 (FR-AUTH-008)
  *   · 폼 상단 오류 Alert 영역 (SCR-001)
+ *
+ * 인증은 `signInAction`(API-004)이 합니다. 이 컴포넌트는 **결과를 보여주기만** 합니다 —
+ * 아이디·비밀번호 판정, 시도 제한, 상태 차단은 전부 서버의 일입니다 (`NFR-SEC-006`).
  */
-export function LoginForm() {
+export function LoginForm({ next }: { next?: string }) {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
-    // UI 확인용 — 인증은 M1에서 붙인다.
-    if (!username || !password) {
-      setError("아이디 또는 비밀번호가 올바르지 않습니다.");
-      return;
-    }
     setPending(true);
-    if (username === "pending") {
-      router.push("/pending");
+
+    const result = await signInAction({ username, password, remember }, next);
+
+    if (!result.ok) {
+      setError(result.message);
+      setPending(false);
       return;
     }
-    router.push("/dashboard");
+
+    // 서버가 정한 목적지로 간다. 클라이언트가 정하면 `mustChangePassword` 같은
+    // 조건을 화면마다 다시 구현하게 된다.
+    router.replace(result.data.redirectTo);
+    router.refresh();
   }
 
   return (
@@ -107,7 +114,11 @@ export function LoginForm() {
               </Field>
 
               <Field orientation="horizontal">
-                <Checkbox id="remember" defaultChecked />
+                <Checkbox
+                  id="remember"
+                  checked={remember}
+                  onCheckedChange={(v) => setRemember(v === true)}
+                />
                 <FieldLabel htmlFor="remember" className="font-normal">
                   로그인 상태 유지
                 </FieldLabel>

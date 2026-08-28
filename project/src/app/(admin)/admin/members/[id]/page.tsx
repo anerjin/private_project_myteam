@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/table";
 import { apiKeys, auditLogs, members, resources } from "@/mocks";
 import { getContentType } from "@/features/resources/content-types";
+import { requireRole } from "@/server/auth/guards";
 
 export async function generateStaticParams() {
   return members.map((m) => ({ id: m.id }));
@@ -61,6 +62,9 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 export default async function AdminMemberDetailPage({
   params,
 }: PageProps<"/admin/members/[id]">) {
+  // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
+  await requireRole("ADMIN");
+
   const { id } = await params;
   const member = members.find((m) => m.id === id);
   if (!member) notFound();

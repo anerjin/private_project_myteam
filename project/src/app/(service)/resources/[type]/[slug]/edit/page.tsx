@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
-import { canEditResource, getMockSession } from "@/features/auth/mock-session";
+import { canEditResource } from "@/server/auth/actor";
+import { requireActiveUser, toActor } from "@/server/auth/guards";
 
 import { PageHeader } from "@/components/common/page-header";
 import { ResourceForm } from "@/features/resources/components/resource-form";
@@ -28,8 +29,8 @@ export default async function EditResourcePage({
   if (!meta || !resource) notFound();
 
   // 인가는 화면 진입에서도 확인한다. 버튼을 숨기는 것만으로는 인가가 아니다 (REQ-02 · 2.1절)
-  const session = await getMockSession();
-  if (!canEditResource(session, resource.author.id)) redirect("/403");
+  const session = await requireActiveUser();
+  if (!canEditResource(toActor(session), resource.author.id)) redirect("/403");
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">

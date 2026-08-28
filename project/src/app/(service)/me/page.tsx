@@ -20,14 +20,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiKeyPanel } from "@/features/members/components/api-key-panel";
 import { ResourceCard } from "@/features/resources/components/resource-card";
-import { getMockSession } from "@/features/auth/mock-session";
+import { requireActiveUser } from "@/server/auth/guards";
+import { getProfile } from "@/server/services/user.service";
 import { notifications, resources } from "@/mocks";
 
 export const metadata: Metadata = { title: "마이페이지" };
 
 /** SCR-141 마이페이지 */
 export default async function MePage() {
-  const me = await getMockSession();
+  const session = await requireActiveUser();
+  // 세션 DTO 는 인가용 최소값이다. 가입일·자기소개는 프로필에서 읽는다.
+  const me = await getProfile(session.userId);
+  // 목 자료의 author.id 는 실제 계정 id 와 맞지 않는다 — P4 에서 실데이터가 오면 맞는다
   const mine = resources.filter((r) => r.author.id === me.id);
 
   return (
@@ -59,7 +63,7 @@ export default async function MePage() {
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="dept">소속 팀</FieldLabel>
-                  <Input id="dept" defaultValue={me.department} />
+                  <Input id="dept" defaultValue={me.department ?? ""} />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="bio">자기소개</FieldLabel>
@@ -231,7 +235,7 @@ export default async function MePage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">가입일</span>
-                <span>{me.createdAt.slice(0, 10)}</span>
+                <span>{me.createdAt.toISOString().slice(0, 10)}</span>
               </div>
             </CardContent>
           </Card>
