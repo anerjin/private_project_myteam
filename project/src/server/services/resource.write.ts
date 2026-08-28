@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 
 import type { Prisma, ResourceType } from "@prisma/client";
 
+import { parseGithubUrl } from "@/features/resources/content-types/github-repo/schema";
 import {
   toDetailRow,
   type DetailRow,
@@ -33,12 +34,31 @@ import * as audit from "@/server/services/audit.service";
  * - `www.` 제거, 끝 슬래시 제거
  * - 추적 파라미터(`utm_*`·`fbclid`·`gclid`) 제거 후 **남은 쿼리는 정렬**
  * - 프래그먼트(`#`) 제거
+ * - **GitHub 저장소 주소는 `owner/repo` 까지 접습니다** (아래)
  *
  * 파싱 실패는 **예외가 아니라 `undefined`** 입니다 — URL 은 선택 항목이고,
  * 중복 감지를 못 하는 것이 등록을 막을 이유는 아닙니다.
+ *
+ * ## GitHub 은 한 저장소를 여러 주소로 가리킵니다
+ *
+ * `github.com/a/b` · `/a/b/tree/main` · `/a/b/blob/main/README.md` · `/a/b.git`
+ * 이 전부 **같은 저장소**입니다. 접지 않으면 같은 저장소가 다른 자료가 되고,
+ * 중복 감지가 「다르게 쓴 같은 것」을 못 잡습니다 — 이 함수가 존재하는 이유
+ * 그대로입니다.
+ *
+ * 그리고 접은 값이 `DEC-050` 의 **정체성**이 됩니다:
+ * `resources(url_normalized) WHERE deleted_at IS NULL AND type='GITHUB_REPO'`
+ * 부분 유니크가 그 값을 봅니다.
+ *
+ * > **타입 분기가 아니라 URL 규칙입니다.** `utm_*` 를 떼는 것과 같은 자리이고,
+ * > `GITHUB_REPO` 타입이 아닌 자료가 저장소 주소를 달아도 똑같이 접힙니다 —
+ * > 그래야 「AI 자료로 등록한 저장소」와 「GitHub 자료로 등록한 저장소」가
+ * > 중복 감지에서 만납니다.
  */
 export function normalizeUrl(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
+  const gh = parseGithubUrl(raw);
+  if (gh) return `https://github.com/${gh.owner}/${gh.repo}`;
   try {
     const url = new URL(raw);
     if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
@@ -377,11 +397,24 @@ export async function create(
        * `guard()` 가 non-`AppError` 를 「처리 중 문제가 발생했습니다」로 통일하는데,
        * 그건 **사용자가 할 수 있는 일이 없는** 문구입니다. 유니크 위반은
        * 「무엇이 겹쳤는지」를 말할 수 있는 오류이므로 그렇게 말합니다.
+       *
+       * > **전에는 «어떤» P2002 든 「잠시 후 다시 시도해 주세요」였습니다**
+       * > (`isUniqueViolation(e, "")` 는 빈 문자열이라 항상 참). 그 문구가 참인
+       * > 것은 **slug 충돌 하나뿐**이고, 그건 이미 위에서 재시도합니다.
+       * > 나머지 제약은 **재시도로 절대 풀리지 않습니다** — 사용자는 같은 버튼을
+       * > 계속 누르게 됩니다. 제약마다 «할 수 있는 일»을 말합니다.
        */
-      if (isUniqueViolation(e, "")) {
+      if (isUniqueViolation(e, "github_url")) {
         throw new AppError(
           "DUPLICATE",
-          "같은 값이 이미 등록돼 있습니다. 잠시 후 다시 시도해 주세요."
+          "이 저장소는 이미 등록돼 있습니다. 같은 저장소를 두 번 두면 아카이브와 메타 갱신이 두 벌 돌고 어느 쪽이 최신인지 알 수 없습니다. 관점이 다르다면 기존 자료를 수정하거나 «관련» 으로 이어 주세요."
+        );
+      }
+      if (isUniqueViolation(e, "slug")) {
+        // 재시도 3번을 다 쓴 경우 — 여기서는 「다시」가 실제로 도움이 된다
+        throw new AppError(
+          "DUPLICATE",
+          "같은 제목이 동시에 등록되고 있습니다. 잠시 후 다시 시도해 주세요."
         );
       }
       throw e;

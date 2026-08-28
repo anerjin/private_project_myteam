@@ -195,6 +195,15 @@ function eq(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+async function msg(fn: () => Promise<unknown>): Promise<string> {
+  try {
+    await fn();
+    return "(오류 없음)";
+  } catch (e) {
+    return e instanceof AppError ? e.message : `(${String(e)})`;
+  }
+}
+
 async function run() {
   const user = await mkUser("author");
   const actor = actorOf(user);
@@ -301,6 +310,65 @@ async function run() {
       })
     );
     check("예약 경로를 저장소로 보지 않는다", !reserved.ok);
+
+    /*
+     * **한 저장소를 여러 주소로 가리킬 수 있습니다.**
+     * `normalizeUrl` 이 `owner/repo` 까지 접으므로 넷이 같은 값이 됩니다.
+     */
+    const forms = [
+      "https://github.com/octocat/Hello-World",
+      "https://www.github.com/octocat/Hello-World/",
+      "http://github.com/octocat/Hello-World/tree/main",
+      "https://github.com/octocat/Hello-World.git",
+    ];
+    const normalized = new Set(forms.map((u) => resourceWrite.normalizeUrl(u)));
+    check(
+      "저장소 주소 네 가지가 한 값으로 접힌다",
+      normalized.size === 1 &&
+        [...normalized][0] === "https://github.com/octocat/Hello-World",
+      [...normalized].join(" · ")
+    );
+  }
+
+  console.log("\n★ 같은 저장소는 하나만 (DEC-050) — 그러나 지운 것은 다시 등록된다");
+  {
+    const mk = (title: string, url: string) =>
+      parseResourceInput(formLike({ type: "GITHUB_REPO", title, url }));
+
+    const a = mk("저장소 A", "https://github.com/vendor/thing");
+    if (!a.ok) throw new Error("파싱 실패");
+    const first = await resourceWrite.create(actor, a.data);
+    madeResources.push(first.id);
+    check("처음 등록된다", Boolean(first.id));
+
+    // 다른 주소 형태로 같은 저장소 — 접힌 값이 같으므로 막혀야 한다
+    const b = mk("같은 저장소 다른 주소", "https://github.com/vendor/thing/tree/main");
+    if (!b.ok) throw new Error("파싱 실패");
+    const dup = await msg(() => resourceWrite.create(actor, b.data));
+    check(
+      "다르게 쓴 같은 저장소가 막힌다",
+      dup.includes("이미 등록돼 있습니다"),
+      dup
+    );
+    check(
+      "그리고 «왜» 막히는지 말한다",
+      dup.includes("아카이브") && dup.includes("관련"),
+      "「중복입니다」로만 끝나면 사람이 버그로 읽는다"
+    );
+
+    /*
+     * > **이것이 `DEC-050` 의 본체입니다.** 전에는 `github_repos(owner, repo)`
+     * > 유니크가 막았는데 그 테이블에는 `deleted_at` 이 없어 **소프트 삭제를
+     * > 볼 수 없었습니다** — 지웠다 다시 등록하면 30일간 영원히 `P2002` 였습니다.
+     */
+    await resourceService.remove(actorOf(user), first.id);
+    const c = mk("지운 뒤 다시", "https://github.com/vendor/thing");
+    if (!c.ok) throw new Error("파싱 실패");
+    const again = await msg(async () => {
+      const r = await resourceWrite.create(actor, c.data);
+      madeResources.push(r.id);
+    });
+    check("소프트 삭제한 저장소는 다시 등록된다", again === "(오류 없음)", again);
   }
 
   console.log("\n★ 목록·상세에서 여섯 종이 보인다");
