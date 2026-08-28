@@ -1,4 +1,4 @@
-import { Bookmark, CheckCircle2, Eye, FolderPlus, Pencil, Share2 } from "lucide-react";
+import { Bookmark, Eye, FolderPlus, Pencil, Share2 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -8,15 +8,7 @@ import {
   TableOfContents,
   extractToc,
 } from "@/components/common/table-of-contents";
-import { ReviewBadge, TypeBadge } from "@/features/resources/components/badges";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { TypeBadge } from "@/features/resources/components/badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CATEGORIES } from "@/config/site";
@@ -60,43 +52,18 @@ export default async function ResourceDetailPage({
 
   return (
     <>
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href="/resources">자료</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href={`/resources/${meta.slug}`}>{meta.label}</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage className="max-w-[24ch] truncate">
-              {resource.title}
-            </BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-
+      {/* 자료 제목과 경로는 헤더 빵부스러기가 보여 준다 (DEV-03 · 3.4절) */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <TypeBadge type={resource.type} />
-              {resource.needsReview && <ReviewBadge />}
               {resource.sourceChannel === "MCP" && (
                 <span className="text-muted-foreground font-mono text-xs">
                   CLI 수집
                 </span>
               )}
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {resource.title}
-            </h1>
             {resource.summary && (
               <p className="text-muted-foreground">{resource.summary}</p>
             )}
@@ -120,12 +87,6 @@ export default async function ResourceDetailPage({
               <Share2 className="size-4" />
               링크 복사
             </Button>
-            {resource.needsReview && canEdit && (
-              <Button variant="outline" size="sm">
-                <CheckCircle2 className="size-4" />
-                검수 완료
-              </Button>
-            )}
             {canEdit ? (
               <div className="ml-auto flex gap-2">
                 <Button variant="ghost" size="sm" asChild>

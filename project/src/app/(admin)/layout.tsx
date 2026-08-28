@@ -28,7 +28,6 @@ export default async function AdminLayout({ children }: LayoutProps<"/">) {
         }}
         badges={{
           "/admin/members": stats.pendingMembers,
-          "/admin/resources": stats.needsReview,
           "/admin/jobs": stats.failedJobs,
         }}
       />
@@ -42,7 +41,8 @@ export default async function AdminLayout({ children }: LayoutProps<"/">) {
           actions={<SessionSwitcher />}
         />
         <main className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">
-          <Breadcrumbs labels={adminBreadcrumbLabels()} />
+          {/* 관리자 영역은 아직 타이틀을 헤더로 옮기지 않았다. 본문 PageHeader 가 h1 을 낸다 */}
+          <Breadcrumbs labels={adminBreadcrumbLabels()} heading={false} />
           {children}
         </main>
       </SidebarInset>

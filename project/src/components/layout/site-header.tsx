@@ -41,14 +41,21 @@ export interface HeaderNotification {
   read: boolean;
 }
 
-/** 표현 전용 헤더. 검색 후보·알림은 라우트 레이아웃이 주입한다. */
+/** 표현 전용 헤더. 검색 후보·알림·빵부스러기는 라우트 레이아웃이 주입한다. */
 export function SiteHeader({
   title,
+  breadcrumb,
   searchItems,
   notifications,
   actions,
 }: {
+  /**
+   * 고정 타이틀. **아직 빵부스러기로 옮기지 않은 관리자 영역**만 쓴다.
+   * 서비스 영역은 `breadcrumb` 의 마지막 조각이 타이틀 역할을 한다.
+   */
   title?: string;
+  /** 사이드바 토글 오른쪽에 한 줄로 들어가는 빵부스러기 (DEV-03 · 3.4절) */
+  breadcrumb?: React.ReactNode;
   searchItems: SearchItem[];
   notifications: HeaderNotification[];
   /** 헤더 우측에 끼워 넣을 추가 요소 (예: 프로토타입 사용자 전환기) */
@@ -72,9 +79,10 @@ export function SiteHeader({
     <header className="bg-background sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2 border-b px-4">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-2 !h-4" />
-      {title && <h1 className="text-sm font-medium">{title}</h1>}
+      {title && <h1 className="shrink-0 text-sm font-medium">{title}</h1>}
 
-      <div className="flex-1" />
+      {/* 빵부스러기가 남는 가로 폭을 차지한다. min-w-0 이라야 긴 제목이 잘린다 */}
+      <div className="min-w-0 flex-1">{breadcrumb}</div>
 
       {actions}
 

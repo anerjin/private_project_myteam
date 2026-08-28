@@ -27,7 +27,6 @@ export default function SearchPage() {
   return (
     <>
       <PageHeader
-        title="검색"
         description="제목 · 요약 · 본문 · 태그를 한 번에 찾습니다. 헤더에서 Ctrl+K 로도 열 수 있습니다."
       />
 

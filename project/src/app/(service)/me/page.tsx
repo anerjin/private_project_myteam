@@ -2,7 +2,6 @@ import { Monitor } from "lucide-react";
 import type { Metadata } from "next";
 
 import { RoleBadge, UserStatusBadge } from "@/features/members/components/badges";
-import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -30,8 +29,6 @@ export default async function MePage() {
 
   return (
     <>
-      <PageHeader title="마이페이지" />
-
       <Tabs defaultValue="profile">
         <TabsList>
           <TabsTrigger value="profile">프로필</TabsTrigger>
@@ -155,7 +152,6 @@ export default async function MePage() {
                 { label: "가입 신청 알림", hint: "관리자에게만 해당", on: true },
                 { label: "승인·거부 결과", hint: "내 계정 상태가 바뀔 때", on: true },
                 { label: "작업 완료·실패", hint: "아카이브·메타 수집 결과", on: true },
-                { label: "검수 대기 알림", hint: "내가 등록한 자료가 검수될 때", on: false },
               ].map((n) => (
                 <div
                   key={n.label}

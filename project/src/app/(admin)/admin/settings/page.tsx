@@ -157,12 +157,6 @@ export default function AdminSettingsPage() {
             <SettingRow label="Ingest API 사용">
               <Switch defaultChecked />
             </SettingRow>
-            <SettingRow
-              label="CLI 등록분 검수 대기 자동 부여"
-              hint="끄면 CLI 등록분이 바로 검수 완료 상태가 됩니다"
-            >
-              <Switch defaultChecked />
-            </SettingRow>
             <SettingRow label="키당 쓰기 제한">
               <div className="flex items-center gap-2">
                 <Input defaultValue="60" className="w-20 text-right" />

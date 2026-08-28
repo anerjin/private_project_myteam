@@ -1,7 +1,7 @@
 import { Trash2 } from "lucide-react";
 import type { Metadata } from "next";
 
-import { ReviewBadge, TypeBadge } from "@/features/resources/components/badges";
+import { TypeBadge } from "@/features/resources/components/badges";
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
@@ -21,29 +21,21 @@ export const metadata: Metadata = { title: "자료 관리" };
 
 /** SCR-221 자료 관리 · 휴지통 */
 export default function AdminResourcesPage() {
-  const review = resources.filter((r) => r.needsReview);
-
   return (
     <>
       <PageHeader
         title="자료 관리"
-        description="전체 자료를 관리하고 검수 대기분을 확인합니다."
+        description="전체 자료를 관리하고 삭제된 자료를 되돌립니다."
         count={resources.length}
       />
 
-      <Tabs defaultValue="review">
+      <Tabs defaultValue="all">
         <TabsList>
-          <TabsTrigger value="review">검수 대기 ({review.length})</TabsTrigger>
           <TabsTrigger value="all">전체 ({resources.length})</TabsTrigger>
           <TabsTrigger value="trash">휴지통 (0)</TabsTrigger>
         </TabsList>
 
-        {(
-          [
-            ["review", review],
-            ["all", resources],
-          ] as const
-        ).map(([key, list]) => (
+        {([["all", resources]] as const).map(([key, list]) => (
           <TabsContent key={key} value={key} className="mt-4">
             <div className="overflow-x-auto rounded-lg border">
               <Table>
@@ -61,10 +53,7 @@ export default function AdminResourcesPage() {
                   {list.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="truncate font-medium">{r.title}</span>
-                          {r.needsReview && <ReviewBadge />}
-                        </div>
+                        <span className="truncate font-medium">{r.title}</span>
                       </TableCell>
                       <TableCell>
                         <TypeBadge type={r.type} />
@@ -78,11 +67,6 @@ export default function AdminResourcesPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          {r.needsReview && (
-                            <Button size="sm" variant="outline">
-                              검수 완료
-                            </Button>
-                          )}
                           <PurgeResourceDialog
                             title={r.title}
                             trigger={

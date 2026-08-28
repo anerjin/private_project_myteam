@@ -14,7 +14,6 @@ export default function ResourcesPage() {
   return (
     <>
       <PageHeader
-        title="전체 자료"
         description="팀이 모은 모든 자료입니다. 승인된 회원은 전부 열람할 수 있습니다."
         count={resources.length}
         action={

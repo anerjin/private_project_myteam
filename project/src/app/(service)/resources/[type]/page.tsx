@@ -36,7 +36,6 @@ export default async function ResourceTypePage({
   return (
     <>
       <PageHeader
-        title={meta.label}
         description={meta.description}
         count={list.length}
         action={

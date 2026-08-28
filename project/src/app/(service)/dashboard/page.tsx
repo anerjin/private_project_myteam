@@ -31,10 +31,14 @@ export default async function DashboardPage() {
 
   return (
     <>
+      {/*
+        페이지 타이틀("대시보드")은 헤더 빵부스러기가 담당한다.
+        이 인사말은 제목이 아니라 인사이므로 heading 으로 두지 않는다.
+      */}
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <p className="text-2xl font-semibold tracking-tight">
           안녕하세요, {session.name}님
-        </h1>
+        </p>
         <p className="text-muted-foreground text-sm">
           팀이 모은 자료 {stats.totalResources}건이 기다리고 있습니다.
         </p>

@@ -47,7 +47,6 @@ export default async function CollectionDetailPage({
   return (
     <>
       <PageHeader
-        title={collection.name}
         description={collection.description}
         count={items.length}
         action={

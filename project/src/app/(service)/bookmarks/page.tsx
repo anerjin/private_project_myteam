@@ -16,7 +16,7 @@ export default function BookmarksPage() {
 
   return (
     <>
-      <PageHeader title="내 북마크" count={list.length} />
+      <PageHeader count={list.length} />
       {list.length === 0 ? (
         <EmptyState
           icon={BookMarked}

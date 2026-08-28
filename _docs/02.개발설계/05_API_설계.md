@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | 문서 ID | DEV-05 |
-| 버전 | v0.4 |
+| 버전 | v0.5 |
 | 상태 | Draft |
 | 최종 수정 | 2026-08-28 |
 
@@ -441,7 +441,7 @@ Authorization: Bearer qb_live_<32자>
 3. URL 정규화 후 중복 확인 → 중복이면 `409 DUPLICATE` + 기존 자료 정보
 4. 비밀값 패턴 검사 (`NFR-SEC-008`)
 5. `createResource(input, actor, { via: 'MCP' })` 호출
-   → `source_channel = MCP`, `needs_review = true`
+   → `source_channel = MCP` (**검수 상태 같은 것은 붙이지 않는다** — `DEC-029`)
 6. 후속 작업 큐 등록 (`FETCH_URL_META` / `FETCH_GITHUB_META`)
 7. 감사 로그 (`via=MCP`, `api_key_id`)
 
@@ -451,7 +451,6 @@ Authorization: Bearer qb_live_<32자>
   "data": {
     "id": "clx…",
     "url": "http://localhost:3100/resources/ai-material/rag-eval-…",
-    "needsReview": true,
     "queuedJobs": ["FETCH_URL_META"]
   }
 }
@@ -510,3 +509,4 @@ Authorization: Bearer qb_live_<32자>
 | 2026-08-28 | v0.2 | **Ingest API 절 신설**(5.11, `API-100~108`), API 키 액션 추가(`API-008`·`009`), 아이디 기반으로 인증 액션 개정, 메일 기반 액션 제거 |
 | 2026-08-28 | v0.3 | **MinIO 제외**(`DEC-019`) — 5.6 파일 절 재작성. presigned 방식 폐기, 스트리밍 업로드(`API-040`)·스트림 다운로드(`API-042`·`API-032`)로 전환. `API-041` 폐기 |
 | 2026-08-28 | v0.4 | `ARCHIVE_QUOTA_EXCEEDED` 에러 코드 추가 (`DEC-022`) |
+| 2026-08-28 | v0.5 | **검수 폐기 반영**(`DEC-029`) — `API-104` 동작·응답에서 `needsReview` 제거 |

@@ -1,7 +1,6 @@
 import {
   AlertTriangle,
   Archive,
-  ClipboardCheck,
   HardDrive,
   Library,
   UserPlus,
@@ -35,7 +34,7 @@ export default function AdminDashboardPage() {
     <>
       <PageHeader
         title="관리자 대시보드"
-        description="승인 대기 · 검수 대기 · 실패 작업 · 디스크를 한 화면에서 봅니다."
+        description="승인 대기 · 실패 작업 · 디스크를 한 화면에서 봅니다."
       />
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -46,17 +45,6 @@ export default function AdminDashboardPage() {
             영업일 1일 안에 처리하는 것을 목표로 합니다.
             <Button size="sm" variant="outline" asChild>
               <Link href="/admin/members">처리하기</Link>
-            </Button>
-          </AlertDescription>
-        </Alert>
-
-        <Alert>
-          <ClipboardCheck />
-          <AlertTitle>검수 대기 {stats.needsReview}건</AlertTitle>
-          <AlertDescription className="flex items-center gap-3">
-            CLI가 등록한 자료입니다. 요약과 분류를 확인해 주세요.
-            <Button size="sm" variant="outline" asChild>
-              <Link href="/admin/resources">확인하기</Link>
             </Button>
           </AlertDescription>
         </Alert>

@@ -1,6 +1,3 @@
-import { AlertCircle } from "lucide-react";
-
-import { Badge } from "@/components/ui/badge";
 import { getContentType } from "@/features/resources/content-types";
 import { cn } from "@/lib/utils";
 import type { ResourceType, UsageStatus } from "@/types";
@@ -17,19 +14,6 @@ export function TypeBadge({ type }: { type: ResourceType }) {
     >
       {meta.label}
     </span>
-  );
-}
-
-/** 검수 대기 — 열람을 막지 않고 표시만 한다 (FR-RES-017) */
-export function ReviewBadge() {
-  return (
-    <Badge
-      variant="outline"
-      className="border-amber-400 text-amber-700 dark:text-amber-300"
-    >
-      <AlertCircle className="size-3" />
-      검수 대기
-    </Badge>
   );
 }
 

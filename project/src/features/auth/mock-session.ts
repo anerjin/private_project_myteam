@@ -27,8 +27,3 @@ export async function getMockSession(): Promise<Member> {
 export function canEditResource(actor: Member, authorId: string) {
   return actor.role !== "MEMBER" || actor.id === authorId;
 }
-
-/** 검수 대기를 해제할 수 있는가 (FR-RES-017) */
-export function canResolveReview(actor: Member, authorId: string) {
-  return canEditResource(actor, authorId);
-}

@@ -69,7 +69,6 @@ export default function CollectionsPage() {
   return (
     <>
       <PageHeader
-        title="컬렉션"
         description="목적에 따라 자료를 묶습니다. 온보딩 자료 묶음도 여기서 관리합니다."
         action={
           <Button>

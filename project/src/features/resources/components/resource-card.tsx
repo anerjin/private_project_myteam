@@ -2,7 +2,7 @@ import { Bookmark, Eye } from "lucide-react";
 import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { ReviewBadge, TypeBadge } from "@/features/resources/components/badges";
+import { TypeBadge } from "@/features/resources/components/badges";
 import { getContentType } from "@/features/resources/content-types";
 import { cn } from "@/lib/utils";
 import type { Resource } from "@/types";
@@ -26,7 +26,6 @@ export function ResourceCard({ resource }: { resource: Resource }) {
       <CardContent className="flex h-full flex-col gap-3 p-5">
         <div className="flex items-start gap-2">
           <TypeBadge type={resource.type} />
-          {resource.needsReview && <ReviewBadge />}
           <Bookmark
             className={cn(
               "ml-auto size-4 shrink-0",

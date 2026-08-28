@@ -111,7 +111,6 @@ export interface Resource {
   url?: string;
   status: ResourceStatus;
   sourceChannel: SourceChannel;
-  needsReview: boolean;
   category?: string;
   tags: string[];
   author: Author;

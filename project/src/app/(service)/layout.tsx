@@ -26,14 +26,12 @@ export default async function ServiceLayout({ children }: LayoutProps<"/">) {
       />
       <SidebarInset>
         <SiteHeader
+          breadcrumb={<Breadcrumbs labels={serviceBreadcrumbLabels()} />}
           searchItems={toSearchItems(resources)}
           notifications={notifications}
           actions={<SessionSwitcher />}
         />
-        <main className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">
-          <Breadcrumbs labels={serviceBreadcrumbLabels()} />
-          {children}
-        </main>
+        <main className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

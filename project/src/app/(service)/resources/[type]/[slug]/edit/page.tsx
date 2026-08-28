@@ -1,18 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { canEditResource, getMockSession } from "@/features/auth/mock-session";
 
 import { PageHeader } from "@/components/common/page-header";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { ResourceForm } from "@/features/resources/components/resource-form";
 import { getContentTypeBySlug } from "@/features/resources/content-types";
 import { resources } from "@/mocks";
@@ -40,33 +31,9 @@ export default async function EditResourcePage({
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href={`/resources/${meta.slug}`}>{meta.label}</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href={`/resources/${meta.slug}/${resource.slug}`}>
-                <span className="inline-block max-w-[20ch] truncate align-bottom">
-                  {resource.title}
-                </span>
-              </Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>수정</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-
+      {/* 경로(자료 › 타입 › 제목 › 수정)는 헤더 빵부스러기가 보여 준다 */}
       <PageHeader
-        title="자료 수정"
-        description={`마지막 수정 ${resource.updatedAt.slice(0, 10)} · 등록자 ${resource.author.name}`}
+        description={`${resource.title} · 마지막 수정 ${resource.updatedAt.slice(0, 10)} · 등록자 ${resource.author.name}`}
       />
 
       <ResourceForm resource={resource} />

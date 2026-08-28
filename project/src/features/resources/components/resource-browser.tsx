@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/common/empty-state";
-import { ReviewBadge, TypeBadge } from "@/features/resources/components/badges";
+import { TypeBadge } from "@/features/resources/components/badges";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,7 +23,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Toggle } from "@/components/ui/toggle";
 import { CATEGORIES } from "@/config/site";
 import { ResourceCard } from "@/features/resources/components/resource-card";
 import type { Resource } from "@/types";
@@ -38,7 +37,6 @@ export function ResourceBrowser({ resources }: { resources: Resource[] }) {
   const [category, setCategory] = useState("all");
   const [author, setAuthor] = useState("all");
   const [sort, setSort] = useState<Sort>("latest");
-  const [onlyReview, setOnlyReview] = useState(false);
   const [view, setView] = useState<"card" | "table">("card");
   const [limit, setLimit] = useState(PAGE_SIZE);
 
@@ -53,7 +51,6 @@ export function ResourceBrowser({ resources }: { resources: Resource[] }) {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const list = resources.filter((r) => {
-      if (onlyReview && !r.needsReview) return false;
       if (category !== "all" && r.category !== category) return false;
       if (author !== "all" && r.author.name !== author) return false;
       if (!needle) return true;
@@ -70,7 +67,7 @@ export function ResourceBrowser({ resources }: { resources: Resource[] }) {
       if (sort === "title") return a.title.localeCompare(b.title, "ko");
       return b.createdAt.localeCompare(a.createdAt);
     });
-  }, [resources, q, category, author, sort, onlyReview]);
+  }, [resources, q, category, author, sort]);
 
   /**
    * 목록은 한 번에 다 뿌리지 않고 «더 보기» 로 늘린다.
@@ -83,7 +80,6 @@ export function ResourceBrowser({ resources }: { resources: Resource[] }) {
     setQ("");
     setCategory("all");
     setAuthor("all");
-    setOnlyReview(false);
     setLimit(PAGE_SIZE);
   };
 
@@ -136,15 +132,6 @@ export function ResourceBrowser({ resources }: { resources: Resource[] }) {
             <SelectItem value="title">제목순</SelectItem>
           </SelectContent>
         </Select>
-
-        <Toggle
-          pressed={onlyReview}
-          onPressedChange={setOnlyReview}
-          variant="outline"
-          size="sm"
-        >
-          검수 대기만
-        </Toggle>
 
         <div className="ml-auto flex items-center gap-1">
           <Button
@@ -222,7 +209,6 @@ export function ResourceBrowser({ resources }: { resources: Resource[] }) {
                       className="hover:text-primary flex items-center gap-2 font-medium"
                     >
                       <span className="truncate">{r.title}</span>
-                      {r.needsReview && <ReviewBadge />}
                     </Link>
                   </TableCell>
                   <TableCell>
