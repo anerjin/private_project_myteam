@@ -4,6 +4,10 @@ import { randomBytes } from "node:crypto";
 
 import type { Prisma, ResourceType } from "@prisma/client";
 
+import {
+  toDetailRow,
+  type DetailRow,
+} from "@/features/resources/content-types/writers";
 import type { ParsedResourceInput } from "@/features/resources/form.schema";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
@@ -226,50 +230,89 @@ async function syncTags(
   }
 }
 
-/** 타입별 상세 테이블에 쓴다 — `resourceId` 가 PK 라 upsert 로 등록·수정을 겸한다 */
-async function writeDetail(
+/**
+ * **어느 테이블에 쓰는가.** 여섯 줄이고, 각 줄이 델리게이트 하나입니다.
+ *
+ * 행의 «모양»은 여기 없습니다 — `content-types/<type>/write.ts` 가 만듭니다.
+ * 이 표가 아는 것은 **테이블뿐**입니다.
+ *
+ * > 델리게이트 이름을 타입 폴더에 문자열로 두고 `tx[name]` 으로 부르는 안도
+ * > 있었지만, 그건 캐스트가 필요하고 **컬럼 이름 오타가 컴파일 오류가 아니라
+ * > 런타임 오류**가 됩니다. 여기서는 `tx.aiMaterial.upsert` 라 타입이 삽니다.
+ *
+ * `Record<ResourceType, …>` 이라 **일곱 번째 타입을 빠뜨리면 컴파일이 실패합니다.**
+ * `schemas.ts`·`writers.ts`·`index.ts` 와 같은 성질입니다 (`REQ-04 · 4.9`).
+ */
+const DETAIL_UPSERT: {
+  [T in ResourceType]: (
+    tx: Prisma.TransactionClient,
+    resourceId: string,
+    row: DetailRow<T>
+  ) => Promise<unknown>;
+} = {
+  AI_MATERIAL: (tx, resourceId, row) =>
+    tx.aiMaterial.upsert({
+      where: { resourceId },
+      create: { resourceId, ...row },
+      update: row,
+    }),
+  GITHUB_REPO: (tx, resourceId, row) =>
+    tx.githubRepo.upsert({
+      where: { resourceId },
+      create: { resourceId, ...row },
+      update: row,
+    }),
+  MCP_SERVER: (tx, resourceId, row) =>
+    tx.mcpServer.upsert({
+      where: { resourceId },
+      create: { resourceId, ...row },
+      update: row,
+    }),
+  SKILL: (tx, resourceId, row) =>
+    tx.skill.upsert({
+      where: { resourceId },
+      create: { resourceId, ...row },
+      update: row,
+    }),
+  DEV_NOTE: (tx, resourceId, row) =>
+    tx.devNote.upsert({
+      where: { resourceId },
+      create: { resourceId, ...row },
+      update: row,
+    }),
+  PROMPT: (tx, resourceId, row) =>
+    tx.prompt.upsert({
+      where: { resourceId },
+      create: { resourceId, ...row },
+      update: row,
+    }),
+};
+
+/**
+ * 타입별 상세 테이블에 쓴다 — `resourceId` 가 PK 라 upsert 로 등록·수정을 겸한다.
+ *
+ * > 전에는 `if (type !== "AI_MATERIAL") throw` 였고 그 아래 여덟 필드의 매핑이
+ * > 손으로 적혀 있었습니다. 타입을 다섯 더하면 **그 자리가 분기로 자랐을**
+ * > 것이고, `REQ-04 · 4.9` 의 「폴더 하나 + 레지스트리」가 거기서 깨집니다.
+ * > 지금 이 함수에는 **타입 이름이 분기로 나오지 않습니다** — 표의 키로만 나옵니다.
+ */
+async function writeDetail<T extends ResourceType>(
   tx: Prisma.TransactionClient,
   resourceId: string,
-  type: ResourceType,
+  type: T,
   detail: Record<string, unknown>
 ): Promise<void> {
-  if (type !== "AI_MATERIAL") {
-    // `schemas.ts` 가 이미 막지만, service 도 스스로 확인한다 —
-    // 웹 폼 말고 Ingest(P7)가 들어올 자리다
-    throw new AppError(
-      "VALIDATION_ERROR",
-      "이 타입은 아직 등록할 수 없습니다. (P5)"
-    );
-  }
-
-  const d = detail as {
-    materialKind:
-      "PAPER" | "ARTICLE" | "VIDEO" | "MODEL" | "SERVICE" | "COURSE";
-    sourceName?: string;
-    authors?: string[];
-    publishedAt?: string;
-    language?: "KO" | "EN" | "ETC";
-    readingTime?: number;
-    keyPoints?: string;
-    applicability?: string;
-  };
-
-  const data = {
-    materialKind: d.materialKind,
-    sourceName: d.sourceName ?? null,
-    authors: d.authors ?? [],
-    publishedAt: d.publishedAt ? new Date(d.publishedAt) : null,
-    language: d.language ?? null,
-    readingTime: d.readingTime ?? null,
-    keyPoints: d.keyPoints ?? null,
-    applicability: d.applicability ?? null,
-  };
-
-  await tx.aiMaterial.upsert({
-    where: { resourceId },
-    create: { resourceId, ...data },
-    update: data,
-  });
+  /*
+   * 두 표를 `type` 으로 함께 조회합니다. **여기가 유니온이 좁혀지는 유일한
+   * 자리**이고, 그래서 캐스트도 여기 한 번뿐입니다 — 각 줄 안에서는
+   * `row` 가 그 타입의 행이라 컬럼 이름 오타가 컴파일 오류로 잡힙니다.
+   */
+  const upsert = DETAIL_UPSERT[type] as (
+    tx: Prisma.TransactionClient,
+    id: string,
+    row: DetailRow<T>
+  ) => Promise<unknown>;
+  await upsert(tx, resourceId, toDetailRow(type, detail));
 }
 
 export interface DuplicateHint {

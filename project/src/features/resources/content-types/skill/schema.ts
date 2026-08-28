@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+import {
+  commaList,
+  optionalText,
+} from "@/features/resources/content-types/fields";
+
 /**
  * `SKILL` 입력 스키마 (`REQ-04 · 4.4`, `FR-TYPE-007`).
  *
@@ -41,14 +46,9 @@ export const skillSchema = z.object({
     .max(2000),
   usageExample: z.string().trim().min(1, "사용 예시를 적어 주세요.").max(2000),
   /** 쉼표로 받습니다 — Claude Code · Cursor 등 */
-  targetClients: z
-    .union([z.string(), z.array(z.string())])
-    .transform((v) =>
-      (Array.isArray(v) ? v : v.split(",")).map((s) => s.trim()).filter(Boolean)
-    )
-    .optional(),
+  targetClients: commaList,
   usageStatus: z.enum(USAGE_STATUSES).optional(),
-  version: z.string().trim().max(50).optional(),
+  version: optionalText(50),
 });
 
 export type SkillInput = z.infer<typeof skillSchema>;

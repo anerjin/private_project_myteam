@@ -283,11 +283,32 @@ async function run() {
     });
     check("뺀 태그의 연결이 지워진다", links === 0);
 
+    /*
+     * > **이 항목은 `P4` 에서 「저장할 수 없는 타입은 zod 가 막는다」였습니다.**
+     * > 그때는 `DETAIL_SCHEMAS` 의 다섯이 `null` 이라 «타입 자체»가 막혔고,
+     * > 오류 문구에 `P5` 가 들어 있었습니다.
+     * >
+     * > `P5` 가 여섯을 다 열었으므로 그 문장은 이제 **거짓**입니다.
+     * > 지우지 않고 **반대 문장으로 바꿉니다** — 지우면 「그 성질을 왜 봤는지」가
+     * > 사라지고, 다음에 타입을 막는 코드가 들어와도 아무도 모릅니다.
+     *
+     * 지금 확인하는 것은 **타입이 열렸다는 것**과, 그럼에도 **그 타입의 필수
+     * 칸이 없으면 여전히 막힌다**는 것입니다. `formLike()` 는 `AI_MATERIAL` 의
+     * 칸만 채우므로 `DEV_NOTE` 로 바꾸면 `noteKind` 가 없습니다.
+     */
     const typeChange = parseResourceInput(formLike({ type: "DEV_NOTE" }));
     check(
-      "저장할 수 없는 타입은 zod 가 막는다",
-      !typeChange.ok && JSON.stringify(typeChange.fieldErrors).includes("P5"),
+      "타입은 열렸지만 그 타입의 필수 칸이 없으면 막는다",
+      !typeChange.ok && Boolean(typeChange.fieldErrors.noteKind),
       typeChange.ok ? "(통과됨)" : JSON.stringify(typeChange.fieldErrors)
+    );
+    const withKind = parseResourceInput(
+      formLike({ type: "DEV_NOTE", noteKind: "TIP" })
+    );
+    check(
+      "필수 칸을 채우면 P5 의 타입도 파싱된다",
+      withKind.ok,
+      withKind.ok ? "" : JSON.stringify(withKind.fieldErrors)
     );
 
     const stranger = await mkUser("stranger");

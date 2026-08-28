@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+import {
+  optionalDate,
+  optionalText,
+} from "@/features/resources/content-types/fields";
+
 /**
  * `DEV_NOTE` 입력 스키마 (`REQ-04 · 4.4`).
  *
@@ -23,14 +28,8 @@ export const NOTE_KINDS = [
 
 export const devNoteSchema = z.object({
   noteKind: z.enum(NOTE_KINDS),
-  relatedProject: z.string().trim().max(100).optional(),
-  /** `YYYY-MM-DD`. 빈 문자열은 «없음» — 폼은 빈 칸을 보냅니다 */
-  occurredAt: z
-    .string()
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD 형식으로 적어 주세요.")
-    .optional()
-    .or(z.literal("").transform(() => undefined)),
+  relatedProject: optionalText(100),
+  occurredAt: optionalDate,
 });
 
 export type DevNoteInput = z.infer<typeof devNoteSchema>;

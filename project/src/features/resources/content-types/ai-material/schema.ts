@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+import {
+  commaList,
+  optionalDate,
+  optionalInt,
+  optionalText,
+} from "@/features/resources/content-types/fields";
+
 /**
  * `AI_MATERIAL` 입력 스키마 (REQ-04 · 4.4절).
  *
@@ -27,28 +34,18 @@ export const LANGUAGES = ["KO", "EN", "ETC"] as const;
 
 export const aiMaterialSchema = z.object({
   materialKind: z.enum(MATERIAL_KINDS),
-  sourceName: z.string().trim().max(100).optional(),
+  sourceName: optionalText(100),
   /**
    * 저자 목록. 폼은 쉼표로 받고 여기서 배열로 만듭니다 —
    * **경계에서 한 번만** 바꿉니다.
    */
-  authors: z
-    .union([z.string(), z.array(z.string())])
-    .transform((v) =>
-      (Array.isArray(v) ? v : v.split(",")).map((s) => s.trim()).filter(Boolean)
-    )
-    .optional(),
+  authors: commaList,
   /** `YYYY-MM-DD`. 빈 문자열은 «없음» 입니다 — 폼은 빈 칸을 보냅니다 */
-  publishedAt: z
-    .string()
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD 형식으로 적어 주세요.")
-    .optional()
-    .or(z.literal("").transform(() => undefined)),
+  publishedAt: optionalDate,
   language: z.enum(LANGUAGES).optional(),
-  readingTime: z.coerce.number().int().min(1).max(10_000).optional(),
-  keyPoints: z.string().trim().max(2000).optional(),
-  applicability: z.string().trim().max(2000).optional(),
+  readingTime: optionalInt(1, 10_000),
+  keyPoints: optionalText(2000),
+  applicability: optionalText(2000),
 });
 
 export type AiMaterialInput = z.infer<typeof aiMaterialSchema>;

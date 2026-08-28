@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+import {
+  commaList,
+  optionalText,
+} from "@/features/resources/content-types/fields";
+
 /**
  * `MCP_SERVER` 입력 스키마 (`REQ-04 · 4.4`, `FR-TYPE-006`).
  *
@@ -65,9 +70,9 @@ function jsonArray<T extends z.ZodTypeAny>(item: T, label: string) {
 }
 
 export const mcpServerSchema = z.object({
-  packageName: z.string().trim().max(200).optional(),
+  packageName: optionalText(200),
   transport: z.enum(MCP_TRANSPORTS),
-  installCommand: z.string().trim().max(500).optional(),
+  installCommand: optionalText(500),
   configJson: z
     .string()
     .trim()
@@ -84,12 +89,7 @@ export const mcpServerSchema = z.object({
   envVars: jsonArray(envVarSchema, "환경변수"),
   providedTools: jsonArray(providedToolSchema, "제공 도구"),
   /** 쉼표로 받습니다 — `authors` 와 같은 방식 */
-  clientSupport: z
-    .union([z.string(), z.array(z.string())])
-    .transform((v) =>
-      (Array.isArray(v) ? v : v.split(",")).map((s) => s.trim()).filter(Boolean)
-    )
-    .optional(),
+  clientSupport: commaList,
   usageStatus: z.enum(USAGE_STATUSES).optional(),
 });
 

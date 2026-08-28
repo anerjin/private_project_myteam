@@ -208,6 +208,33 @@ for await (const file of walk(SRC)) {
   }
 
   for (const spec of importsOf(code)) {
+    /*
+     * **외부 패키지 규칙은 «여기», 경로 해석 앞에 둡니다.**
+     *
+     * 콘텐츠 타입 폴더는 Prisma 를 몰라야 합니다 (`DEC-051`). 이 폴더는
+     * `card.tsx`·`form.tsx` 와 같은 자리라, `write.ts` 가 `tx` 를 받게 하면
+     * **화면 컴포넌트 옆에 서버 타입이 들어오고** 레지스트리를 import 하는
+     * 쪽이 전부 그것을 끌고 갑니다 — `P4` 가 `schemas.ts`·`operational.ts` 를
+     * 떼어낸 이유의 정확한 반대 방향입니다.
+     *
+     * > **처음엔 이 검사를 아래(`resolveSpec` 뒤)에 뒀고, 그래서 한 번도
+     * > 동작하지 않았습니다.** `@prisma/client` 는 저장소 안의 경로가 아니라
+     * > `resolveSpec` 이 `null` 을 돌려주고 그 자리에서 `continue` 합니다.
+     * > 규칙을 넣고 **던져 보지 않았으면 「위반 0건」을 그대로 믿었을** 것입니다
+     * > (`DEC-044`: 0건은 증거가 아니다).
+     */
+    if (
+      rel.startsWith("features/resources/content-types/") &&
+      /^@prisma\/client(\/|$)/.test(spec)
+    ) {
+      violations.push({
+        file: rel,
+        spec,
+        rule: "content-types → @prisma/client",
+        why: "타입 폴더는 화면 컴포넌트와 같은 자리다. 상세 행의 «모양»만 만들고, 어느 테이블에 쓰는지는 server/services/resource.write.ts 의 DETAIL_UPSERT 가 안다 (DEC-051)",
+      });
+    }
+
     // 별칭이든 상대 경로든 **같은 형태로** 판정한다 — 한쪽만 보면 다른 쪽이 구멍이 된다
     const target = resolveSpec(spec, rel);
     if (!target) continue;

@@ -32,7 +32,6 @@ import {
   getContentType,
   listContentTypes,
 } from "@/features/resources/content-types";
-import { isWritableType } from "@/features/resources/content-types/schemas";
 import {
   checkDuplicateAction,
   createResourceAction,
@@ -65,11 +64,8 @@ export function ResourceForm({
 }) {
   const router = useRouter();
   const editing = !!resource;
-  // 추정한 타입이 아직 저장 불가면 고른 것으로 치지 않는다 — 폼이 열려도 저장이 막힌다
-  const presetType =
-    initialType && isWritableType(initialType) ? initialType : null;
   const [type, setType] = useState<ResourceType | null>(
-    resource?.type ?? presetType
+    resource?.type ?? initialType ?? null
   );
   const [body, setBody] = useState(resource?.body ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -82,42 +78,27 @@ export function ResourceForm({
         <p className="text-muted-foreground text-sm">
           어떤 자료를 등록하시나요? 타입에 따라 입력 항목이 달라집니다.
         </p>
+        {/*
+          > **`disabled` 분기가 사라졌습니다.** `P4` 동안에는 `AI_MATERIAL` 만
+          > 저장할 수 있어 나머지 다섯을 흐리게 두고 「아직 등록할 수 없습니다」
+          > 라고 적었습니다. `P5` 가 여섯을 다 열었으므로 그 안내는 이제
+          > **거짓**입니다 — 남겨 두면 이 저장소가 반복해서 지워 온
+          > 「있는데 안 된다」의 거울상이 됩니다.
+        */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {listContentTypes().map((t) => {
-            /*
-              **아직 저장할 수 없는 타입은 고를 수 없습니다.**
-              `P4` 의 범위는 `AI_MATERIAL` 1종 관통이고(`DEV-07 · 7.4`),
-              나머지는 상세 테이블의 NOT NULL 에서 터집니다.
-              고르게 해 놓고 저장에서 막는 것보다 **처음부터 말하는** 편이 낫습니다 —
-              `/me` 프로필과 관리자 상세에서 내린 것과 같은 판단입니다.
-            */
-            const writable = isWritableType(t.code);
-            return (
-              <button
-                key={t.code}
-                type="button"
-                disabled={!writable}
-                onClick={() => setType(t.code)}
-                className="disabled:cursor-not-allowed"
-              >
-                <Card
-                  className={
-                    writable
-                      ? "hover:border-primary h-full text-left transition-colors"
-                      : "h-full text-left opacity-50"
-                  }
-                >
-                  <CardContent className="space-y-2 p-5">
-                    <t.icon className="text-muted-foreground size-5" />
-                    <p className="font-medium">{t.label}</p>
-                    <p className="text-muted-foreground text-sm">
-                      {writable ? t.description : "아직 등록할 수 없습니다."}
-                    </p>
-                  </CardContent>
-                </Card>
-              </button>
-            );
-          })}
+          {listContentTypes().map((t) => (
+            <button key={t.code} type="button" onClick={() => setType(t.code)}>
+              <Card className="hover:border-primary h-full text-left transition-colors">
+                <CardContent className="space-y-2 p-5">
+                  <t.icon className="text-muted-foreground size-5" />
+                  <p className="font-medium">{t.label}</p>
+                  <p className="text-muted-foreground text-sm">
+                    {t.description}
+                  </p>
+                </CardContent>
+              </Card>
+            </button>
+          ))}
         </div>
       </div>
     );
@@ -135,7 +116,30 @@ export function ResourceForm({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
-    const raw = Object.fromEntries(new FormData(e.currentTarget));
+    /*
+     * **`Object.fromEntries(new FormData(...))` 는 배열을 죽입니다.**
+     * 같은 `name` 이 여럿이면 **마지막 하나만** 남고 오류는 안 납니다 —
+     * `clientSupport`·`targetClients` 를 체크박스 묶음으로 만드는 순간
+     * 사용자가 셋을 골라도 하나만 저장됩니다.
+     *
+     * 타입 중립이라 **여기 한 곳**에서 끝납니다. 스키마 쪽은 이미 이 모양을
+     * 받습니다 — `tagsField`·`authors` 가 `union([string, array(string)])` 입니다.
+     */
+    const fd = new FormData(e.currentTarget);
+    const raw = Object.fromEntries(
+      [...new Set(fd.keys())].map((k) => {
+        const values = fd.getAll(k);
+        return [
+          k,
+          values.length > 1 ? values.map(String) : String(values[0] ?? ""),
+        ];
+      })
+    );
+    /*
+     * `type` 과 `body` 는 `name` 이 아니라 여기서 주입합니다 —
+     * 타입은 카드로 고르고 본문은 탭 편집기가 들고 있습니다.
+     * `verify-p5` 의 「폼 `name` ↔ zod 키」 대조가 이 둘을 예외로 압니다.
+     */
     const input = { ...raw, type, body };
 
     startTransition(async () => {

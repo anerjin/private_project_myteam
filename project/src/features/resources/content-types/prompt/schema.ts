@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { optionalText } from "@/features/resources/content-types/fields";
+
 /**
  * `PROMPT` 입력 스키마 (`REQ-04 · 4.4`).
  *
@@ -38,7 +40,7 @@ export const promptSchema = z.object({
     .trim()
     .min(1, "어떤 상황에 쓰는 프롬프트인지 적어 주세요.")
     .max(500),
-  targetModel: z.string().trim().max(100).optional(),
+  targetModel: optionalText(100),
   usageStatus: z.enum(USAGE_STATUSES).optional(),
 });
 
