@@ -102,6 +102,67 @@ async function seed(authorId: string) {
   console.log(`  생성 ${((Date.now() - started) / 1000).toFixed(1)}초`);
 }
 
+/**
+ * **계획을 봅니다** — 시간만으로는 판정할 수 없기 때문입니다.
+ *
+ * 1만 건에서는 정렬 인덱스가 없어도 17ms 입니다. 「500ms 이내」만 보면
+ * **전부 통과하고 인덱스를 하나도 안 넣게 됩니다.** 그런데 인덱스가 없으면
+ * Postgres 는 매번 **전체를 읽어 정렬**합니다 — 데이터가 늘면 그 비용이 자랍니다.
+ *
+ * > 그래서 **「느린가」가 아니라 「무엇을 하고 있는가」**를 함께 봅니다.
+ * > `Seq Scan` + `Sort` 는 「지금은 빠르지만 자랄 것」이고,
+ * > `Index Scan` 은 「데이터가 늘어도 같은 모양」입니다.
+ *
+ * ## 이 SQL 은 Prisma 가 «보내는» SQL 이 아니라 **거울**입니다
+ *
+ * Prisma 가 실제로 만든 SQL 을 꺼내려면 로거를 달아야 하는데, 그러면 `db`
+ * 싱글턴을 벤치용으로 바꿔야 합니다. 대신 같은 모양의 SQL 을 손으로 쓰고
+ * **결과 id 가 Prisma 경로와 같은지 확인**합니다 — 거울이 맞는지 «증명»하지
+ * 않으면 이 측정 전체가 「실제 실행되지 않는 것에 대한 결론」이 됩니다
+ * (이 저장소가 반복해서 겪은 그 형태입니다).
+ */
+const SORT_SQL: Record<string, string> = {
+  recent: "created_at DESC, id DESC",
+  popular: "view_count DESC, id DESC",
+  title: "title ASC, id ASC",
+};
+
+async function explainSort(sort: keyof typeof SORT_SQL, authorId: string) {
+  const order = SORT_SQL[sort];
+  const rows = await db.$queryRawUnsafe<{ id: string }[]>(
+    `SELECT id FROM resources
+      WHERE deleted_at IS NULL AND status = 'PUBLISHED'
+      ORDER BY ${order} LIMIT ${PAGE_SIZE}`
+  );
+
+  // **거울이 맞는가** — 다르면 아래 계획은 다른 질의의 계획이다
+  const viaPrisma = await resourceService.list(
+    { sort: sort as "recent" },
+    { kind: "cursor", size: PAGE_SIZE },
+    authorId
+  );
+  const same =
+    rows.map((r) => r.id).join(",") ===
+    viaPrisma.items.map((i) => i.id).join(",");
+
+  const plan = await db.$queryRawUnsafe<{ "QUERY PLAN": unknown }[]>(
+    `EXPLAIN (ANALYZE, FORMAT JSON)
+     SELECT id FROM resources
+      WHERE deleted_at IS NULL AND status = 'PUBLISHED'
+      ORDER BY ${order} LIMIT ${PAGE_SIZE}`
+  );
+  const text = JSON.stringify(plan);
+  const seqScan = text.includes('"Seq Scan"');
+  const sortNode = text.includes('"Node Type":"Sort"');
+
+  console.log(
+    `  ${same ? "" : "거울 불일치! "}${sort.padEnd(8)} ` +
+      `${seqScan ? "Seq Scan" : "Index"} ${sortNode ? "+ Sort" : "(정렬 없음)"}` +
+      `${same ? "" : "  ← 이 계획은 믿을 수 없습니다"}`
+  );
+  return { sort, seqScan, sortNode, same };
+}
+
 async function measure(
   label: string,
   fn: () => Promise<unknown>
@@ -187,12 +248,107 @@ async function run() {
     if (!cursor) break;
   }
   const deep = cursor;
-  await measure("깊은 페이지 (약 1000번째)", () =>
+  await measure("깊은 커서 (약 1000번째)", () =>
     resourceService.list(
       { sort: "recent" },
       { ...page, after: deep },
       author.id
     )
+  );
+
+  /*
+   * ## **오프셋을 잽니다** — 지금까지 한 번도 재지 않았습니다
+   *
+   * 위 주석은 *"오프셋이라면 여기서 무너진다"* 라고 적혀 있었는데,
+   * 이 스크립트는 **오프셋 경로를 한 번도 실행하지 않았습니다.**
+   * `DEC-045` 가 「관리 목록은 오프셋」으로 갈랐고 그 근거가
+   * *"지금은 괜찮다"* 였는데 **재 본 적이 없었습니다** — 옳은 결론이었을 수는
+   * 있어도 «측정된» 결론은 아니었습니다.
+   *
+   * 오프셋은 `COUNT(*)` 도 함께 돕니다(「총 N건 중 2페이지」). 그 비용이
+   * 커서와 갈리는 지점이 여기서 보입니다.
+   */
+  console.log("");
+  for (const pageNo of [1, 40, 200, 400]) {
+    await measure(`오프셋 ${pageNo}페이지`, () =>
+      resourceService.list(
+        { sort: "recent" },
+        { kind: "offset", page: pageNo, size: PAGE_SIZE },
+        author.id
+      )
+    );
+  }
+
+  /*
+   * **상한에 닿는 검색** (`DEC-048`). 흔한 낱말은 후보가 2,000을 넘습니다 —
+   * raw 로 2,001건을 뽑고 `id IN (…)` 2,000개를 Prisma 에 넘기는 경로가
+   * 실제로 얼마나 드는지 봅니다. 상한을 「구조의 요구」라고 적어 뒀으니
+   * 그 대가도 숫자로 있어야 합니다.
+   */
+  /*
+   * 낱말을 고를 때 주의: 처음엔 «드론» 으로 쟀는데 **834건밖에 안 물어
+   * 상한 경로를 한 번도 지나지 않았습니다.** 「상한 검색」이라는 이름표만 달고
+   * 평범한 검색을 재고 있었던 셈입니다 — 이 스크립트가 고치려던 바로 그 형태입니다.
+   * 더미 제목이 전부 `… 자료 {n}` 이라 «자료» 는 **전건**을 뭅니다.
+   */
+  const WIDE = "자료";
+  const hitCount = await db.resource.count({
+    where: { deletedAt: null, title: { contains: WIDE } },
+  });
+  console.log("");
+  const probe = await resourceService.list(
+    { q: WIDE, sort: "recent" },
+    page,
+    author.id
+  );
+  console.log(
+    `  상한 도달: ${probe.searchTruncated ? "예" : "아니오"} (${hitCount.toLocaleString()}건 매칭)` +
+      (probe.searchTruncated ? "" : "  ← 상한 경로를 안 지납니다. 낱말을 바꾸십시오")
+  );
+  await measure(`상한 검색 («${WIDE}»)`, () =>
+    resourceService.list({ q: WIDE, sort: "recent" }, page, author.id)
+  );
+
+  /*
+   * **커서 전수 순회** — 목록을 끝까지 넘기면 총 얼마인가.
+   * 한 페이지가 빠른 것과 전체를 도는 것이 같은 이야기가 아닙니다.
+   */
+  {
+    const t0 = performance.now();
+    let c: string | undefined;
+    let pages = 0;
+    for (;;) {
+      const r = await resourceService.list(
+        { sort: "recent" },
+        { ...page, after: c },
+        author.id
+      );
+      pages++;
+      c = r.nextCursor;
+      if (!c) break;
+    }
+    const ms = performance.now() - t0;
+    console.log(
+      `  전수 순회  ${pages}페이지 ${(ms / 1000).toFixed(1)}초 · 페이지당 평균 ${(ms / pages).toFixed(0)}ms`
+    );
+  }
+
+  /*
+   * ## 계획 — **시간이 판정하지 못하는 것**
+   *
+   * 1만 건에서는 전부 500ms 안입니다. 「느린가」로는 인덱스를 판단할 수 없고,
+   * 「무엇을 하고 있는가」를 봐야 합니다.
+   */
+  console.log("\n정렬 축이 인덱스를 타는가 (EXPLAIN ANALYZE)");
+  const plans = [];
+  for (const s of ["recent", "popular", "title"] as const) {
+    plans.push(await explainSort(s, author.id));
+  }
+  const needIndex = plans.filter((p) => p.seqScan || p.sortNode);
+  console.log(
+    needIndex.length === 0
+      ? "  → 셋 다 인덱스로 정렬됩니다. 추가할 것 없음"
+      : `  → 전체 읽고 정렬하는 축 ${needIndex.length}개: ${needIndex.map((p) => p.sort).join(", ")}`
   );
 
   if (!process.argv.includes("--keep")) {
