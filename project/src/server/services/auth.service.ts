@@ -10,7 +10,12 @@ import {
   hashPassword,
   verifyPassword,
 } from "@/server/auth/password";
-import { destroy, issue, revokeAllFor } from "@/server/auth/session";
+import {
+  deleteSessionsFor,
+  destroy,
+  invalidateSessionCache,
+  issue,
+} from "@/server/auth/session";
 import * as userRepo from "@/server/repositories/user.repository";
 import * as audit from "@/server/services/audit.service";
 
@@ -137,7 +142,7 @@ export async function signIn(
   if (BLOCKED_STATUSES.has(user.status)) {
     // **비밀번호는 맞았다.** 정지된 계정에 올바른 자격 증명으로 들어오려는 시도는
     // 「퇴사자 자격 증명이 유출됐다」의 신호라 반드시 남긴다 (FR-AUDIT-001).
-    await audit.log(
+    await audit.logDetached(
       {
         id: user.id,
         username: user.username,
@@ -174,7 +179,7 @@ export async function signIn(
   const { token, expires } = await issue(user.id, meta);
   await userRepo.touchLastLogin(user.id);
 
-  await audit.log(
+  await audit.logDetached(
     {
       id: user.id,
       username: user.username,
@@ -294,48 +299,61 @@ export async function changePassword(
 
   const nextHash = await hashPassword(newPassword);
 
-  await db.$transaction([
-    db.user.update({
+  /*
+   * **비밀번호 교체·이력·세션 삭제·감사 로그를 한 트랜잭션에 묶습니다** (`DEC-043`).
+   * 전에는 셋이 따로 돌아서 「비밀번호는 바뀌었는데 옛 세션이 살아 있다」와
+   * 「바뀌었는데 기록이 없다」가 각각 가능했습니다.
+   * 캐시 무효화만 커밋 «후» 입니다 (`DEC-035` 순서).
+   */
+  await db.$transaction(async (tx) => {
+    await tx.user.update({
       where: { id: userId },
       data: {
         passwordHash: nextHash,
         passwordChangedAt: new Date(),
         mustChangePassword: false,
       },
-    }),
-    db.passwordHistory.create({
-      data: { userId, passwordHash: user.passwordHash },
-    }),
-  ]);
-
-  // 보관은 최근 3개까지
-  const stale = await db.passwordHistory.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    skip: 3,
-    select: { id: true },
-  });
-  if (stale.length > 0) {
-    await db.passwordHistory.deleteMany({
-      where: { id: { in: stale.map((s) => s.id) } },
     });
-  }
+    await tx.passwordHistory.create({
+      data: { userId, passwordHash: user.passwordHash },
+    });
 
-  // 본인의 **다른** 세션을 전부 끊는다. 현재 세션은 DB 행만 남고 캐시는 무효화되므로
-  // 방금 바꾼 `mustChangePassword: false` 가 다음 요청에 바로 반영된다.
-  await revokeAllFor(userId, currentSessionId);
-
-  await audit.log(
-    {
-      id: user.id,
-      username: user.username,
-      role: user.role,
-      via: "WEB",
-      ...meta,
-    },
-    {
-      action: "USER_PASSWORD_CHANGE",
-      summary: `비밀번호 변경 — ${user.username}`,
+    // 보관은 최근 3개까지
+    const stale = await tx.passwordHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      skip: 3,
+      select: { id: true },
+    });
+    if (stale.length > 0) {
+      await tx.passwordHistory.deleteMany({
+        where: { id: { in: stale.map((s) => s.id) } },
+      });
     }
-  );
+
+    // 본인의 **다른** 세션 행을 끊는다. 현재 세션 행은 남긴다.
+    await deleteSessionsFor(tx, userId, currentSessionId);
+
+    await audit.log(
+      {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        via: "WEB",
+        ...meta,
+      },
+      {
+        action: "USER_PASSWORD_CHANGE",
+        summary: `비밀번호 변경 — ${user.username}`,
+      },
+      tx
+    );
+  });
+
+  /*
+   * 캐시 무효화는 커밋 후. **현재 세션의 캐시도 지웁니다** —
+   * 안 지우면 방금 바꾼 `mustChangePassword: false` 가 최대 15분간 반영되지 않아
+   * 사용자가 계속 `/change-password` 로 튕깁니다.
+   */
+  await invalidateSessionCache(userId);
 }

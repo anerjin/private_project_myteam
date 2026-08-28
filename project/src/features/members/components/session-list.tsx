@@ -32,28 +32,39 @@ export interface SessionRow {
   current: boolean;
 }
 
-/** UA 문자열 전체를 보여주면 읽을 수 없다. 알아볼 만큼만 줄인다 */
+/**
+ * UA 문자열 전체를 보여주면 읽을 수 없다. 알아볼 만큼만 줄인다.
+ *
+ * **순서가 규칙입니다.** 좁은 것을 먼저 봅니다 —
+ * - iOS UA 에는 `like Mac OS X` 가 들어 있어서 `/Mac OS/` 를 먼저 보면
+ *   **모든 iPhone·iPad 가 「macOS」가 됩니다**(그리고 `iOS` 분기는 죽은 코드가 됩니다).
+ *   이 화면의 목적이 「낯선 기기 식별」이라, 폰만 쓰는 사람에게 「macOS」가 뜨면
+ *   **자기 세션을 침입으로 오인해 끊고**, 진짜 맥에서 온 침입자는 자기 폰으로 착각합니다.
+ * - iOS 의 Chrome·Firefox 는 `CriOS`·`FxiOS` 이고 UA 에 `Safari/` 도 함께 들어 있어서
+ *   `Safari` 를 먼저 보면 전부 Safari 가 됩니다.
+ * - Android UA 에는 `Linux` 가 들어 있어 `Android` 가 먼저여야 합니다.
+ */
 function deviceLabel(ua: string | null): string {
   if (!ua) return "알 수 없는 기기";
-  const os = /Windows/.test(ua)
-    ? "Windows"
-    : /Mac OS/.test(ua)
-      ? "macOS"
-      : /Android/.test(ua)
-        ? "Android"
-        : /iPhone|iPad/.test(ua)
-          ? "iOS"
+  const os = /iPhone|iPad|iPod/.test(ua)
+    ? "iOS"
+    : /Android/.test(ua)
+      ? "Android"
+      : /Windows/.test(ua)
+        ? "Windows"
+        : /Mac OS/.test(ua)
+          ? "macOS"
           : /Linux/.test(ua)
             ? "Linux"
             : "기타";
-  const browser = /Edg\//.test(ua)
+  const browser = /Edg(?:iOS|A)?\//.test(ua)
     ? "Edge"
-    : /Chrome\//.test(ua)
+    : /CriOS\//.test(ua) || /Chrome\//.test(ua)
       ? "Chrome"
-      : /Safari\//.test(ua)
-        ? "Safari"
-        : /Firefox\//.test(ua)
-          ? "Firefox"
+      : /FxiOS\//.test(ua) || /Firefox\//.test(ua)
+        ? "Firefox"
+        : /Safari\//.test(ua)
+          ? "Safari"
           : "기타";
   return `${os} · ${browser}`;
 }

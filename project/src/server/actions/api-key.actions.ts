@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { createApiKeySchema } from "@/features/members/api-key.schema";
 import { guard, ok, validationError, type ActionResult } from "@/lib/result";
 import { requireActor, requireAdminActor } from "@/server/auth/guards";
 import * as apiKeyService from "@/server/services/api-key.service";
@@ -11,18 +12,8 @@ import * as apiKeyService from "@/server/services/api-key.service";
  * API 키 액션 (API-008 · API-009 · API-079).
  *
  * 5단계 규칙 (`DEC-038`) — 감사 로그는 service 가 남깁니다.
+ * 입력 규칙은 화면과 **같은 스키마**를 씁니다 (`features/members/api-key.schema.ts`).
  */
-
-const createSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(2, "용도를 알 수 있는 이름을 적어 주세요.")
-    .max(50),
-  scopes: z
-    .array(z.enum(apiKeyService.SCOPES))
-    .min(1, "스코프를 하나 이상 선택해 주세요."),
-});
 
 /** API-008 발급 — 응답에만 전체 키를 담고 저장하지 않는다 */
 export async function createApiKeyAction(
@@ -32,7 +23,7 @@ export async function createApiKeyAction(
 > {
   return guard(async () => {
     const actor = await requireActor();
-    const parsed = createSchema.safeParse(input);
+    const parsed = createApiKeySchema.safeParse(input);
     if (!parsed.success) return validationError(parsed.error);
 
     const key = await apiKeyService.issue(
@@ -75,7 +66,7 @@ export async function revokeMemberApiKeysAction(
     const parsed = z.string().min(1).safeParse(userId);
     if (!parsed.success) return validationError(parsed.error);
 
-    const revoked = await apiKeyService.revokeAllFor(actor, parsed.data);
+    const revoked = await apiKeyService.revokeAllKeysFor(actor, parsed.data);
 
     revalidatePath(`/admin/members/${parsed.data}`);
     return ok({ revoked });

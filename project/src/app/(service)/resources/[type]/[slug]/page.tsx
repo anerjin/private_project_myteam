@@ -47,7 +47,7 @@ export default async function ResourceDetailPage({
   const session = await requireActiveUser();
   // 목 자료의 author.id 는 실제 계정 id 와 맞지 않아 P2~P3 동안 EDITOR+ 에게만 보인다.
   // **버그가 아니라 목 경계가 드러난 것이므로 목 데이터를 맞추지 않는다** — P4 에서 저절로 맞는다.
-  const canEdit = canEditResource(toActor(session), resource.author.id);
+  const canEdit = canEditResource(await toActor(session), resource.author.id);
   const related = resources
     .filter(
       (r) =>

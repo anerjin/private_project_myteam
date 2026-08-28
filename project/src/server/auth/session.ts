@@ -211,6 +211,14 @@ export async function resolve(token: string): Promise<SessionUser | null> {
    * 남는 창은 「`alive` 확인 ~ `writeCache`」 사이인데, 그 사이에 폐기가 커밋되면
    * `INCR` 가 세대를 올리므로 우리가 방금 읽은 `gen` 이 옛 값이 되어 캐시가 무효화됩니다.
    * **두 장치가 서로의 창을 덮습니다** — 세대만도, 존재 확인만도 부족합니다.
+   *
+   * **비용:** 갱신할 때가 아니면 `touch()` 가 전에는 질의 0회로 빠져나갔는데
+   * 지금은 PK `count` 가 한 번 돕니다. 캐시 미스 경로가 1회 → 2회입니다.
+   * 이 경로는 세션당 15분에 한 번이라 **질의 하나를 주고 창을 닫는 거래**입니다.
+   *
+   * **절대 방어는 아닙니다.** Redis 는 살아 있는데 `INCR` 만 실패하면 두 번째 창은
+   * 열린 채입니다 — 그것이 `cacheInvalidated: false` 이고, 그때는 서버 로그와
+   * 화면 경고로 알립니다 (`DEC-036`·`DEC-043`).
    */
   const alive = await touch(row.id, idleSince, now);
   if (!alive) return null;
@@ -324,17 +332,24 @@ export async function destroy(token: string): Promise<void> {
   await destroyByHash(tokenHash, row?.userId);
 }
 
-/** 활성 세션 개별 종료 (FR-USER-006). 남의 세션은 못 지운다 */
+/**
+ * 활성 세션 개별 종료 (FR-USER-006). 남의 세션은 못 지운다.
+ *
+ * 성공·실패를 **구분해서 돌려주지 않습니다** — 없는 세션과 남의 세션이 같은 결과라
+ * 세션 id 열거 오라클이 되지 않습니다. 다만 호출부가 **감사 로그를 남길지** 판단할 수
+ * 있도록 「실제로 지웠는가」는 알려 줍니다.
+ */
 export async function destroyById(
   sessionId: string,
   userId: string
-): Promise<void> {
+): Promise<boolean> {
   const row = await db.session.findUnique({
     where: { id: sessionId },
     select: { tokenHash: true, userId: true },
   });
-  if (!row || row.userId !== userId) return;
+  if (!row || row.userId !== userId) return false;
   await destroyByHash(row.tokenHash, userId);
+  return true;
 }
 
 async function destroyByHash(tokenHash: string, userId?: string) {
@@ -419,10 +434,35 @@ export async function revokeAllFor(
   return { deleted: count, cacheInvalidated };
 }
 
-/** 활성 세션 목록 (FR-USER-006) */
+/**
+ * 활성 세션 목록 (FR-USER-006).
+ *
+ * **`resolve()` 와 «같은» 유효 조건을 봅니다.** 전에는 `{ userId }` 만 보고 있어서
+ * 만료된 세션이 목록에 남았습니다. 세션 «행»은 `resolve()` 가 **그 토큰을 다시 받았을 때만**
+ * 정리되므로, 다시 쓰지 않는 기기의 행은 영원히 남습니다.
+ *
+ * 이 화면이 사용자에게 하는 말은 「낯선 기기가 있으면 종료하세요」입니다 —
+ * **이미 죽은 세션을 침입으로 읽게 만들고, 종료를 눌러도 실제로 달라지는 것이 없습니다.**
+ * 보안 화면이 거짓 경보를 내는 것이 이 버그의 값입니다.
+ *
+ * 조건을 여기 다시 «쓰지» 않고 `resolve()` 가 쓰는 상수를 그대로 씁니다 —
+ * 두 벌이 되면 화면과 판정이 어긋납니다.
+ */
 export function listFor(userId: string) {
+  const now = Date.now();
   return db.session.findMany({
-    where: { userId },
+    where: {
+      userId,
+      expires: { gt: new Date(now) },
+      // 유휴 만료 — `resolve()` 는 `lastSeenAt ?? createdAt` 을 본다. 같은 식.
+      OR: [
+        { lastSeenAt: { gt: new Date(now - IDLE_TIMEOUT_MS) } },
+        {
+          lastSeenAt: null,
+          createdAt: { gt: new Date(now - IDLE_TIMEOUT_MS) },
+        },
+      ],
+    },
     select: {
       id: true,
       ip: true,
@@ -430,7 +470,8 @@ export function listFor(userId: string) {
       lastSeenAt: true,
       createdAt: true,
     },
-    orderBy: { lastSeenAt: "desc" },
+    // `lastSeenAt` 은 nullable 이고 Postgres 는 DESC 에서 NULL 을 «먼저» 놓는다
+    orderBy: { lastSeenAt: { sort: "desc", nulls: "last" } },
   });
 }
 

@@ -47,6 +47,7 @@ import {
   UserStatusBadge,
 } from "@/features/members/components/badges";
 import {
+  canAttempt,
   isReasonLongEnough,
   isResettableStatus,
   REASON_MIN_LENGTH,
@@ -81,12 +82,9 @@ export interface MemberRow {
 }
 
 /*
- * 메뉴에 무엇을 띄울지는 **정적으로 확정된 상태 머신**(`REQ-02 · 2.3`)을 따릅니다.
- *
- * 이것은 서버 판정을 화면에 복제하는 것이 아닙니다 — `LAST_ADMIN` 처럼 **동시성으로만
- * 판정되는 것**은 여전히 서버 몫입니다. 다만 `REJECTED` 회원에게 「정지」를 띄우는 것은
- * 판정을 «안 하는» 게 아니라 «틀리게 하는» 것이고, 누르면 `INVALID_STATE` 만 돌아옵니다.
- * 표 자체는 `features/members/schema.ts` 에 한 벌만 둡니다.
+ * 메뉴 구성은 `features/members/schema.ts` 의 **`TRANSITION_FROM` 한 벌**을 봅니다.
+ * 서버의 `SPECS` 도 같은 표를 읽으므로 **복제가 아니라 공유**입니다 —
+ * 자세한 분업(정적 사실은 공유, 동적 판정은 서버)은 그 파일 주석에 있습니다.
  */
 
 /**
@@ -215,7 +213,7 @@ function MemberRows({
                   일괄 동작이 「일괄 승인」 하나뿐인데 모든 행에 체크박스를 두면
                   **반드시 실패하는 선택을 화면이 권하는 것**이 됩니다.
                 */}
-                {m.status === "PENDING" && (
+                {canAttempt("APPROVE", m.status) && (
                   <Checkbox
                     checked={selected.includes(m.id)}
                     onCheckedChange={() => toggle(m.id)}
@@ -281,7 +279,7 @@ function MemberRows({
                       <DropdownMenuItem asChild>
                         <Link href={`/admin/members/${m.id}`}>상세 보기</Link>
                       </DropdownMenuItem>
-                      {m.status === "ACTIVE" && (
+                      {canAttempt("CHANGE_ROLE", m.status) && (
                         <>
                           <DropdownMenuSeparator />
                           {(["MEMBER", "EDITOR", "ADMIN"] as const)
@@ -306,7 +304,7 @@ function MemberRows({
                           </DropdownMenuItem>
                         </>
                       )}
-                      {m.status === "SUSPENDED" && (
+                      {canAttempt("REACTIVATE", m.status) && (
                         <>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -316,7 +314,7 @@ function MemberRows({
                           </DropdownMenuItem>
                         </>
                       )}
-                      {m.status === "REJECTED" && (
+                      {canAttempt("REOPEN", m.status) && (
                         <>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -326,7 +324,7 @@ function MemberRows({
                           </DropdownMenuItem>
                         </>
                       )}
-                      {m.status === "ACTIVE" && (
+                      {canAttempt("SUSPEND", m.status) && (
                         <>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -532,9 +530,10 @@ export function MemberTable({ members }: { members: MemberRow[] }) {
    * **화면이 서버 판정을 흉내내는 것이 아니라**(`LAST_ADMIN` 같은 동시성 판정은
    * 여전히 서버 몫입니다) 「명백히 불가능한 요청을 보내지 않는」 것입니다.
    */
-  const selectedApprovable = selected.filter(
-    (id) => members.find((m) => m.id === id)?.status === "PENDING"
-  );
+  const selectedApprovable = selected.filter((id) => {
+    const m = members.find((x) => x.id === id);
+    return m ? canAttempt("APPROVE", m.status) : false;
+  });
 
   /** 일괄 승인은 **부분 성공**이다 (DEC-039) — 성공·실패를 나눠 보고한다 */
   async function bulkApprove() {

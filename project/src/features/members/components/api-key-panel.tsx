@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, Plus, Trash2, TriangleAlert } from "lucide-react";
+import { KeyRound, Plus, Trash2, TriangleAlert, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -28,6 +28,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  MAX_KEYS_PER_USER,
+  SCOPE_LABEL,
+  type Scope,
+} from "@/features/members/api-key.schema";
+import {
   createApiKeyAction,
   revokeApiKeyAction,
 } from "@/server/actions/api-key.actions";
@@ -39,12 +55,6 @@ import {
  * 다시 합니다 (`DEC-037`). 여기서 «지금 역할로 가능한 스코프»를 미리 걸러 보여주면
  * 같은 규칙이 두 곳에 생기므로, 선택 가능 목록도 서버가 준 것을 씁니다.
  */
-
-const SCOPE_LABEL: Record<string, string> = {
-  "resources:read": "자료 읽기",
-  "resources:write": "자료 쓰기",
-  "archive:run": "아카이브 실행",
-};
 
 export interface ApiKeyRow {
   id: string;
@@ -72,7 +82,19 @@ function mcpSnippet(appUrl: string) {
 }`;
 }
 
-const MAX_KEYS = 5;
+/** 90일 이상 안 쓴 키에 경고를 붙인다 (`SCR-141`) */
+const STALE_DAYS = 90;
+
+function isStale(k: ApiKeyRow): boolean {
+  const last = k.lastUsedAt ?? k.createdAt;
+  return Date.now() - new Date(last).getTime() > STALE_DAYS * 86_400_000;
+}
+
+const isExpired = (k: ApiKeyRow) =>
+  new Date(k.expiresAt).getTime() <= Date.now();
+
+/** 「지금 쓸 수 있는」 키 — 발급 상한이 세는 것과 같은 정의여야 한다 (service 와 일치) */
+const isUsable = (k: ApiKeyRow) => !k.revokedAt && !isExpired(k);
 
 export function ApiKeyPanel({
   keys,
@@ -93,7 +115,9 @@ export function ApiKeyPanel({
     allowedScopes.filter((s) => s !== "archive:run")
   );
 
-  const alive = keys.filter((k) => !k.revokedAt);
+  // 만료된 키는 자리를 차지하지 않는다 — 서버의 상한 계산과 같은 정의다
+  const usable = keys.filter(isUsable);
+  const atLimit = usable.length >= MAX_KEYS_PER_USER;
 
   function toggleScope(s: string) {
     setScopes((v) => (v.includes(s) ? v.filter((x) => x !== s) : [...v, s]));
@@ -135,13 +159,22 @@ export function ApiKeyPanel({
             키의 권한은 내 역할을 넘지 못합니다.
           </CardDescription>
         </div>
-        <Button
-          size="sm"
-          disabled={alive.length >= MAX_KEYS || busy}
-          onClick={() => setOpen(true)}
-        >
-          <Plus className="size-4" />키 발급
-        </Button>
+        <div className="flex flex-col items-end gap-1">
+          <Button
+            size="sm"
+            disabled={atLimit || busy}
+            onClick={() => setOpen(true)}
+          >
+            <Plus className="size-4" />키 발급
+          </Button>
+          {/* 「왜 못 누르는가」를 말한다 (FR-USER-008 수용 기준) */}
+          {atLimit && (
+            <p className="text-muted-foreground text-xs">
+              키 {MAX_KEYS_PER_USER}개를 모두 쓰고 있습니다. 쓰지 않는 키를
+              폐기해 주세요.
+            </p>
+          )}
+        </div>
       </CardHeader>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -172,7 +205,7 @@ export function ApiKeyPanel({
                     onCheckedChange={() => toggleScope(s)}
                   />
                   <Label htmlFor={s} className="font-normal">
-                    {SCOPE_LABEL[s] ?? s}{" "}
+                    {SCOPE_LABEL[s as Scope] ?? s}{" "}
                     <code className="text-muted-foreground text-xs">{s}</code>
                   </Label>
                 </div>
@@ -197,7 +230,24 @@ export function ApiKeyPanel({
         {issued && (
           <Alert>
             <TriangleAlert />
-            <AlertTitle>이 화면을 벗어나면 다시 볼 수 없습니다</AlertTitle>
+            <AlertTitle className="flex items-center justify-between gap-2">
+              <span>이 화면을 벗어나면 다시 볼 수 없습니다</span>
+              {/*
+                **닫는 순간이 이 평문의 수명입니다.**
+                전에는 지우는 경로가 없어서, 실제로 사라지는 조건이
+                「탭을 옮겨 Radix 가 언마운트할 때」와 「전체 리로드」뿐이었습니다 —
+                수명을 정하는 주체가 코드에 없었습니다 (`SCR-141` 은 다이얼로그를
+                요구했고, 그랬다면 «닫기»가 곧 수명이었을 자리입니다).
+              */}
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="발급된 키 감추기"
+                onClick={() => setIssued(null)}
+              >
+                <X className="size-4" />
+              </Button>
+            </AlertTitle>
             <AlertDescription className="space-y-3">
               <div className="flex w-full items-center gap-2">
                 <code className="bg-muted flex-1 overflow-x-auto rounded px-3 py-2 font-mono text-xs">
@@ -232,14 +282,22 @@ export function ApiKeyPanel({
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center gap-2">
                     <p className="font-medium">{k.name}</p>
+                    {/*
+                      만료를 «폐기됨»과 나란히 보여줍니다. 전에는 만료된 키가
+                      배지 없이 정상 키처럼 보였고, 그러면서 발급 상한만 잡아먹었습니다.
+                    */}
                     {k.revokedAt ? (
                       <Badge variant="outline" className="text-xs">
                         폐기됨
                       </Badge>
+                    ) : isExpired(k) ? (
+                      <Badge variant="outline" className="text-xs">
+                        만료됨
+                      </Badge>
                     ) : (
-                      !k.lastUsedAt && (
+                      isStale(k) && (
                         <Badge variant="outline" className="text-xs">
-                          사용 안 함
+                          {STALE_DAYS}일 이상 미사용
                         </Badge>
                       )
                     )}
@@ -253,8 +311,9 @@ export function ApiKeyPanel({
                         key={s}
                         variant="secondary"
                         className="text-[10px]"
+                        title={s}
                       >
-                        {s}
+                        {SCOPE_LABEL[s as Scope] ?? s}
                       </Badge>
                     ))}
                   </div>
@@ -268,16 +327,44 @@ export function ApiKeyPanel({
                   </p>
                 </div>
                 {!k.revokedAt && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive"
-                    aria-label={`${k.name} 폐기`}
-                    disabled={busy}
-                    onClick={() => startTransition(() => revoke(k))}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive"
+                        aria-label={`${k.name} 폐기`}
+                        disabled={busy}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          {k.name} 키를 폐기할까요?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {/*
+                            되돌리는 함수가 없습니다 (`DEC-037`: 폐기는 돌아오는
+                            전이가 없음). 이웃 행의 아이콘을 잘못 눌러 즉시 폐기되면
+                            Claude Code 설정을 다시 써야 합니다.
+                          */}
+                          되돌릴 수 없습니다. 이 키를 쓰던 Claude Code 설정은
+                          곧바로 동작을 멈추고, 새 키를 발급해 다시 넣어야
+                          합니다.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>취소</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => startTransition(() => revoke(k))}
+                        >
+                          폐기
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 )}
               </div>
             ))}

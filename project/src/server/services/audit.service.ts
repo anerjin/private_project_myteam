@@ -69,13 +69,42 @@ export interface AuditInput {
  * `actorUsername` 을 **스냅샷으로 함께 저장**합니다. 계정이 익명화돼도
  * 「누가 했는지」가 남아야 합니다 (`DEC-021`, `DEV-02 · TBL-audit_logs`).
  */
+/**
+ * 트랜잭션 안에서 기록한다. **본 작업과 운명을 같이합니다** (`DEC-043`).
+ *
+ * `tx` 가 **필수**인 것이 이 함수의 요점입니다. 선택 인자로 두었더니
+ * 같은 커밋 안에서 회원 전이에는 넣고 API 키에는 빠뜨렸습니다 —
+ * **빠뜨려도 컴파일되는 규칙은 반드시 절반에서 빠집니다** (`DEC-044` 가 없앤 그 형태).
+ */
 export async function log(
   actor: Actor,
   input: AuditInput,
-  /** 주면 **본 작업과 같은 트랜잭션**에 넣고, 실패하면 던진다 (`DEC-043`) */
-  tx?: Prisma.TransactionClient
+  tx: Prisma.TransactionClient
 ): Promise<void> {
-  const data = {
+  await tx.auditLog.create({ data: toRow(actor, input) });
+}
+
+/**
+ * 트랜잭션 «없이» 기록하고, **실패를 삼킵니다** (`DEC-043`).
+ *
+ * **이름이 곧 사유 요구입니다** — 이 함수가 보이면 「왜 트랜잭션 밖인가」를
+ * 묻게 됩니다. 정당한 자리는 **되돌릴 본 작업이 없는 인증 경로**뿐입니다:
+ * 로그인 성공·실패·차단·로그아웃. 로그를 못 남겼다고 로그인을 막으면
+ * DB 가 흔들릴 때 서비스가 통째로 죽습니다.
+ */
+export async function logDetached(
+  actor: Actor,
+  input: AuditInput
+): Promise<void> {
+  try {
+    await db.auditLog.create({ data: toRow(actor, input) });
+  } catch (e) {
+    console.error("[audit] 기록 실패 — 본 작업은 유지됩니다:", input.action, e);
+  }
+}
+
+function toRow(actor: Actor, input: AuditInput) {
+  return {
     actorId: actor.id,
     actorUsername: actor.username,
     via: actor.via,
@@ -88,18 +117,6 @@ export async function log(
     ip: actor.ip,
     userAgent: actor.userAgent,
   };
-
-  // 트랜잭션 안이면 **삼키지 않는다.** 삼키면 롤백도 안 되고 기록도 없다.
-  if (tx) {
-    await tx.auditLog.create({ data });
-    return;
-  }
-
-  try {
-    await db.auditLog.create({ data });
-  } catch (e) {
-    console.error("[audit] 기록 실패 — 본 작업은 유지됩니다:", input.action, e);
-  }
 }
 
 /**

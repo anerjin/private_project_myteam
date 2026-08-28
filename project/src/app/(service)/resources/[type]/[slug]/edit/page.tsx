@@ -30,7 +30,8 @@ export default async function EditResourcePage({
 
   // 인가는 화면 진입에서도 확인한다. 버튼을 숨기는 것만으로는 인가가 아니다 (REQ-02 · 2.1절)
   const session = await requireActiveUser();
-  if (!canEditResource(toActor(session), resource.author.id)) redirect("/403");
+  if (!canEditResource(await toActor(session), resource.author.id))
+    redirect("/403");
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">

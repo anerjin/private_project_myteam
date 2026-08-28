@@ -55,10 +55,20 @@ export default async function MePage() {
         </TabsList>
 
         <TabsContent value="profile" className="mt-4">
+          {/*
+            **입력은 전부 `disabled` 입니다.** 프로필 수정은 `P8`(마이페이지 잔여 기능)
+            몫인데, 전에는 고칠 수 있는 칸과 `onClick` 없는 「저장」 버튼이 있었습니다 —
+            눌러도 아무 일이 안 일어나고 경고도 없습니다.
+            같은 커밋이 관리자 상세에서 장식 버튼 4종을 같은 이유로 걷어냈습니다
+            (`DEC-045`). **「있는데 안 된다」보다 「아직 없다」가 정직합니다.**
+          */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">프로필</CardTitle>
-              <CardDescription>아이디는 변경할 수 없습니다.</CardDescription>
+              <CardDescription>
+                아이디는 변경할 수 없습니다. 이름·소속·자기소개 수정은 준비
+                중입니다.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <FieldGroup>
@@ -68,18 +78,26 @@ export default async function MePage() {
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="name">이름</FieldLabel>
-                  <Input id="name" defaultValue={me.name} />
+                  <Input id="name" defaultValue={me.name} disabled />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="dept">소속 팀</FieldLabel>
-                  <Input id="dept" defaultValue={me.department ?? ""} />
+                  <Input
+                    id="dept"
+                    defaultValue={me.department ?? ""}
+                    disabled
+                  />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="bio">자기소개</FieldLabel>
-                  <Textarea id="bio" rows={3} />
-                </Field>
-                <Field>
-                  <Button className="w-fit">저장</Button>
+                  {/* 읽어 온 값을 그린다 — 안 그리면 P8 이 값을 넣는 순간
+                      사용자가 «사라진» 화면을 보고 빈 칸으로 덮어씁니다 */}
+                  <Textarea
+                    id="bio"
+                    rows={3}
+                    defaultValue={me.bio ?? ""}
+                    disabled
+                  />
                 </Field>
               </FieldGroup>
             </CardContent>
@@ -144,6 +162,7 @@ export default async function MePage() {
               <CardTitle className="text-base">알림 수신 설정</CardTitle>
               <CardDescription>
                 메일이나 메신저로는 보내지 않습니다. 알림함과 배지로만 알립니다.
+                수신 설정 변경은 준비 중입니다.
               </CardDescription>
             </CardHeader>
             <CardContent className="divide-y">
@@ -172,7 +191,8 @@ export default async function MePage() {
                     <p className="text-sm">{n.label}</p>
                     <p className="text-muted-foreground text-xs">{n.hint}</p>
                   </div>
-                  <Switch defaultChecked={n.on} aria-label={n.label} />
+                  {/* 저장 경로가 없다 — 켜고 끌 수 있으면 저장됐다고 믿게 된다 */}
+                  <Switch defaultChecked={n.on} aria-label={n.label} disabled />
                 </div>
               ))}
             </CardContent>

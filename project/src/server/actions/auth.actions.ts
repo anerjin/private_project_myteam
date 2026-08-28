@@ -124,7 +124,7 @@ export async function signOutAction(): Promise<void> {
   const token = await readSessionToken();
 
   if (session) {
-    await audit.log(toActor(session), {
+    await audit.logDetached(await toActor(session), {
       action: "USER_SIGNOUT",
       summary: `로그아웃 — ${session.username}`,
     });
@@ -198,7 +198,24 @@ export async function revokeSessionAction(
       throw new AppError("VALIDATION_ERROR", "세션을 지정해 주세요.");
     }
     // `destroyById` 가 소유자를 확인한다 — 남의 세션은 못 지운다
-    await destroyById(sessionId, actor.id);
+    const destroyed = await destroyById(sessionId, actor.id);
+
+    /*
+     * **끊은 것도 로그아웃입니다** (`REQ-02 · 2.10` 감사 대상).
+     * `signOutAction` 은 `USER_SIGNOUT` 을 남기는데 여기만 침묵하면,
+     * 나중에 「내 세션이 왜 끊겼지」에 답할 자료가 없습니다 —
+     * 「낯선 기기를 종료했다」는 침해 대응의 흔적이기도 합니다.
+     * 실제로 지웠을 때만 남깁니다(없는 세션에 기록을 만들지 않도록).
+     */
+    if (destroyed) {
+      await audit.logDetached(actor, {
+        action: "USER_SIGNOUT",
+        targetType: "session",
+        targetId: sessionId,
+        summary: `다른 기기 세션 종료 — ${actor.username}`,
+      });
+    }
+
     revalidatePath("/me");
     return ok(undefined);
   });

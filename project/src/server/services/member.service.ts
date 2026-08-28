@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import type { Prisma, Role, UserStatus } from "@prisma/client";
 
-import { isResettableStatus } from "@/features/members/schema";
+import { isResettableStatus, TRANSITION_FROM } from "@/features/members/schema";
 import { db } from "@/lib/db";
 import { AppError, type ErrorCode } from "@/lib/errors";
 import type { Actor } from "@/server/auth/actor";
@@ -61,7 +61,7 @@ export type Transition =
 
 interface TransitionSpec {
   /** 이 전이가 허용되는 «현재» 상태 */
-  from: UserStatus[];
+  from: readonly UserStatus[];
   next?: UserStatus;
   action: audit.AuditAction;
   label: string;
@@ -70,7 +70,7 @@ interface TransitionSpec {
 
 const SPECS: Record<Transition["kind"], TransitionSpec> = {
   APPROVE: {
-    from: ["PENDING"],
+    from: TRANSITION_FROM.APPROVE,
     next: "ACTIVE",
     action: "USER_APPROVE",
     label: "승인",
@@ -87,13 +87,13 @@ const SPECS: Record<Transition["kind"], TransitionSpec> = {
    * 바꿔 다시 신청해야 합니다 — **관리자의 실수를 사용자가 갚습니다.**
    */
   REOPEN: {
-    from: ["REJECTED"],
+    from: TRANSITION_FROM.REOPEN,
     next: "PENDING",
     action: "USER_REOPEN",
     label: "재검토",
   },
   REJECT: {
-    from: ["PENDING"],
+    from: TRANSITION_FROM.REJECT,
     next: "REJECTED",
     action: "USER_REJECT",
     label: "거부",
@@ -105,7 +105,7 @@ const SPECS: Record<Transition["kind"], TransitionSpec> = {
      */
   },
   SUSPEND: {
-    from: ["ACTIVE"],
+    from: TRANSITION_FROM.SUSPEND,
     next: "SUSPENDED",
     action: "USER_SUSPEND",
     label: "정지",
@@ -117,14 +117,14 @@ const SPECS: Record<Transition["kind"], TransitionSpec> = {
      */
   },
   REACTIVATE: {
-    from: ["SUSPENDED"],
+    from: TRANSITION_FROM.REACTIVATE,
     next: "ACTIVE",
     action: "USER_REACTIVATE",
     label: "정지 해제",
     notifyUser: () => ({ title: "계정 정지가 해제되었습니다" }),
   },
   CHANGE_ROLE: {
-    from: ["ACTIVE"],
+    from: TRANSITION_FROM.CHANGE_ROLE,
     action: "USER_ROLE_CHANGE",
     label: "역할 변경",
   },

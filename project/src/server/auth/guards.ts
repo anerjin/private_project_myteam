@@ -1,8 +1,10 @@
 import "server-only";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
+import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 import { readSessionToken } from "@/server/auth/cookie";
 import { resolve, type SessionUser } from "@/server/auth/session";
@@ -58,7 +60,9 @@ export async function requireRole(
 ): Promise<SessionUser> {
   const session = await requireActiveUser();
   const allowed =
-    role === "ADMIN" ? session.role === "ADMIN" : isEditor(toActor(session));
+    role === "ADMIN"
+      ? session.role === "ADMIN"
+      : isEditor(await toActor(session));
   if (!allowed) redirect("/403");
   return session;
 }
@@ -88,7 +92,7 @@ export async function requireActor(): Promise<Actor> {
   if (session.mustChangePassword) {
     throw new AppError("FORBIDDEN", "비밀번호를 먼저 변경해 주세요.");
   }
-  return toActor(session);
+  return await toActor(session);
 }
 
 export async function requireAdminActor(): Promise<Actor> {
@@ -99,12 +103,30 @@ export async function requireAdminActor(): Promise<Actor> {
   return actor;
 }
 
-export function toActor(session: SessionUser): Actor {
+/**
+ * 세션 → `Actor`. **`ip`·`userAgent` 를 함께 싣습니다** (`REQ-02 · 2.10`).
+ *
+ * `DEC-038` 이 「감사 로그를 service 에 두어도 계층 규칙은 안 깨진다」의 근거로 든 것이
+ * 정확히 이 통로였습니다 — *"`ip`·`userAgent` 는 `Actor` 에 실려 파라미터로 들어온다"*.
+ * **통로는 만들어졌는데 아무도 값을 넣지 않아** 모든 감사 로그의 두 칸이 `null` 이었습니다.
+ *
+ * > **`ip` 는 이걸 고쳐도 1단계에서는 계속 `null` 입니다.** `TRUST_PROXY` 가 꺼져 있으면
+ * > `X-Forwarded-For` 를 **일부러** 믿지 않기 때문입니다 (`NFR-SEC-002`) — 리버스 프록시가
+ * > 없는 단계에서 그 헤더를 믿으면 IP 레이트리밋이 무력화되고 `audit_logs.ip` 가 오염됩니다.
+ * > 「안 고쳐졌다」고 판단해 그 가드를 걷어내지 마십시오. 2단계에서 프록시가 들어오면
+ * > `TRUST_PROXY` 를 켜는 것으로 활성화됩니다.
+ */
+export async function toActor(session: SessionUser): Promise<Actor> {
+  const h = await headers();
   return {
     id: session.userId,
     username: session.username,
     role: session.role,
     via: "WEB",
+    ip: env.TRUST_PROXY
+      ? (h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined)
+      : undefined,
+    userAgent: h.get("user-agent") ?? undefined,
   };
 }
 
