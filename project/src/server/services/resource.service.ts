@@ -7,6 +7,7 @@ import {
 } from "@/features/resources/list.schema";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { redis } from "@/lib/redis";
 import type { Actor } from "@/server/auth/actor";
 import * as resourceRepo from "@/server/repositories/resource.repository";
 import * as audit from "@/server/services/audit.service";
@@ -24,6 +25,11 @@ export interface ListPage {
   items: Resource[];
   nextCursor?: string;
   total?: number;
+  /**
+   * 검색 후보가 상한(`DEC-048`)에 닿았는가.
+   * **없는 것과 안 보여주는 것을 사용자가 구별할 수 있어야 합니다.**
+   */
+  searchTruncated?: boolean;
 }
 
 /**
@@ -51,6 +57,7 @@ export async function list(
     ),
     nextCursor: result.nextCursor,
     total: result.total,
+    searchTruncated: result.searchTruncated,
   };
 }
 
@@ -212,16 +219,56 @@ export async function getBySlug(
 }
 
 /**
- * 조회수 (FR-RES-007).
+ * 같은 사람의 같은 자료 조회를 한 번으로 치는 창 (`FR-RES-014`).
+ *
+ * 6시간입니다. 오전에 세 번 열어 본 것은 **한 번 본 것**이고, 다음 날 다시 읽는
+ * 것은 **새로 본 것**입니다. 값이 너무 짧으면(예: 5분) 새로고침 몇 번에 숫자가
+ * 부풀고, 너무 길면(예: 일주일) 「많이 본 순」이 며칠 전 순위에 얼어붙습니다.
+ */
+const VIEW_DEDUPE_TTL_SEC = 6 * 60 * 60;
+
+/**
+ * 조회수 (`FR-RES-007`) — **동일 사용자 중복 제외** (`FR-RES-014`).
  *
  * **상세 렌더 안에서 세지 않습니다.** 서버 컴포넌트는 프리페치·재검증으로
  * 여러 번 실행될 수 있어 숫자가 부풀고, 렌더 중 쓰기는 캐시와도 싸웁니다.
  * 화면이 «본 뒤에» 액션으로 부릅니다.
  *
+ * ## 중복 제외가 「많이 본 순」을 의미 있게 만듭니다
+ *
+ * 없으면 `viewCount` 는 **새로고침 횟수**입니다 — 자기 자료를 자주 열어 보는
+ * 사람의 글이 위로 올라가고, 정렬 축 하나가 통째로 거짓말이 됩니다.
+ * `FR-RES-014` 가 P0 인 이유이고, DoD 5항목이 이것을 묻지 않아 빠져 있었습니다.
+ *
+ * `SET NX EX` **한 번**으로 판정합니다. 「읽고 없으면 쓴다」로 하면 같은 사람의
+ * 동시 요청 둘이 모두 통과해 두 번 세어집니다 — 북마크 카운터에서 겪은
+ * lost update 와 같은 형태입니다.
+ *
+ * ## Redis 가 죽으면 **셉니다**
+ *
+ * 중복 제외는 정확도를 높이는 장치이지 조회수의 전제가 아닙니다.
+ * 못 세는 쪽(통계가 사라짐)보다 더 세는 쪽(잠깐 부풀음)이 낫고,
+ * `NFR-AVAIL-004`(Redis 장애를 서비스 장애로 만들지 않는다)와도 같은 방향입니다 —
+ * 세션의 `touch()` 가 DB 오류에 `true` 를 돌려주는 것과 같은 판단입니다.
+ *
  * 실패해도 조용히 지나갑니다 — 조회수 때문에 화면이 깨질 이유가 없습니다.
  */
-export async function countView(resourceId: string): Promise<void> {
+export async function countView(
+  resourceId: string,
+  viewerId: string
+): Promise<void> {
   try {
+    const first = await redis
+      .set(
+        `view:${viewerId}:${resourceId}`,
+        "1",
+        "EX",
+        VIEW_DEDUPE_TTL_SEC,
+        "NX"
+      )
+      .catch(() => "OK" as const);
+    if (first !== "OK") return;
+
     await db.resource.updateMany({
       where: { id: resourceId, deletedAt: null },
       data: { viewCount: { increment: 1 } },

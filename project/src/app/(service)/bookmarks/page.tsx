@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ResourceBrowser } from "@/features/resources/components/resource-browser";
 import { parseListQuery, PAGE_SIZE } from "@/features/resources/list.schema";
 import { requireActiveUser } from "@/server/auth/guards";
+import * as categoryService from "@/server/services/category.service";
 import * as resourceService from "@/server/services/resource.service";
 
 export const metadata: Metadata = { title: "북마크" };
@@ -25,13 +26,14 @@ export default async function BookmarksPage({
    * 말하면서요. 탐색 화면이므로 커서입니다 (`DEC-045`).
    */
   const query = parseListQuery(await searchParams);
-  const [page, authors] = await Promise.all([
+  const [page, authors, categories] = await Promise.all([
     resourceService.listBookmarked(session.userId, {
       kind: "cursor",
       after: query.cursor,
       size: PAGE_SIZE,
     }),
     resourceService.listAuthors(),
+    categoryService.listChoices(),
   ]);
 
   return (
@@ -53,6 +55,7 @@ export default async function BookmarksPage({
           resources={page.items}
           query={query}
           authors={authors}
+          categories={categories}
           nextCursor={page.nextCursor}
           /*
             **필터·정렬 컨트롤을 숨깁니다.** `listBookmarked` 는 그 조건을 받지

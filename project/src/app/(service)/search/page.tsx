@@ -11,6 +11,7 @@ import {
   toSearchParams,
 } from "@/features/resources/list.schema";
 import { requireActiveUser } from "@/server/auth/guards";
+import * as categoryService from "@/server/services/category.service";
 import * as resourceService from "@/server/services/resource.service";
 
 export const metadata: Metadata = { title: "검색" };
@@ -29,7 +30,7 @@ export default async function SearchPage({
 
   const query = parseListQuery(await searchParams);
 
-  const [page, authors, typeCounts, topTags] = await Promise.all([
+  const [page, authors, typeCounts, topTags, categories] = await Promise.all([
     resourceService.list(
       query,
       { kind: "cursor", after: query.cursor, size: PAGE_SIZE },
@@ -38,6 +39,7 @@ export default async function SearchPage({
     resourceService.listAuthors(),
     resourceService.countByType(),
     resourceService.topTags(12),
+    categoryService.listChoices(),
   ]);
 
   return (
@@ -95,6 +97,8 @@ export default async function SearchPage({
           resources={page.items}
           query={query}
           authors={authors}
+          categories={categories}
+          searchTruncated={page.searchTruncated}
           nextCursor={page.nextCursor}
         />
       </div>

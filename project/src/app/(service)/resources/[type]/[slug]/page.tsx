@@ -11,7 +11,6 @@ import {
 import { TypeBadge } from "@/features/resources/components/badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CATEGORIES } from "@/config/site";
 import { canEditResource } from "@/server/auth/actor";
 import { requireActiveUser, toActor } from "@/server/auth/guards";
 import { DeleteResourceDialog } from "@/features/resources/components/delete-resource-dialog";
@@ -66,7 +65,10 @@ export default async function ResourceDetailPage({
   // 경로의 타입과 자료의 타입이 다르면 잘못된 주소다
   if (resource.type !== meta.code) notFound();
 
-  const category = CATEGORIES.find((c) => c.slug === resource.category);
+  // 카테고리 이름은 자료와 «같은 행»에서 온다 — slug→이름 표를 두면 그게 목이 된다
+  const category = resource.category
+    ? { slug: resource.category, name: resource.categoryName ?? resource.category }
+    : undefined;
   const toc = resource.body ? extractToc(resource.body) : [];
   const canEdit = canEditResource(await toActor(session), resource.author.id);
   const related = await resourceService.findRelated(resource.id, resource.tags);

@@ -267,6 +267,26 @@ for await (const file of walk(SRC)) {
       }
     }
 
+    /*
+     * **반대 방향도 막습니다** — 누가 `@/proxy` 를 import 하는가.
+     *
+     * 위 규칙은 proxy 의 «나가는» import 만 봤습니다. 그래서 서버 컴포넌트가
+     * 상수 하나(`PATHNAME_HEADER`) 때문에 `@/proxy` 를 import 해도 조용히
+     * 통과했고, 그 순간 미들웨어 모듈(`next/server` · `config.matcher` ·
+     * `proxy()` 본문)이 통째로 RSC 그래프에 들어왔습니다.
+     *
+     * `proxy.ts` 는 **라우트 진입점이지 모듈이 아닙니다** — 아무도 import 하지
+     * 않아야 정상입니다. 공유할 값이 있으면 `lib/` 에 둡니다.
+     */
+    if (target === "proxy" || target === "proxy.ts") {
+      violations.push({
+        file: rel,
+        spec,
+        rule: `${rel} → @/proxy`,
+        why: "proxy.ts 는 라우트 진입점이라 import 대상이 아니다. 공유 상수는 lib/ 에 둘 것 (선례: lib/session-cookie.ts · lib/request-headers.ts)",
+      });
+    }
+
     // features/A → features/B 금지. 같은 feature 안은 허용한다.
     if (fromLayer === "features" && toLayer === "features") {
       const fromFeature = rel.split("/")[1];

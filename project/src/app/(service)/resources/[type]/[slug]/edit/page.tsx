@@ -7,6 +7,7 @@ import { getContentTypeBySlug } from "@/features/resources/content-types";
 import { AppError } from "@/lib/errors";
 import { canEditResource } from "@/server/auth/actor";
 import { requireActiveUser, toActor } from "@/server/auth/guards";
+import * as categoryService from "@/server/services/category.service";
 import * as resourceService from "@/server/services/resource.service";
 
 export async function generateMetadata({
@@ -55,7 +56,10 @@ export default async function EditResourcePage({
         description={`${resource.title} · 마지막 수정 ${resource.updatedAt.slice(0, 10)} · 등록자 ${resource.author.name}`}
       />
 
-      <ResourceForm resource={resource} />
+      <ResourceForm
+        resource={resource}
+        categories={await categoryService.listChoices()}
+      />
     </div>
   );
 }

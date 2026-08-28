@@ -107,15 +107,38 @@ function toWhere(
  * 그래서 «드론» 으로 «드론영상» 이 안 잡히고, 그 보완이 `title` 의 trgm 인덱스입니다 —
  * **두 결과를 합칩니다.**
  */
+/**
+ * 후보 상한 (`DEC-048`). **이 구조의 부작용이 아니라 요구입니다** —
+ * `id IN (…)` 리스트가 커지면 Postgres 파싱 비용이 급격히 나빠지므로,
+ * 상한을 없애려면 raw 를 본 질의로 만들어야 하고 그러면 select·정렬·페이징이
+ * 두 곳으로 갈려 `DEC-045`(P8 재사용)와 정렬 표 단일 출처가 깨집니다.
+ */
 const SEARCH_CANDIDATE_LIMIT = 2000;
 
-async function searchIds(q: string): Promise<string[]> {
+interface SearchCandidates {
+  ids: string[];
+  /** 상한에 닿았는가 — 화면이 「검색어를 좁혀 주세요」를 띄우는 근거 */
+  truncated: boolean;
+}
+
+async function searchIds(q: string): Promise<SearchCandidates> {
   /*
-   * **`ORDER BY` 없이 자르면 «아무 2000건»이 됩니다.**
-   * 흔한 낱말이 5000건을 물면 잘려 나간 3000건이 무엇인지 규칙이 없고,
-   * 사용자는 「최신순으로 봤는데 어제 글이 없다」를 겪습니다.
-   * **관련도 순으로 자릅니다** — 그러면 잘리는 것은 항상 «덜 관련된 것»이고,
-   * 그 뒤의 정렬(최신순 등)은 남은 후보 안에서 이뤄집니다.
+   * **`ORDER BY rank DESC` 만으로는 절단이 결정적이지 않습니다.**
+   *
+   * > 전에 이 자리 주석은 *"관련도 순으로 자르니 잘리는 것은 항상 «덜 관련된 것»"*
+   * > 이라고 적혀 있었습니다. **거짓입니다.** `ts_rank` 는 FTS 분기만 정렬하고,
+   * > `title ILIKE` 로만 걸린 행은 **전부 rank 0 동점**입니다. Postgres 는 동점을
+   * > 임의 순서로 내므로 «덜 관련된 것»이 아니라 «plan 이 정하는 아무거나»가 잘렸고,
+   * > 그 순서는 실행마다 달라질 수 있어 **같은 검색이 요청마다 다른 결과**를
+   * > 낼 수 있었습니다. 잘림보다 이쪽이 나쁩니다.
+   *
+   * `, id DESC` 는 절단을 «의미 있게» 만들지 않습니다 — **안정되게** 만듭니다.
+   * 무엇이 잘리는가보다 **매번 같은 것이 잘리는가**가 먼저입니다.
+   *
+   * `status` 를 여기 넣지 않는 것은 **의도한 선택**입니다. 넣으면 실효 상한이
+   * 올라가지만 `toWhere` 의 일부가 SQL 로 복제되어 필터 판정이 두 곳이 됩니다.
+   * 대신 아래 `truncated` 가 그 손실까지 포함해 말합니다 — 초안·보관 행이 후보
+   * 자리를 차지해 실효 상한이 2000보다 낮아지는 것도 같은 신호에 잡힙니다.
    */
   const rows = await db.$queryRaw<{ id: string }[]>`
     SELECT id,
@@ -126,10 +149,18 @@ async function searchIds(q: string): Promise<string[]> {
         search_vector @@ websearch_to_tsquery('simple', unaccent(${q}))
         OR title ILIKE ${"%" + q + "%"}
       )
-    ORDER BY rank DESC
-    LIMIT ${SEARCH_CANDIDATE_LIMIT}
+    ORDER BY rank DESC, id DESC
+    LIMIT ${SEARCH_CANDIDATE_LIMIT + 1}
   `;
-  return rows.map((r) => r.id);
+
+  /*
+   * **한 건 더 뽑아 상한에 닿았는지 압니다.** 별도 `COUNT` 없이 공짜이고,
+   * 커서 페이징이 `size + 1` 로 「다음 페이지 있음」을 아는 것과 같은 수법입니다.
+   * 사람이 짐작해 띄우는 문구가 아니라 **질의가 말합니다.**
+   */
+  const truncated = rows.length > SEARCH_CANDIDATE_LIMIT;
+  const kept = truncated ? rows.slice(0, SEARCH_CANDIDATE_LIMIT) : rows;
+  return { ids: kept.map((r) => r.id), truncated };
 }
 
 export interface ListResult {
@@ -138,6 +169,11 @@ export interface ListResult {
   nextCursor?: string;
   /** 오프셋 모드 — 전체 개수. 커서 모드에서는 «세지 않습니다» */
   total?: number;
+  /**
+   * 검색 후보가 상한에 닿았는가 (`DEC-048`).
+   * 이때는 **뒤쪽 결과가 실제로 없습니다** — 화면이 그 사실을 말해야 합니다.
+   */
+  searchTruncated?: boolean;
 }
 
 export async function list(
@@ -149,12 +185,18 @@ export async function list(
 
   /*
    * 검색어가 있으면 **FTS 가 후보를 좁히고** 나머지 필터·정렬·페이징은 그대로 갑니다.
-   * 상한 2000 은 「검색 결과를 끝까지 넘겨보는 사람은 없다」는 판단입니다 —
-   * 없으면 «드론» 같은 흔한 말이 전체를 다 끌고 옵니다.
+   * 상한은 `DEC-048` 이고, **닿았으면 화면에 말합니다** — 조용히 자르면
+   * 사용자는 「없다」와 「안 보여준다」를 구별할 수 없습니다.
    */
-  const where: Prisma.ResourceWhereInput = filter.q
-    ? { ...toWhere(filter, scope), id: { in: await searchIds(filter.q) } }
-    : toWhere(filter, scope);
+  let searchTruncated: boolean | undefined;
+  let where: Prisma.ResourceWhereInput;
+  if (filter.q) {
+    const c = await searchIds(filter.q);
+    searchTruncated = c.truncated;
+    where = { ...toWhere(filter, scope), id: { in: c.ids } };
+  } else {
+    where = toWhere(filter, scope);
+  }
 
   if (page.kind === "cursor") {
     /*
@@ -175,6 +217,7 @@ export async function list(
     return {
       items,
       nextCursor: hasMore ? items[items.length - 1]?.id : undefined,
+      searchTruncated,
     };
   }
 
@@ -189,7 +232,7 @@ export async function list(
     }),
     db.resource.count({ where }),
   ]);
-  return { items, total };
+  return { items, total, searchTruncated };
 }
 
 /** 휴지통 건수 — 탭 라벨에 쓴다 */

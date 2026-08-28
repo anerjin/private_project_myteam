@@ -421,6 +421,174 @@ async function run() {
     );
   }
 
+  console.log("\n★ 조회수 — 같은 사람이 세 번 열어도 한 번이다 (FR-RES-014)");
+  {
+    const target = madeResources[0];
+    const viewer = await mkUser("viewer");
+    const other = await mkUser("viewer2");
+    const countOf = async () =>
+      (
+        await db.resource.findUniqueOrThrow({
+          where: { id: target },
+          select: { viewCount: true },
+        })
+      ).viewCount;
+
+    // 이전 실행의 흔적을 지운다 — TTL 6시간이라 남아 있으면 첫 조회가 안 세어진다
+    await redis.del(`view:${viewer.id}:${target}`, `view:${other.id}:${target}`);
+
+    const base = await countOf();
+    await resourceService.countView(target, viewer.id);
+    check("처음 보면 는다", (await countOf()) === base + 1, `${base} → ${await countOf()}`);
+
+    await resourceService.countView(target, viewer.id);
+    await resourceService.countView(target, viewer.id);
+    check(
+      "같은 사람이 더 봐도 안 는다",
+      (await countOf()) === base + 1,
+      `${await countOf()}`
+    );
+
+    await resourceService.countView(target, other.id);
+    check("다른 사람이 보면 는다", (await countOf()) === base + 2);
+
+    /*
+     * **동시 호출이 두 번 세면 안 됩니다.** 「읽고 없으면 쓴다」로 만들면
+     * 둘 다 통과합니다 — 북마크 카운터에서 실측했던 lost update 와 같은 형태이고,
+     * 단일 스레드 검증은 이것을 절대 못 봅니다.
+     */
+    const racer = await mkUser("viewer3");
+    await redis.del(`view:${racer.id}:${target}`);
+    const before = await countOf();
+    await Promise.all(
+      Array.from({ length: 5 }, () =>
+        resourceService.countView(target, racer.id)
+      )
+    );
+    check(
+      "동시 5회도 1만 는다",
+      (await countOf()) === before + 1,
+      `${before} → ${await countOf()}`
+    );
+  }
+
+  console.log("\n★ 검색 후보 상한 — 잘리면 «잘렸다고 말한다» (DEC-048)");
+  {
+    const normal = await resourceService.list(
+      { q: "검증용", sort: "recent" },
+      { kind: "cursor", size: PAGE_SIZE },
+      user.id
+    );
+    check(
+      "상한에 안 닿으면 신호가 없다",
+      !normal.searchTruncated,
+      `truncated=${normal.searchTruncated}`
+    );
+
+    /*
+     * **같은 질의를 두 번 하면 같은 결과여야 합니다.**
+     * 전에는 `ORDER BY rank DESC` 뿐이라 `title ILIKE` 로만 걸린 행이 전부
+     * rank 0 동점이었고, Postgres 는 동점을 임의 순서로 냅니다 —
+     * 즉 **같은 검색이 요청마다 다른 결과를 낼 수 있었습니다.**
+     * `, id DESC` 가 그것을 고정합니다.
+     */
+    const runs = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        resourceService.list(
+          { q: "자료", sort: "recent" },
+          { kind: "cursor", size: PAGE_SIZE },
+          user.id
+        )
+      )
+    );
+    const shapes = runs.map((r) => r.items.map((i) => i.id).join(","));
+    check(
+      "같은 질의를 네 번 해도 결과가 같다",
+      new Set(shapes).size === 1,
+      `서로 다른 결과 ${new Set(shapes).size}가지`
+    );
+
+    /*
+     * **신호가 «켜지는» 것까지 봐야 합니다.**
+     * 상한을 넘기지 않은 검색만 확인하면 「`truncated` 가 늘 `false` 인 코드」도
+     * 통과합니다 — `check-deps` 에서 겪은 「매치하는 파일이 하나도 없어도 0건」과
+     * 같은 함정입니다. 그래서 실제로 2,001건을 만들어 던져 봅니다.
+     */
+    const MARK = "상한시험어";
+    const bulkAuthor = await mkUser("bulk");
+    const bulkIds: string[] = [];
+    for (let off = 0; off < 2001; off += 500) {
+      const size = Math.min(500, 2001 - off);
+      const rows = Array.from({ length: size }, (_, i) => {
+        const n = off + i;
+        const id = `vlim${n.toString().padStart(6, "0")}${randomBytes(4).toString("hex")}`;
+        bulkIds.push(id);
+        return {
+          id,
+          type: "AI_MATERIAL" as const,
+          slug: `vlim-${n}-${randomBytes(3).toString("hex")}`,
+          title: `${MARK} ${n}`,
+          authorId: bulkAuthor.id,
+        };
+      });
+      await db.resource.createMany({ data: rows, skipDuplicates: true });
+    }
+    try {
+      const hit = await resourceService.list(
+        { q: MARK, sort: "recent" },
+        { kind: "cursor", size: PAGE_SIZE },
+        user.id
+      );
+      check(
+        "2,001건이면 상한에 닿았다고 «말한다»",
+        hit.searchTruncated === true,
+        `truncated=${hit.searchTruncated}`
+      );
+
+      // 잘려도 페이지는 정상이어야 한다 — 신호는 경고이지 오류가 아니다
+      check(
+        "잘려도 결과는 나온다",
+        hit.items.length === PAGE_SIZE,
+        `${hit.items.length}건`
+      );
+
+      const twice = await Promise.all([
+        resourceService.list(
+          { q: MARK, sort: "recent" },
+          { kind: "cursor", size: PAGE_SIZE },
+          user.id
+        ),
+        resourceService.list(
+          { q: MARK, sort: "recent" },
+          { kind: "cursor", size: PAGE_SIZE },
+          user.id
+        ),
+      ]);
+      check(
+        "상한에 닿아도 같은 질의는 같은 결과",
+        twice[0].items.map((i) => i.id).join(",") ===
+          twice[1].items.map((i) => i.id).join(","),
+        "타이브레이커 `id DESC` 가 동점 순서를 고정한다"
+      );
+
+      // 한 건 줄이면 신호가 꺼진다 — 경계가 맞는지 본다
+      await db.resource.delete({ where: { id: bulkIds[0] } });
+      bulkIds.shift();
+      const edge = await resourceService.list(
+        { q: MARK, sort: "recent" },
+        { kind: "cursor", size: PAGE_SIZE },
+        user.id
+      );
+      check(
+        "정확히 2,000건이면 신호가 꺼진다",
+        edge.searchTruncated === false,
+        `truncated=${edge.searchTruncated}`
+      );
+    } finally {
+      await db.resource.deleteMany({ where: { id: { in: bulkIds } } });
+    }
+  }
+
   console.log("\n★ 초안은 작성자·EDITOR 만 본다 (M3)");
   {
     const draftAuthor = await mkUser("draft");

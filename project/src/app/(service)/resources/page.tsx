@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ResourceBrowser } from "@/features/resources/components/resource-browser";
 import { parseListQuery, PAGE_SIZE } from "@/features/resources/list.schema";
 import { requireActiveUser } from "@/server/auth/guards";
+import * as categoryService from "@/server/services/category.service";
 import { listAuthors } from "@/server/services/resource.service";
 import * as resourceService from "@/server/services/resource.service";
 
@@ -29,13 +30,14 @@ export default async function ResourcesPage({
   // Next.js 16 에서 searchParams 는 Promise 다
   const query = parseListQuery(await searchParams);
 
-  const [page, authors] = await Promise.all([
+  const [page, authors, categories] = await Promise.all([
     resourceService.list(
       query,
       { kind: "cursor", after: query.cursor, size: PAGE_SIZE },
       session.userId
     ),
     listAuthors(),
+    categoryService.listChoices(),
   ]);
 
   return (
@@ -55,6 +57,8 @@ export default async function ResourcesPage({
         resources={page.items}
         query={query}
         authors={authors}
+        categories={categories}
+        searchTruncated={page.searchTruncated}
         nextCursor={page.nextCursor}
       />
     </>

@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { CATEGORIES } from "@/config/site";
 import { DeleteResourceDialog } from "@/features/resources/components/delete-resource-dialog";
 import {
   getContentType,
@@ -39,7 +38,7 @@ import {
   createResourceAction,
   updateResourceAction,
 } from "@/server/actions/resource.actions";
-import type { Resource, ResourceType } from "@/types";
+import type { CategoryChoice, Resource, ResourceType } from "@/types";
 import type { DuplicateHint } from "@/server/services/resource.write";
 
 /**
@@ -49,10 +48,17 @@ import type { DuplicateHint } from "@/server/services/resource.write";
  */
 export function ResourceForm({
   resource,
+  categories,
   initialUrl,
   initialType,
 }: {
   resource?: Resource;
+  /**
+   * **DB 의 카테고리입니다.** 전에는 `config/site.ts` 의 상수 5개를 제안했는데,
+   * 저장은 `slug` 로 `categories` 행을 찾아 **못 찾으면 `null` 을 넣습니다** —
+   * 상수와 테이블이 어긋나면 사용자가 고른 분류가 **오류 없이 사라집니다.**
+   */
+  categories: CategoryChoice[];
   /** 「URL 빠른 등록」이 넘긴 값 (`FR-RES-005`) */
   initialUrl?: string;
   initialType?: ResourceType;
@@ -261,9 +267,9 @@ export function ResourceForm({
                   <SelectValue placeholder="선택" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.map((c) => (
+                  {categories.map((c) => (
                     <SelectItem key={c.slug} value={c.slug}>
-                      {c.name}
+                      {c.depth === 1 ? ` ${c.name}` : c.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

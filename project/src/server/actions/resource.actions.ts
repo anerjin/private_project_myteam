@@ -132,7 +132,8 @@ export async function countViewAction(
     const parsed = idSchema.safeParse(resourceId);
     if (!parsed.success) return validationError(parsed.error);
 
-    await resourceService.countView(parsed.data);
+    // 「누가」를 넘겨야 같은 사람의 재방문을 걸러낼 수 있다 (`FR-RES-014`)
+    await resourceService.countView(parsed.data, session.userId);
     return ok(undefined);
   });
 }

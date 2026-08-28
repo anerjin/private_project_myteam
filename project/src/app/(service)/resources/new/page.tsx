@@ -5,6 +5,7 @@ import { QuickAddUrl } from "@/features/resources/components/quick-add-url";
 import { ResourceForm } from "@/features/resources/components/resource-form";
 import { RESOURCE_TYPES } from "@/features/resources/list.schema";
 import { requireActiveUser } from "@/server/auth/guards";
+import * as categoryService from "@/server/services/category.service";
 import type { ResourceType } from "@/types";
 
 export const metadata: Metadata = { title: "자료 등록" };
@@ -36,7 +37,11 @@ export default async function NewResourcePage({
       <PageHeader description="타입을 고르면 그에 맞는 입력 항목이 나타납니다." />
       {/* URL 빠른 등록(FR-RES-005). 사이드바에서 이 화면으로 넘어옵니다. */}
       <QuickAddUrl />
-      <ResourceForm initialUrl={one(sp.url)} initialType={initialType} />
+      <ResourceForm
+        categories={await categoryService.listChoices()}
+        initialUrl={one(sp.url)}
+        initialType={initialType}
+      />
     </div>
   );
 }

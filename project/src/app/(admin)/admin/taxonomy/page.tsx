@@ -13,22 +13,23 @@ import {
 } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CATEGORIES } from "@/config/site";
+import * as categoryService from "@/server/services/category.service";
 import * as contentTypeService from "@/server/services/content-type.service";
 import * as resourceService from "@/server/services/resource.service";
 import { requireRole } from "@/server/auth/guards";
 
 export const metadata: Metadata = { title: "분류 · 타입 관리" };
 
-const SUBCATEGORIES: Record<string, string[]> = {
-  "ai-model": ["LLM", "비전", "음성", "멀티모달", "파인튜닝"],
-  "ai-tools": ["에이전트", "MCP", "Skill", "프롬프트", "코딩 도구"],
-  geospatial: ["드론 촬영", "포인트클라우드", "GIS", "사진측량", "지도"],
-  dev: ["프론트엔드", "백엔드", "인프라", "데이터"],
-  internal: ["규약", "온보딩", "회고"],
-};
-
-/** SCR-231 분류 · 콘텐츠 타입 관리 */
+/**
+ * SCR-231 분류 · 콘텐츠 타입 관리
+ *
+ * > **이 파일에 `SUBCATEGORIES` 상수가 있었습니다.** `src/mocks/` 를 지우고
+ * > 「목 부채 0」이라고 셌지만 그 게이트는 **import 형태**를 셌고, 목은 죽지 않고
+ * > 화면 파일로 이사했을 뿐이었습니다. 그동안 `categories` 테이블에는
+ * > **27행이 이미 있었고**, 하드코딩한 하위분류는 slug 가 DB 와 아예 달라서
+ * > 화면에서 본 「사내 › 규약」으로 필터를 걸면 0건이 나왔습니다.
+ * > 확인하는 법은 `scripts/verify-empty-db.ts` 입니다 — **DB 를 비우면 화면도 빕니다.**
+ */
 export default async function AdminTaxonomyPage() {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
   await requireRole("ADMIN");
@@ -38,13 +39,14 @@ export default async function AdminTaxonomyPage() {
    * 메모리에서 집계하게 됩니다 — `tags.usage_count` 가 그 일을 하려고 있는
    * 표시용 캐시이고, 등록·수정이 세어서 씁니다.
    */
-  const [tagCounts, typeCounts, categoryCounts, typeSettings] =
+  const [tagCounts, typeCounts, categoryCounts, typeSettings, categories] =
     await Promise.all([
       resourceService.topTags(200),
       resourceService.countByType(),
       resourceService.countByCategory(),
       // 운영 설정은 DB, 표현은 코드 (DEC-032) — 병합은 service 가 한다
       contentTypeService.listSettings(),
+      categoryService.listTree(),
     ]);
 
   return (
@@ -70,36 +72,46 @@ export default async function AdminTaxonomyPage() {
                   자료당 1개. 깊이는 2단계까지입니다.
                 </CardDescription>
               </div>
-              <Button size="sm" variant="outline">
+              {/* 태그 병합과 같은 이유로 disabled 다 — 「있는데 안 된다」보다 정직하다 */}
+              <Button size="sm" variant="outline" disabled>
                 <Plus className="size-4" />
                 대분류 추가
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              {CATEGORIES.map((c) => (
-                <div key={c.slug} className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <GripVertical className="text-muted-foreground size-4" />
-                    <span className="font-medium">{c.name}</span>
-                    <code className="text-muted-foreground text-xs">
-                      {c.slug}
-                    </code>
-                    <span className="text-muted-foreground ml-auto text-xs">
-                      {categoryCounts[c.slug] ?? 0}건
-                    </span>
-                  </div>
-                  <div className="ml-6 flex flex-wrap gap-1.5">
-                    {SUBCATEGORIES[c.slug]?.map((s) => (
-                      <span
-                        key={s}
-                        className="bg-muted rounded px-2 py-0.5 text-xs"
-                      >
-                        {s}
+              {categories.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  등록된 카테고리가 없습니다.
+                </p>
+              ) : (
+                categories.map((c) => (
+                  <div key={c.slug} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <GripVertical className="text-muted-foreground size-4" />
+                      <span className="font-medium">{c.name}</span>
+                      <code className="text-muted-foreground text-xs">
+                        {c.slug}
+                      </code>
+                      <span className="text-muted-foreground ml-auto text-xs">
+                        {categoryCounts[c.slug] ?? 0}건
                       </span>
-                    ))}
+                    </div>
+                    <div className="ml-6 flex flex-wrap gap-1.5">
+                      {c.children.map((s) => (
+                        <span
+                          key={s.slug}
+                          className="bg-muted inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs"
+                        >
+                          {s.name}
+                          <span className="text-muted-foreground tabular-nums">
+                            {categoryCounts[s.slug] ?? 0}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </TabsContent>

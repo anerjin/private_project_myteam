@@ -152,6 +152,7 @@ export function toResource(
     status: row.status,
     sourceChannel: row.sourceChannel,
     category: u(row.category?.slug),
+    categoryName: u(row.category?.name),
     tags: row.tags.map((t) => t.tag.slug),
     author: {
       id: row.author.id,

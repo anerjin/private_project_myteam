@@ -106,6 +106,26 @@ export type ResourceDetail =
   | ({ type: "DEV_NOTE" } & DevNoteDetail)
   | ({ type: "PROMPT" } & PromptDetail);
 
+/**
+ * 카테고리 (`REQ-04 · 4.2`). **정본은 `categories` 테이블**이고 계층은
+ * `parent_id` 자기 참조로 표현합니다 — 깊이는 2단계까지입니다.
+ */
+export interface CategoryOption {
+  slug: string;
+  name: string;
+}
+
+export interface CategoryNode extends CategoryOption {
+  /** lucide 아이콘명. 없으면 화면이 아이콘을 그리지 않는다 */
+  icon: string | null;
+  children: CategoryOption[];
+}
+
+/** `<Select>` 는 계층을 못 그리므로 평평하게 펴고 `depth` 로 들여쓴다 */
+export interface CategoryChoice extends CategoryOption {
+  depth: 0 | 1;
+}
+
 /** 자료 — 모든 콘텐츠의 공통 뼈대 */
 export interface Resource {
   id: string;
@@ -118,6 +138,12 @@ export interface Resource {
   status: ResourceStatus;
   sourceChannel: SourceChannel;
   category?: string;
+  /**
+   * 카테고리 이름. **slug 와 같은 행에서 옵니다** — 화면이 slug 로 이름을
+   * 찾으려면 어딘가에 「slug → 이름」 표를 두게 되고, 그 표가 곧 목이 됩니다
+   * (`config/site.ts` 의 `CATEGORIES` 가 그렇게 살아남았습니다).
+   */
+  categoryName?: string;
   tags: string[];
   author: Author;
   viewCount: number;

@@ -9,6 +9,7 @@ import { ResourceBrowser } from "@/features/resources/components/resource-browse
 import { getContentTypeBySlug } from "@/features/resources/content-types";
 import { parseListQuery, PAGE_SIZE } from "@/features/resources/list.schema";
 import { requireActiveUser } from "@/server/auth/guards";
+import * as categoryService from "@/server/services/category.service";
 import * as resourceService from "@/server/services/resource.service";
 
 /*
@@ -42,13 +43,14 @@ export default async function ResourceTypePage({
    */
   const query = { ...parseListQuery(await searchParams), type: meta.code };
 
-  const [page, authors] = await Promise.all([
+  const [page, authors, categories] = await Promise.all([
     resourceService.list(
       query,
       { kind: "cursor", after: query.cursor, size: PAGE_SIZE },
       session.userId
     ),
     resourceService.listAuthors(),
+    categoryService.listChoices(),
   ]);
 
   return (
@@ -68,6 +70,8 @@ export default async function ResourceTypePage({
         resources={page.items}
         query={query}
         authors={authors}
+        categories={categories}
+        searchTruncated={page.searchTruncated}
         nextCursor={page.nextCursor}
       />
     </>

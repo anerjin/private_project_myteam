@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/common/empty-state";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,7 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CATEGORIES } from "@/config/site";
 import { TypeBadge } from "@/features/resources/components/badges";
 import { ResourceCard } from "@/features/resources/components/resource-card";
 import { getContentType } from "@/features/resources/content-types";
@@ -34,7 +34,7 @@ import {
   type ListQuery,
   type SortKey,
 } from "@/features/resources/list.schema";
-import type { Resource } from "@/types";
+import type { CategoryChoice, Resource } from "@/types";
 
 /**
  * 자료 목록 (SCR-111, FR-RES-004~006).
@@ -65,17 +65,27 @@ export function ResourceBrowser({
   resources,
   query,
   authors,
+  categories,
   nextCursor,
   total,
+  searchTruncated,
   controls = true,
 }: {
   resources: Resource[];
   /** 서버가 파싱한 «지금» 조건 */
   query: ListQuery;
   authors: AuthorOption[];
+  /**
+   * 카테고리 선택지도 **서버가 줍니다** — 등록자 목록과 같은 이유이자,
+   * 전에 `config/site.ts` 의 상수를 읽던 자리입니다. 그 상수는 대분류 5개뿐이라
+   * DB 의 하위분류 22개를 **필터로 고를 수 없었습니다.**
+   */
+  categories: CategoryChoice[];
   nextCursor?: string;
   /** 관리 화면에서만 온다. 탐색 화면은 세지 않는다 */
   total?: number;
+  /** 검색 후보가 상한에 닿았는가 (`DEC-048`) — 서버가 «질의로» 알아낸 값이다 */
+  searchTruncated?: boolean;
   /**
    * 필터·정렬 컨트롤을 그릴지. **서버가 그 조건을 실제로 받는 화면만 `true`** 입니다 —
    * 북마크 목록처럼 조건을 안 받는 곳에 띄우면 URL 만 바뀌고 목록은 그대로라
@@ -135,9 +145,9 @@ export function ResourceBrowser({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">전체 카테고리</SelectItem>
-                {CATEGORIES.map((c) => (
+                {categories.map((c) => (
                   <SelectItem key={c.slug} value={c.slug}>
-                    {c.name}
+                    {c.depth === 1 ? ` ${c.name}` : c.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -203,6 +213,22 @@ export function ResourceBrowser({
           ? `${total}건`
           : `${resources.length}건 표시 중${nextCursor ? " · 더 있습니다" : ""}`}
       </p>
+
+      {/*
+        **잘렸다는 사실을 질의가 알려 줍니다** (`DEC-048`). 검색은 관련도 상위
+        2000건 «안에서만» 필터·정렬·페이징합니다. 조용히 자르면 사용자는
+        「없다」와 「안 보여준다」를 구별할 수 없고, 「최신순으로 봤는데 어제 글이
+        없다」를 버그로 신고하게 됩니다.
+      */}
+      {searchTruncated && (
+        <Alert>
+          <AlertDescription>
+            검색 결과가 많아 <b>관련도 상위 2,000건 안에서만</b> 추리고
+            정렬했습니다. 뒤쪽 자료는 이 목록에 없으니 검색어를 좁히거나 타입 ·
+            카테고리 필터를 함께 걸어 주세요.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {resources.length === 0 ? (
         <EmptyState
