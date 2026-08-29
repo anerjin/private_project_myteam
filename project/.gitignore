@@ -2,6 +2,10 @@
 
 # dependencies
 /node_modules
+packages/*/node_modules
+
+# workspace 패키지 빌드 산출물 — 원본은 src/ 다. 받는 쪽이 `npm run build` 를 돌린다
+packages/*/dist
 /.pnp
 .pnp.*
 .yarn/*

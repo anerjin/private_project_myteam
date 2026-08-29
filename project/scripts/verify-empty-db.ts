@@ -160,12 +160,23 @@ async function run() {
   await db.user.delete({ where: { id: admin.id } });
 
   console.log(`\n합계: 통과 ${pass} · 실패 ${fail}`);
-  await db.$disconnect();
-  if (fail > 0) process.exit(1);
 }
 
-run().catch(async (e) => {
-  console.error(e);
-  await db.$disconnect();
-  process.exit(1);
-});
+/*
+ * **성공해도 «끝냅니다».**
+ *
+ * 전에는 `fail > 0` 일 때만 `process.exit` 를 불렀습니다. 통과하면 합계까지
+ * 찍고 **프로세스가 안 죽었습니다** — DB 풀이 이벤트 루프를 잡고 있어서입니다.
+ * CI 에서는 이 한 줄이 「검증이 멈춘 것」과 구별되지 않고, 실제로 이전 세션이
+ * 남긴 좀비 두 개를 나중에 발견했습니다. 다른 `verify:*` 는 전부
+ * `finally` 에서 끝냅니다 — 이것만 빠져 있었습니다.
+ */
+run()
+  .catch((e) => {
+    console.error(e);
+    fail++;
+  })
+  .finally(async () => {
+    await db.$disconnect();
+    process.exit(fail > 0 ? 1 : 0);
+  });

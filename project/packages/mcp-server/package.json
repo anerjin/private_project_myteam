@@ -1,0 +1,32 @@
+{
+  "name": "@queenbee/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "QueenBee 자료 수집용 stdio MCP 서버 (FR-CLI-001)",
+  "type": "module",
+  "bin": {
+    "queenbee-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "skills",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.12",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -12,6 +12,7 @@ import {
 import type { ParsedResourceInput } from "@/features/resources/form.schema";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { scanValues } from "@/lib/secret-scan";
 import type { Actor } from "@/server/auth/actor";
 import * as audit from "@/server/services/audit.service";
 
@@ -376,6 +377,26 @@ export interface WriteResult {
 }
 
 /**
+ * 비밀값이 섞여 들어오면 저장하지 않는다 (`NFR-SEC-008`).
+ *
+ * **등록과 수정 «둘 다»에서 봅니다.** 등록만 보면 깨끗하게 넣고 나중에
+ * 토큰을 붙이는 경로가 열려 있고, 그게 더 흔한 순서입니다(설정 예시를
+ * 나중에 채우다가).
+ *
+ * 걸린 **종류만** 말하고 값은 돌려주지 않습니다 — 이 문구는 응답과 감사
+ * 로그에 남으므로, 원문을 실으면 차단하려던 것을 스스로 흘립니다.
+ */
+function assertNoSecrets(input: ParsedResourceInput): void {
+  const found = scanValues(input);
+  if (found.length > 0) {
+    throw new AppError(
+      "VALIDATION_ERROR",
+      `비밀값으로 보이는 문자열이 들어 있습니다 (${found.join("·")}). 자료에는 «키 이름과 설명»만 적고 실제 값은 빼 주세요.`
+    );
+  }
+}
+
+/**
  * API-031 자료 등록.
  *
  * **slug 충돌은 재시도합니다.** 같은 제목을 동시에 등록하면 미리 본 빈자리가
@@ -387,6 +408,7 @@ export async function create(
   actor: Actor,
   input: ParsedResourceInput
 ): Promise<WriteResult> {
+  assertNoSecrets(input);
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       return await createOnce(actor, input, attempt);
@@ -480,6 +502,7 @@ export async function update(
   id: string,
   input: ParsedResourceInput
 ): Promise<WriteResult> {
+  assertNoSecrets(input);
   return db.$transaction(async (tx) => {
     const target = await tx.resource.findFirst({
       where: { id, deletedAt: null },

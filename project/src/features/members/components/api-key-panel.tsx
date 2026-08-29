@@ -67,7 +67,15 @@ export interface ApiKeyRow {
   createdAt: string;
 }
 
-function mcpSnippet(appUrl: string) {
+/**
+ * Claude Code 설정 스니펫 (`SCR-141`, `DEV-08 · 8.3`).
+ *
+ * **키를 스니펫 «안»에 넣습니다.** 이 스니펫은 평문을 보여주는 그 순간에만
+ * 나타나고(발급 직후), 사용자가 할 일은 설정 파일에 붙여넣는 것 하나입니다.
+ * 자리 표시자를 두면 복사를 두 번 하고 그 사이에 키를 잃어버릴 수 있습니다 —
+ * 이 화면을 벗어나면 평문은 다시 볼 수 없기 때문입니다 (`NFR-SEC-017`).
+ */
+function mcpSnippet(appUrl: string, apiKey: string) {
   return `{
   "mcpServers": {
     "queenbee": {
@@ -75,7 +83,7 @@ function mcpSnippet(appUrl: string) {
       "args": ["-y", "@queenbee/mcp"],
       "env": {
         "QUEENBEE_URL": "${appUrl}",
-        "QUEENBEE_API_KEY": "여기에 방금 발급한 키를 붙여넣으세요"
+        "QUEENBEE_API_KEY": "${apiKey}"
       }
     }
   }
@@ -259,9 +267,12 @@ export function ApiKeyPanel({
                 <p className="text-xs">Claude Code 설정에 붙여넣으세요.</p>
                 <div className="flex items-start gap-2">
                   <pre className="bg-muted flex-1 overflow-x-auto rounded p-3 font-mono text-[11px]">
-                    {mcpSnippet(appUrl)}
+                    {mcpSnippet(appUrl, issued)}
                   </pre>
-                  <CopyButton value={mcpSnippet(appUrl)} label="설정 복사" />
+                  <CopyButton
+                    value={mcpSnippet(appUrl, issued)}
+                    label="설정 복사"
+                  />
                 </div>
               </div>
             </AlertDescription>

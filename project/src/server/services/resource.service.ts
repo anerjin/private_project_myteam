@@ -12,7 +12,7 @@ import type { Actor } from "@/server/auth/actor";
 import * as resourceRepo from "@/server/repositories/resource.repository";
 import * as audit from "@/server/services/audit.service";
 import { toResource } from "@/server/services/resource.mapper";
-import type { Resource } from "@/types";
+import type { Resource, Role } from "@/types";
 
 /**
  * 자료 조회·북마크·조회수·삭제 (`FR-RES-001`·`003`·`007`·`014`, `FR-COLL-001`·`002`).
@@ -71,6 +71,25 @@ async function bookmarkedIds(
     select: { resourceId: true },
   });
   return new Set(rows.map((b) => b.resourceId));
+}
+
+/**
+ * id 로 상세 — **Ingest 전용**입니다 (`API-102`·`105`·`107`).
+ *
+ * 화면은 slug 로 찾습니다(주소가 사람이 읽는 것이어야 하므로). CLI 는
+ * 등록 응답으로 받은 **id** 를 들고 오고, slug 는 제목을 고치면 바뀔 수
+ * 있으므로 **id 가 안정된 손잡이**입니다.
+ *
+ * 초안 판정은 `getBySlug` 와 **같은 규칙**입니다 — 두 곳에 적으면 갈립니다.
+ */
+export async function getById(
+  id: string,
+  viewerId?: string,
+  viewerRole?: Role
+): Promise<Resource> {
+  const row = await resourceRepo.findById(id);
+  if (!row) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
+  return getBySlug(row.slug, viewerId, viewerRole);
 }
 
 /**
