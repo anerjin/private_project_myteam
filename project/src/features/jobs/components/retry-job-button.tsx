@@ -18,7 +18,18 @@ import { retryJobAction } from "@/server/actions/github.actions";
  * > 전에는 이 버튼에 **핸들러가 없었습니다.** 눌러도 아무 일이 없는 버튼은
  * > 이 저장소가 반복해서 지운 「있는데 안 된다」입니다.
  */
-export function RetryJobButton({ jobId }: { jobId: string }) {
+export function RetryJobButton({
+  jobId,
+  stale = false,
+}: {
+  jobId: string;
+  /**
+   * `RUNNING` 인데 오래 멈춰 있는 작업인가.
+   * **문구가 달라야 합니다** — 「재실행」은 실패한 것에, 「멈춤 · 다시」는
+   * PC 가 꺼져 중단된 것에 맞습니다 (`DEC-053` 의 잃는 것).
+   */
+  stale?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -46,7 +57,7 @@ export function RetryJobButton({ jobId }: { jobId: string }) {
       }
     >
       <RotateCcw className="size-3.5" />
-      {pending ? "실행 중…" : "재실행"}
+      {pending ? "실행 중…" : stale ? "멈춤 · 다시" : "재실행"}
     </Button>
   );
 }

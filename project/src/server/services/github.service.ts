@@ -28,17 +28,31 @@ export async function archiveForDownload(
 ): Promise<ArchiveDownload> {
   const row = await db.githubRepo.findFirst({
     where: { resourceId, resource: { deletedAt: null } },
-    select: {
-      owner: true,
-      repo: true,
-      archivedSha: true,
-      archiveSizeBytes: true,
-      archiveStatus: true,
-    },
+    select: { archiveStatus: true },
   });
   if (!row) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
 
-  if (row.archiveStatus !== "DONE" || !row.archivedSha) {
+  /*
+   * **저장 키를 여기서 조립하지 않습니다.**
+   *
+   * 전에는 `archives/${row.owner}/${row.repo}/${sha}.tar.gz` 를 만들었는데,
+   * 쓰는 쪽(`jobs/archive.ts`)은 **GitHub 응답의 정식 표기**로 만들고 여기는
+   * **DB 값**(사용자가 적은 표기)으로 만들었습니다. 메타 수집이 rate limit 으로
+   * 실패하면 둘이 갈리고 — **Windows 에서는 우연히 열리고 Linux 에서는 404**
+   * 입니다. 저장소 이름이 GitHub 에서 바뀌어도 같습니다.
+   *
+   * 지금은 `files.storage_key` 가 정본입니다 (`DEV-02 · 2.7`).
+   */
+  const link = await db.resourceFile.findFirst({
+    where: { resourceId, role: "ARCHIVE" },
+    select: {
+      file: {
+        select: { storageKey: true, originalName: true, sizeBytes: true },
+      },
+    },
+  });
+
+  if (!link) {
     throw new AppError(
       "INVALID_STATE",
       row.archiveStatus === "RUNNING" || row.archiveStatus === "QUEUED"
@@ -47,11 +61,10 @@ export async function archiveForDownload(
     );
   }
 
-  const sha = row.archivedSha;
   return {
-    storageKey: `archives/${row.owner}/${row.repo}/${sha}.tar.gz`,
+    storageKey: link.file.storageKey,
     // 받은 사람이 **무엇을 받았는지** 알아야 한다 (`DEV-05 · 5.5`)
-    filename: `${row.owner}-${row.repo}-${sha.slice(0, 7)}.tar.gz`,
-    sizeBytes: Number(row.archiveSizeBytes ?? 0),
+    filename: link.file.originalName,
+    sizeBytes: Number(link.file.sizeBytes),
   };
 }

@@ -17,6 +17,7 @@ import { Attachments } from "@/features/resources/components/attachments";
 import { DeleteResourceDialog } from "@/features/resources/components/delete-resource-dialog";
 import { ExternalLinkButton } from "@/features/resources/components/external-link-button";
 import { GithubPanel } from "@/features/resources/components/github-panel";
+import { LinkedResources } from "@/features/resources/components/linked-resources";
 import { TypeDetail } from "@/features/resources/components/type-detail";
 import {
   getContentType,
@@ -25,6 +26,7 @@ import {
 import { ResourceActions } from "@/features/resources/components/resource-actions";
 import { AppError } from "@/lib/errors";
 import * as fileService from "@/server/services/file.service";
+import * as relationService from "@/server/services/relation.service";
 import * as resourceService from "@/server/services/resource.service";
 import { decodeSegment } from "@/lib/route-params";
 
@@ -77,9 +79,10 @@ export default async function ResourceDetailPage({
     : undefined;
   const toc = resource.body ? extractToc(resource.body) : [];
   const canEdit = canEditResource(await toActor(session), resource.author.id);
-  const [related, attachments] = await Promise.all([
+  const [related, attachments, linked] = await Promise.all([
     resourceService.findRelated(resource.id, resource.tags),
     fileService.listFor(resource.id),
+    relationService.listFor(resource.id),
   ]);
 
   return (
@@ -153,6 +156,12 @@ export default async function ResourceDetailPage({
           )}
 
           <TypeDetail resource={resource} />
+
+          <LinkedResources
+            resourceId={resource.id}
+            items={linked}
+            canEdit={canEdit}
+          />
 
           <Attachments
             resourceId={resource.id}

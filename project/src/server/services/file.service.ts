@@ -78,39 +78,50 @@ export async function attach(
     }
   );
 
-  const file = await db.$transaction(async (tx) => {
-    const f = await tx.file.create({
-      data: {
-        storageKey: written.key,
-        originalName: input.filename.slice(0, 255),
-        mimeType: input.contentType.split(";")[0].trim(),
-        sizeBytes: BigInt(written.sizeBytes),
-        checksumSha256: written.sha256,
-        uploadedById: actor.id,
-      },
-      select: {
-        id: true,
-        originalName: true,
-        mimeType: true,
-        sizeBytes: true,
-        createdAt: true,
-      },
+  /*
+   * **트랜잭션이 실패하면 디스크에 고아 파일이 남습니다.**
+   * 스트림을 먼저 받아야 크기·해시를 알 수 있으므로 순서를 뒤집을 수는 없고,
+   * 대신 실패했을 때 **지웁니다** — `detach` 가 반대 방향으로 같은 규칙을
+   * 지킵니다(디스크는 트랜잭션 밖에서, DB 가 정본).
+   */
+  const file = await db
+    .$transaction(async (tx) => {
+      const f = await tx.file.create({
+        data: {
+          storageKey: written.key,
+          originalName: input.filename.slice(0, 255),
+          mimeType: input.contentType.split(";")[0].trim(),
+          sizeBytes: BigInt(written.sizeBytes),
+          checksumSha256: written.sha256,
+          uploadedById: actor.id,
+        },
+        select: {
+          id: true,
+          originalName: true,
+          mimeType: true,
+          sizeBytes: true,
+          createdAt: true,
+        },
+      });
+      await tx.resourceFile.create({
+        data: { resourceId: target.id, fileId: f.id, role: "ATTACHMENT" },
+      });
+      await audit.log(
+        actor,
+        {
+          action: "FILE_UPLOAD",
+          targetType: "FILE",
+          targetId: f.id,
+          summary: `${target.title} 에 ${f.originalName} 첨부`,
+        },
+        tx
+      );
+      return f;
+    })
+    .catch(async (e) => {
+      await storage.remove(written.key).catch(() => {});
+      throw e;
     });
-    await tx.resourceFile.create({
-      data: { resourceId: target.id, fileId: f.id, role: "ATTACHMENT" },
-    });
-    await audit.log(
-      actor,
-      {
-        action: "FILE_UPLOAD",
-        targetType: "FILE",
-        targetId: f.id,
-        summary: `${target.title} 에 ${f.originalName} 첨부`,
-      },
-      tx
-    );
-    return f;
-  });
 
   return {
     id: file.id,
@@ -208,8 +219,13 @@ export async function detach(actor: Actor, fileId: string): Promise<void> {
   }
 
   const orphan = await db.$transaction(async (tx) => {
+    /*
+     * **`role` 을 함께 봅니다.** 위 조회는 `ATTACHMENT` 로 좁히는데 여기만
+     * `{ fileId, resourceId }` 였습니다 — 같은 파일이 `ARCHIVE` 로도 붙어
+     * 있으면 첨부를 지우며 아카이브 연결까지 끊습니다.
+     */
     await tx.resourceFile.deleteMany({
-      where: { fileId, resourceId: link.resourceId },
+      where: { fileId, resourceId: link.resourceId, role: "ATTACHMENT" },
     });
     const left = await tx.resourceFile.count({ where: { fileId } });
     if (left === 0) await tx.file.delete({ where: { id: fileId } });

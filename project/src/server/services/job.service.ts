@@ -44,6 +44,12 @@ export interface JobBoard {
   /** 상태별 건수 — `groupBy` 한 번. 상태마다 세지 않는다 */
   counts: { status: JobStatus; n: number }[];
   recent: JobRow[];
+  /**
+   * 요청자 이름. **`jobs` 에 `User` 관계가 없어** 한 번 더 조회합니다 —
+   * 관계를 넣으려면 마이그레이션이 필요하고, 화면 한 칸에 그 값은 크지 않습니다.
+   * 원시 cuid 를 찍으면 관리자가 「누가 눌렀는지」를 알 수 없습니다.
+   */
+  requesterNames: Record<string, string>;
 }
 
 const STATUSES: JobStatus[] = ["QUEUED", "RUNNING", "DONE", "FAILED"];
@@ -58,10 +64,19 @@ export async function board(): Promise<JobBoard> {
     }),
   ]);
 
+  const ids = [...new Set(recent.map((j) => j.requestedById).filter(Boolean))];
+  const users = ids.length
+    ? await db.user.findMany({
+        where: { id: { in: ids as string[] } },
+        select: { id: true, name: true },
+      })
+    : [];
+
   const byStatus = Object.fromEntries(
     grouped.map((g) => [g.status, g._count._all])
   );
   return {
+    requesterNames: Object.fromEntries(users.map((u) => [u.id, u.name])),
     // 0건인 상태도 «자리를 지킵니다» — 안 그리면 「없는 것」과 「0인 것」이 같아 보인다
     counts: STATUSES.map((s) => ({ status: s, n: byStatus[s] ?? 0 })),
     recent,
@@ -117,20 +132,62 @@ export async function enqueueAndRun(
   input: Parameters<typeof enqueue>[0]
 ): Promise<{ id: string }> {
   const job = await enqueue(input);
-  void runNow(job.id);
+  /*
+   * **`.catch()` 가 반드시 있어야 합니다.** `runNow` 는 자기 안에서 오류를
+   * `jobs` 행에 적지만, **그 적는 일 자체가 실패**하면(DB 가 잠깐 끊기면)
+   * 처리되지 않은 거부가 됩니다 — Node 는 기본값으로 **프로세스를 죽입니다.**
+   * `DEC-053` 이 「프로세스 하나」에 기대는 결정이라 그 하나가 죽으면 안 됩니다.
+   */
+  void runNow(job.id).catch((e) => {
+    console.error("[job] 실행을 시작하지 못했습니다", job.id, e);
+  });
   return job;
+}
+
+/**
+ * **버려진 작업**으로 보는 시간.
+ *
+ * `DEC-053` 이 「PC 가 꺼지면 `RUNNING` 이 남고 사람이 재실행한다」고 적었는데
+ * **그 상태를 집는 코드가 없었습니다** — `QUEUED`·`FAILED` 만 집었으므로
+ * 정확히 그 경우에 할 수 있는 일이 하나도 없었습니다. 결정의 「잃는 것」 칸이
+ * 거짓이었던 셈입니다.
+ *
+ * 살아 있는 실행과 겹치지 않게 **시작한 지 오래된 것만** 집습니다.
+ * 가장 긴 작업이 500MB 아카이브라 30분이면 넉넉합니다.
+ */
+const STALE_AFTER_MS = 30 * 60 * 1000;
+
+/** 지금 다시 실행할 수 있는 상태인가 — 화면과 서비스가 **같은 판정**을 쓴다 */
+export function isRetryable(job: {
+  status: JobStatus;
+  startedAt: Date | null;
+}): boolean {
+  if (job.status === "QUEUED" || job.status === "FAILED") return true;
+  if (job.status !== "RUNNING") return false;
+  return (
+    job.startedAt !== null &&
+    Date.now() - job.startedAt.getTime() > STALE_AFTER_MS
+  );
 }
 
 /**
  * 한 작업을 지금 실행한다. **관리자의 「재실행」도 이 함수입니다.**
  *
- * `QUEUED` 나 `FAILED` 만 집습니다 — 이미 돌고 있는 것을 두 번 돌리면
- * 아카이브가 같은 파일에 동시에 쓰게 됩니다. `updateMany` 의 **갱신 건수**로
- * 판정하므로 두 요청이 동시에 와도 하나만 통과합니다.
+ * 「돌고 있는 것」을 두 번 돌리면 아카이브가 같은 파일에 동시에 씁니다.
+ * 그래서 `RUNNING` 은 **버려진 것만** 집습니다(`STALE_AFTER_MS`).
+ * `updateMany` 의 **갱신 건수**로 판정하므로 두 요청이 동시에 와도 하나만
+ * 통과합니다 — 조건을 코드가 아니라 `where` 에 두는 것이 그 이유입니다.
  */
 export async function runNow(jobId: string): Promise<void> {
+  const stale = new Date(Date.now() - STALE_AFTER_MS);
   const claimed = await db.job.updateMany({
-    where: { id: jobId, status: { in: ["QUEUED", "FAILED"] } },
+    where: {
+      id: jobId,
+      OR: [
+        { status: { in: ["QUEUED", "FAILED"] } },
+        { status: "RUNNING", startedAt: { lt: stale } },
+      ],
+    },
     data: { status: "RUNNING", startedAt: new Date(), errorMessage: null },
   });
   if (claimed.count === 0) return;

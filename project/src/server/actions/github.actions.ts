@@ -88,7 +88,14 @@ export async function retryJobAction(
     if (typeof jobId !== "string") {
       throw new AppError("VALIDATION_ERROR", "잘못된 요청입니다.");
     }
-    await jobService.runNow(jobId);
+    /*
+     * **기다리지 않습니다.** 500MB 아카이브 재실행이면 액션이 그동안 매달리고
+     * (`NFR-PERF-006`), 버튼의 토스트 문구(「결과는 잠시 뒤 이 표에 반영됩니다」)와도
+     * 어긋납니다. `enqueueAndRun` 과 같은 모양입니다.
+     */
+    void jobService.runNow(jobId).catch((e) => {
+      console.error("[job] 재실행을 시작하지 못했습니다", jobId, e);
+    });
     revalidatePath("/admin/jobs");
     return ok(undefined);
   });

@@ -98,6 +98,44 @@ export async function listFor(resourceId: string): Promise<LinkedResource[]> {
 }
 
 /**
+ * 이을 상대를 찾는다.
+ *
+ * **이미 이어진 것과 자기 자신은 뺍니다** — 목록에 보이면 눌러 보게 되고,
+ * 그때 「이미 이어져 있습니다」를 띄우는 것보다 안 보이는 편이 낫습니다.
+ */
+export async function searchTargets(
+  resourceId: string,
+  q: string
+): Promise<{ id: string; title: string; typeLabel: string }[]> {
+  const linked = await db.resourceRelation.findMany({
+    where: { OR: [{ fromId: resourceId }, { toId: resourceId }] },
+    select: { fromId: true, toId: true },
+  });
+  const exclude = new Set<string>([resourceId]);
+  for (const r of linked) {
+    exclude.add(r.fromId);
+    exclude.add(r.toId);
+  }
+
+  const rows = await db.resource.findMany({
+    where: {
+      deletedAt: null,
+      status: "PUBLISHED",
+      id: { notIn: [...exclude] },
+      ...(q.trim() ? { title: { contains: q.trim(), mode: "insensitive" } } : {}),
+    },
+    select: { id: true, title: true, type: true },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    typeLabel: r.type as string,
+  }));
+}
+
+/**
  * 잇는다.
  *
  * **자기 자신은 못 잇습니다** — DB 에도 `CHECK from <> to` 가 있지만

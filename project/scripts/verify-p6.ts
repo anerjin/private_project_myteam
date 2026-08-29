@@ -173,6 +173,34 @@ async function run() {
     await jobService.runNow(job.id);
     const still = await jobOf(job.id);
     check("RUNNING 인 작업은 다시 집지 않는다", still.status === "RUNNING");
+    check(
+      "돌고 있는 작업은 재실행 대상이 아니다",
+      !jobService.isRetryable({ status: "RUNNING", startedAt: new Date() })
+    );
+
+    /*
+     * **`DEC-053` 이 「잃는 것」으로 적은 그 상태입니다.** PC 가 꺼지면
+     * `RUNNING` 이 남는데, 전에는 `runNow` 가 `QUEUED`·`FAILED` 만 집고
+     * 화면에도 버튼이 없어 **할 수 있는 일이 하나도 없었습니다** — 결정의
+     * 「잃는 것」 칸이 거짓이었습니다.
+     */
+    const long = new Date(Date.now() - 60 * 60 * 1000);
+    await db.job.update({
+      where: { id: job.id },
+      data: { status: "RUNNING", startedAt: long },
+    });
+    check(
+      "오래 멈춘 작업은 재실행 대상이다",
+      jobService.isRetryable({ status: "RUNNING", startedAt: long })
+    );
+    await jobService.runNow(job.id);
+    const revived = await jobOf(job.id);
+    check(
+      "멈춘 작업을 다시 집는다",
+      revived.status === "FAILED" &&
+        (revived.errorMessage ?? "").includes("등록되지 않은"),
+      `${revived.status} · ${revived.errorMessage ?? ""}`
+    );
   }
 
   console.log("\n★ GitHub 등록 — 메타가 «자동으로» 채워진다 (FR-GH-001·002)");

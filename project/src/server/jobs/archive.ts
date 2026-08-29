@@ -3,7 +3,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { getDiskStatus } from "@/lib/disk";
 import { AppError } from "@/lib/errors";
-import { fetchRepoMeta, githubHeaders, tarballUrl } from "@/lib/github";
+import { githubHeaders, tarballUrl } from "@/lib/github";
 import * as storage from "@/lib/storage";
 import { register } from "@/server/services/job.service";
 
@@ -49,8 +49,10 @@ async function run(job: { resourceId: string | null }) {
     select: {
       owner: true,
       repo: true,
+      defaultBranch: true,
       archivedSha: true,
       archiveSizeBytes: true,
+      resource: { select: { authorId: true } },
     },
   });
   if (!detail) {
@@ -73,15 +75,23 @@ async function run(job: { resourceId: string | null }) {
     );
   }
 
-  const meta = await fetchRepoMeta(detail.owner, detail.repo);
-  const ref = meta.defaultBranch;
+  /*
+   * **기본 브랜치는 DB 에 있습니다.** 전에는 여기서 `fetchRepoMeta` 를 다시
+   * 불렀는데, 그 함수는 안에서 `releases/latest` 까지 부르므로 **아카이브
+   * 1건이 GitHub 호출 3회**를 썼습니다. 토큰 없이 시간당 60회면 아카이브
+   * 20건이 한도 전부입니다.
+   *
+   * 메타를 아직 안 받았으면 `main` 으로 시도합니다 — GitHub 이 아니면 404 를
+   * 주고, 그때 사람이 「메타 갱신」을 먼저 누르면 됩니다.
+   */
+  const ref = detail.defaultBranch ?? "main";
 
   await db.githubRepo.update({
     where: { resourceId: job.resourceId },
     data: { archiveStatus: "RUNNING" },
   });
 
-  const res = await fetch(tarballUrl(meta.owner, meta.repo, ref), {
+  const res = await fetch(tarballUrl(detail.owner, detail.repo, ref), {
     headers: githubHeaders(),
     redirect: "follow",
   });
@@ -97,14 +107,19 @@ async function run(job: { resourceId: string | null }) {
   }
 
   /*
-   * **실제로 받은 커밋**은 리다이렉트된 주소 끝에 있습니다
-   * (`.../legacy.tar.gz/refs/heads/main` → GitHub 이 SHA 를 준다).
-   * 못 읽으면 브랜치 이름으로 대신합니다 — 「모른다」로 두는 것보다 낫습니다.
+   * **실제로 받은 커밋은 리다이렉트된 주소 끝에 있습니다.**
+   * `redirect: "follow"` 라 `res.url` 이 이미 손에 있고, 그 끝이 SHA 입니다
+   * (`codeload.github.com/owner/repo/legacy.tar.gz/<sha>`).
+   *
+   * > 전에는 `etag` 를 긁고 **못 읽으면 브랜치 이름(`"main"`)** 을 썼습니다.
+   * > 그러면 `archives/…/main.tar.gz` 로 저장되고 다음부터 `archivedSha ===
+   * > "main"` 이 계속 참이라 **skip 이 영원히 걸립니다** — 「같으면 다시 받지
+   * > 않는다」(`FR-GH-003`)가 「영영 다시 안 받는다」가 됩니다.
+   * > 그래서 **못 읽으면 `null`** 로 둡니다: 파일은 받되 다음에 또 받습니다.
    */
-  const sha =
-    res.headers.get("etag")?.replace(/[^a-f0-9]/gi, "").slice(0, 40) || ref;
+  const sha = shaFromUrl(res.url);
 
-  if (detail.archivedSha === sha && detail.archiveSizeBytes) {
+  if (sha && detail.archivedSha === sha && detail.archiveSizeBytes) {
     await db.githubRepo.update({
       where: { resourceId: job.resourceId },
       data: { archiveStatus: "DONE" },
@@ -112,7 +127,18 @@ async function run(job: { resourceId: string | null }) {
     return { skipped: true, sha };
   }
 
-  const key = `archives/${meta.owner}/${meta.repo}/${sha}.tar.gz`;
+  /*
+   * **저장 키를 한 곳에서만 만듭니다.** 전에는 여기서 `meta.owner`(GitHub 정식
+   * 표기)로 쓰고 다운로드 쪽은 `row.owner`(사용자가 적은 표기)로 조립해,
+   * 대소문자가 다르면 **Windows 에서는 열리고 Linux 에서는 404** 였습니다.
+   * 지금은 `files.storage_key` 가 정본이고 다운로드는 그 행을 읽습니다 —
+   * `DEV-02 · 2.7` 이 *"정본은 files.size_bytes (role=ARCHIVE)"* 라고
+   * 적어 둔 그 자리입니다.
+   */
+  const key = storage.newKey(
+    `archives/${detail.owner}/${detail.repo}`,
+    ".tar.gz"
+  );
   let written;
   try {
     written = await storage.writeStream(
@@ -128,16 +154,67 @@ async function run(job: { resourceId: string | null }) {
     throw e;
   }
 
-  await db.githubRepo.update({
-    where: { resourceId: job.resourceId },
-    data: {
-      archiveStatus: "DONE",
-      archivedSha: sha,
-      archiveSizeBytes: BigInt(written.sizeBytes),
-    },
+  const resourceId = job.resourceId;
+  /** 트랜잭션이 끝난 뒤 지울 옛 파일 — **지역 변수여야 합니다**(동시 실행) */
+  const staleKeys: string[] = [];
+
+  await db.$transaction(async (tx) => {
+    // 이전 아카이브 연결을 걷어낸다 — 자료당 아카이브는 하나다
+    const old = await tx.resourceFile.findMany({
+      where: { resourceId, role: "ARCHIVE" },
+      select: { fileId: true, file: { select: { storageKey: true } } },
+    });
+    if (old.length) {
+      await tx.resourceFile.deleteMany({
+        where: { resourceId, role: "ARCHIVE" },
+      });
+      await tx.file.deleteMany({
+        where: { id: { in: old.map((o) => o.fileId) } },
+      });
+    }
+
+    const file = await tx.file.create({
+      data: {
+        storageKey: written.key,
+        originalName: `${detail.owner}-${detail.repo}-${(sha ?? ref).slice(0, 7)}.tar.gz`,
+        mimeType: "application/gzip",
+        sizeBytes: BigInt(written.sizeBytes),
+        checksumSha256: written.sha256,
+        // 「올린 사람」은 자료의 등록자다 — 아카이브는 그 자료에 딸린 것이다
+        uploadedById: detail.resource.authorId,
+      },
+      select: { id: true },
+    });
+    await tx.resourceFile.create({
+      data: { resourceId, fileId: file.id, role: "ARCHIVE" },
+    });
+
+    await tx.githubRepo.update({
+      where: { resourceId },
+      data: {
+        archiveStatus: "DONE",
+        archivedSha: sha,
+        // 표시용 캐시 — 정본은 위 `files.size_bytes` (`DEV-02 · 2.7`)
+        archiveSizeBytes: BigInt(written.sizeBytes),
+      },
+    });
+
+    // 오래된 파일은 트랜잭션 «밖에서» 지운다 (롤백돼도 파일만 사라지면 안 된다)
+    staleKeys.push(...old.map((o) => o.file.storageKey));
   });
 
-  return { sha, sizeBytes: written.sizeBytes, key };
+  for (const k of staleKeys) await storage.remove(k).catch(() => {});
+
+  return { sha, sizeBytes: written.sizeBytes, key: written.key };
+}
+
+/**
+ * `codeload.github.com/owner/repo/legacy.tar.gz/<sha>` 의 끝.
+ * SHA 모양이 아니면 **`null`** — 「모른다」를 「main」으로 바꾸면 안 됩니다.
+ */
+function shaFromUrl(url: string): string | null {
+  const last = url.split("?")[0].split("/").pop() ?? "";
+  return /^[0-9a-f]{7,40}$/i.test(last) ? last : null;
 }
 
 register("ARCHIVE_GITHUB", run);

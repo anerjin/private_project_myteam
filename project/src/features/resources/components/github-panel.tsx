@@ -111,10 +111,19 @@ export function GithubPanel({
               메타 갱신
             </Button>
 
+            {/*
+              > **`RUNNING` 에서 버튼을 잠그면 빠져나올 길이 없습니다.**
+              > PC 가 꺼져 중단되면 자료가 영구히 「아카이브 진행 중」이고
+              > 다시 받기도 내려받기도 안 됩니다 — 그 상태를 만든 것이
+              > `DEC-053`(별도 워커 없음)이므로 **여기서 받아 줘야** 합니다.
+              > 작업 자체의 재실행은 `admin/jobs` 가 하고, 여기서는 새 작업을
+              > 만듭니다. `runNow` 가 「돌고 있는 것」을 두 번 안 집으므로
+              > 살아 있는 실행과 겹치지 않습니다.
+            */}
             <Button
               variant="outline"
               size="sm"
-              disabled={pending || running}
+              disabled={pending}
               onClick={() =>
                 run(
                   () => startArchiveAction(resourceId),
@@ -124,11 +133,16 @@ export function GithubPanel({
             >
               <Archive className="size-4" />
               {running
-                ? "아카이브 진행 중"
+                ? "아카이브 다시 시도"
                 : done
                   ? "아카이브 다시 받기"
                   : "소스 아카이브"}
             </Button>
+            {running && (
+              <span className="text-muted-foreground self-center text-xs">
+                진행 중입니다. 멈춰 있으면 다시 시도해 주세요.
+              </span>
+            )}
           </>
         )}
       </div>

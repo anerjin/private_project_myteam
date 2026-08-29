@@ -50,7 +50,7 @@ export default async function AdminJobsPage() {
    * 하드코딩한 안내문은 「작업이 있는가」에 대한 두 번째 출처이고,
    * 워커가 붙은 날 그 문장이 남아 있게 됩니다.
    */
-  const [{ counts, recent: jobs }, rate] = await Promise.all([
+  const [{ counts, recent: jobs, requesterNames }, rate] = await Promise.all([
     jobService.board(),
     // 못 읽어도 화면이 깨질 이유가 없다 — 카드만 빠진다
     githubRateLimit().catch(() => null),
@@ -161,19 +161,25 @@ export default async function AdminJobsPage() {
                       ? `${((j.finishedAt.getTime() - j.startedAt.getTime()) / 1000).toFixed(1)}s`
                       : "-"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground font-mono text-xs">
-                    {j.requestedById ?? "-"}
+                  <TableCell className="text-muted-foreground text-xs">
+                    {(j.requestedById && requesterNames[j.requestedById]) ?? "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
                     {j.createdAt.toISOString().slice(5, 16).replace("T", " ")}
                   </TableCell>
                   <TableCell className="text-right">
                     {/*
-                      QUEUED 도 다시 집을 수 있습니다 — PC 가 꺼져 있던 사이에
-                      만들어진 작업은 아무도 안 돌립니다 (`DEC-053` 의 잃는 것).
+                      **판정을 화면에 다시 적지 않습니다.** `isRetryable` 이
+                      서비스와 같은 규칙을 씁니다 — 전에는 여기에
+                      `FAILED || QUEUED` 를 손으로 적어 두어, `DEC-053` 이
+                      「재실행으로 받는다」고 한 **`RUNNING` 잔류에 버튼이
+                      없었습니다.**
                     */}
-                    {(j.status === "FAILED" || j.status === "QUEUED") && (
-                      <RetryJobButton jobId={j.id} />
+                    {jobService.isRetryable(j) && (
+                      <RetryJobButton
+                        jobId={j.id}
+                        stale={j.status === "RUNNING"}
+                      />
                     )}
                   </TableCell>
                 </TableRow>
