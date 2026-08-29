@@ -389,8 +389,65 @@ async function run() {
   }
 
   await checkFormNames();
+  await checkRenderedForms(user.id);
 
   console.log(`\n합계: 통과 ${pass} · 실패 ${fail}`);
+}
+
+/**
+ * ## 소스가 아니라 **렌더된 HTML** 을 봅니다
+ *
+ * 위 검사는 `form.tsx` 를 읽습니다. 그것만으로는 **`name` 이 실제로
+ * `FormData` 에 실리는지** 알 수 없습니다 — Radix 의 `Select` 는 커스텀
+ * 컴포넌트라 `name` 을 준다고 native 입력이 생긴다는 보장이 없고,
+ * 「그럴 것이다」로 두면 이 저장소가 반복해서 겪은 형태가 됩니다.
+ *
+ * 그래서 **dev 서버에 쿠키를 들고 `/resources/new?type=…` 을 열어** 그 이름이
+ * HTML 에 있는지 봅니다. `npm run dev` 가 떠 있어야 합니다.
+ */
+async function checkRenderedForms(userId: string) {
+  console.log("\n★ 화면으로 확인 — 렌더된 HTML 에 그 name 이 있는가");
+
+  const { issue } = await import("@/server/auth/session");
+  const { token } = await issue(userId, { userAgent: "verify-p5" });
+  const cookie = `${process.env.SESSION_COOKIE_NAME || "qb_session"}=${token}`;
+
+  /** 타입마다 «Select 로 그린» 칸 하나씩 — 가장 의심스러운 자리 */
+  const PROBE: [ResourceType, string][] = [
+    ["AI_MATERIAL", "materialKind"],
+    ["MCP_SERVER", "transport"],
+    ["SKILL", "usageStatus"],
+    ["DEV_NOTE", "noteKind"],
+    ["PROMPT", "usageStatus"],
+  ];
+
+  for (const [type, field] of PROBE) {
+    let html = "";
+    try {
+      const res = await fetch(
+        `http://localhost:3100/resources/new?type=${type}`,
+        { headers: { cookie } }
+      );
+      if (res.status !== 200) {
+        check(`${type}: 등록 폼이 열린다`, false, `HTTP ${res.status}`);
+        continue;
+      }
+      html = await res.text();
+    } catch {
+      check(
+        `${type}: 등록 폼이 열린다`,
+        false,
+        "dev 서버가 꺼져 있습니다 — `npm run dev` 를 먼저 띄우십시오"
+      );
+      continue;
+    }
+    check(`${type}: 등록 폼이 열린다`, true);
+    check(
+      `  Select 의 «${field}» 가 HTML 에 name 으로 나온다`,
+      html.includes(`name="${field}"`),
+      "안 나오면 고른 값이 FormData 에 안 실립니다"
+    );
+  }
 }
 
 /**

@@ -8,7 +8,7 @@ import {
 } from "@/features/resources/content-types/fields";
 
 /**
- * `AI_MATERIAL` 입력 스키마 (REQ-04 · 4.4절).
+ * `AI_MATERIAL` 입력 스키마 (`REQ-04 · 4.4`, `FR-TYPE-004`).
  *
  * **타입 폴더 안에 있습니다.** 라벨·아이콘·카드·상세·폼과 같은 자리입니다 —
  * 새 타입을 추가할 때 고칠 곳이 「폴더 하나 + 레지스트리 한 줄」이라는 `DEC-032` 의

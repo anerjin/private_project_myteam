@@ -58,8 +58,8 @@ const DEBT = [
   {
     id: "FR-SRCH-007",
     priority: "P1",
-    why: "태그 자동완성. 태그 칸이 쉼표로 구분된 한 줄이라 `<datalist>` 로는 안 되고 콤보박스가 필요하다 — `P5` 가 타입 폼 5종을 다시 만들므로 그때 함께 만든다",
-    until: "P5",
+    why: "태그 자동완성. 태그 칸이 쉼표로 구분된 한 줄이라 `<datalist>` 로는 안 되고 콤보박스가 필요하다 — `P8` 의 태그 관리(`FR-ADM-013` 병합·이름 변경)와 같은 화면 조각이라 함께 만든다",
+    until: "P8",
   },
   {
     id: "FR-RES-008",
@@ -152,12 +152,24 @@ const FIXTURE = {
     "FR-COLL-002",
     "NFR-A11Y-006",
   ],
+  "M4.1": [
+    "FR-RES-005",
+    "FR-TYPE-001",
+    "FR-TYPE-002",
+    "FR-TYPE-003",
+    "FR-TYPE-004",
+    "FR-TYPE-005",
+    "FR-TYPE-006",
+    "FR-TYPE-007",
+    "FR-TYPE-008",
+  ],
 };
 
 /** 페이즈 목록 표(7.11)와 같은 사실이므로 여기 적지 않고 문서에서 읽는다 */
 function phasesByMilestone(doc) {
   const map = new Map();
-  const re = /^\|\s*\*\*(P\d)\*\*\s*\|([^|]*)\|\s*`(M[\d.]+)`\s*\|/gm;
+  // `**P5** ✅` 처럼 뒤에 표시가 붙을 수 있다 — 칸 끝까지 허용한다
+  const re = /^\|\s*\*\*(P\d)\*\*[^|]*\|([^|]*)\|\s*`(M[\d.]+)`\s*\|/gm;
   for (const m of doc.matchAll(re)) {
     const [, phase, name, milestone] = m;
     if (!map.has(milestone)) map.set(milestone, []);
@@ -174,18 +186,31 @@ function phasesByMilestone(doc) {
  * 「015 는 코드에 없다」 같은 헛된 지적이 납니다.
  */
 function parseWorkTable(doc, milestone) {
-  const start = doc.search(
-    new RegExp(`^## [\\d.]+ ${milestone.replace(".", "\\.")} — `, "m")
-  );
-  if (start < 0) return null;
-  const rest = doc.slice(start + 1);
   /*
-   * **끝은 「다음 `##`」이지 「다음 마일스톤 절」이 아닙니다.**
-   * 마지막 마일스톤(`M6`)은 뒤에 마일스톤 절이 없어 7.9~7.13 (페이즈 목록표 ·
-   * 리스크 · 변경 이력)까지 통째로 구간에 들어옵니다. 지금은 우연히 그 표들이
-   * 3자리 숫자를 안 물어 조용하지만, `P9` 를 닫을 때 터집니다.
+   * `##` 과 `###` 을 둘 다 받습니다.
+   *
+   * **`M4` 는 두 페이즈가 나눠 닫습니다** — 타입 5종은 `P5`, GitHub·파일은 `P6`.
+   * 그래서 작업표가 `M4.1`·`M4.2` 두 하위 절로 갈렸습니다. 안 그러면 `P5` 를
+   * 닫을 때 아직 만들 차례가 아닌 `FR-GH-*`·`FR-FILE-*`(전부 `P0`)를 「빠졌다」고
+   * 잡습니다. `M2` 의 행 쪼개기와 같은 처리입니다 (`DEC-049`).
    */
-  const end = rest.search(/^## /m);
+  const esc = milestone.replace(".", "\\.");
+  const m = new RegExp(`^(#{2,3}) [\\d.]+ ${esc} — `, "m").exec(doc);
+  if (!m) return null;
+  const level = m[1].length;
+  /*
+   * **제목 줄 «뒤»부터 자릅니다.** 전에는 `start + 1`(첫 `#` 하나만) 이었는데,
+   * `###` 제목에서는 남은 `## …` 이 곧바로 「다음 제목」에 걸려 **구간이 비었고
+   * 「요구사항 0건」이 초록으로** 찍혔습니다. `##` 에서는 우연히 안 걸렸을 뿐입니다.
+   */
+  const rest = doc.slice(m.index + m[0].length);
+  /*
+   * **끝은 「같은 깊이 이상의 다음 제목」입니다.**
+   * 「다음 마일스톤 절」로 두면 마지막 마일스톤(`M6`)이 7.9~7.13(페이즈 목록표·
+   * 리스크·변경 이력)까지 통째로 삼킵니다. 그리고 `##` 만 보면 `M4` 가 자기
+   * 하위 절 둘을 다 먹어 «반으로 나눈 의미»가 사라집니다.
+   */
+  const end = rest.search(new RegExp(`^#{2,${level}} `, "m"));
   const section = end < 0 ? rest : rest.slice(0, end);
 
   const items = [];
@@ -254,16 +279,17 @@ const corpus = loadCorpus();
 
 const args = process.argv.slice(2);
 /** 끝난 페이즈의 마일스톤 — 새 페이즈를 닫을 때 여기에 더한다 */
-const DONE = ["M0", "M0.5", "M1", "M2"];
+const DONE = ["M0", "M0.5", "M1", "M2", "M4.1"];
 
 /**
  * `--all` 은 문서의 마일스톤 «절»에서 뽑습니다. 페이즈 목록표(7.11)에서 뽑으면
  * **`M0.5` 가 빠집니다** — 그 표에 `M0.5` 행이 없어서입니다.
  * 「전부」라는 이름이 전부가 아닌 채로 두면 안 됩니다.
  */
-const allMilestones = [...doc.matchAll(/^## [\d.]+ (M[\d.]+) — /gm)].map(
-  (m) => m[1]
-);
+const allMilestones = [...doc.matchAll(/^#{2,3} [\d.]+ (M[\d.]+) — /gm)]
+  .map((m) => m[1])
+  // `M4` 는 하위 절 `M4.1`·`M4.2` 가 정본이다 — 자기 절에는 표가 없다
+  .filter((id) => id !== "M4");
 
 const targets = args.includes("--all")
   ? allMilestones

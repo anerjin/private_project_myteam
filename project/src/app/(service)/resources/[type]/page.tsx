@@ -25,7 +25,7 @@ export async function generateMetadata({
   return { title: getContentTypeBySlug(type)?.label ?? "자료" };
 }
 
-/** SCR-111 자료 목록 (타입별) — 타입이 늘어도 이 파일 하나가 처리한다 */
+/** SCR-111 자료 목록 (타입별, `FR-TYPE-001`) — 타입이 늘어도 이 파일 하나가 처리한다 */
 export default async function ResourceTypePage({
   params,
   searchParams,
