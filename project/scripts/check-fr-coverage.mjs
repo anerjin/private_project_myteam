@@ -43,6 +43,44 @@ const ROADMAP = path.resolve(
   ROOT,
   "../_docs/02.개발설계/07_개발_로드맵.md"
 );
+const REQ = path.resolve(ROOT, "../_docs/01.요구사항/03_기능_요구사항.md");
+
+/**
+ * 요구사항 대장 — **번호와 우선순위를 문서에서 읽습니다** (`OPEN-017` 해소).
+ *
+ * ## 왜 필요했나
+ *
+ * 이 검사는 «작업표에 있는 번호»만 봤습니다. 그래서 **번호를 한 행에서 빼고
+ * 아무 데도 안 넣으면 조용히 사라졌습니다** — 여덟 페이즈 내내 「없다」는
+ * 사실조차 보고되지 않았고, 실측해 보니 **15건**이 그 상태였습니다.
+ * 그중 `P0` 가 넷이었습니다.
+ *
+ * 그리고 `DEBT[].priority` 를 손으로 적고 있었습니다. 「`P0` 는 부채가 될 수
+ * 없다」는 규칙이 그 손글씨에 기대고 있었으니, **틀리게 적으면 규칙이
+ * 통과합니다.** 이제 문서가 정본입니다.
+ */
+/**
+ * **대장이 몇 건인지 박아 둡니다.** `FIXTURE` 와 같은 이유입니다.
+ *
+ * 던져 봤습니다: `REQ-03` 의 한 행에서 `| FR-AUTH-001 |` 을 깨뜨렸더니
+ * **대장이 104건으로 줄었는데 검사는 조용히 통과**했습니다. 「한 행도 못 읽음」
+ * 만 막고 **일부만 못 읽는 것**은 안 막고 있었던 것입니다 — 이 저장소가
+ * 이미 두 번 겪은 모양입니다(`M2` 표의 한 행, `###` 하위 절).
+ *
+ * 요구사항을 더하거나 폐기하면 이 숫자를 **손으로** 고칩니다. 그 한 줄이
+ * 「대장이 바뀌었다」를 사람이 알아차리는 자리입니다.
+ */
+const EXPECTED_REQUIREMENTS = 105;
+
+function loadRequirements() {
+  const src = readFileSync(REQ, "utf8");
+  const rows = [
+    ...src.matchAll(/^\| (FR-[A-Z]+-\d{3}) \| ([^|]+) \|[^|]*\| (P\d) \|/gm),
+  ];
+  return new Map(
+    rows.map((m) => [m[1], { id: m[1], name: m[2].trim(), priority: m[3] }])
+  );
+}
 
 /**
  * **인정한 부채.** 작업표에 있지만 아직 안 만든 것 — 다만 «아는 채로» 안 만든 것.
@@ -109,20 +147,31 @@ const DEBT = [
  * **손으로 세지 마십시오.**
  */
 const FIXTURE = {
-  M0: ["NFR-BACKUP-007"],
-  "M0.5": ["NFR-SEC-007"],
+  M0: [
+    "NFR-BACKUP-007",
+  ],
+  "M0.5": [
+    "NFR-SEC-007",
+  ],
   M1: [
     "FR-ADM-002",
     "FR-ADM-004",
     "FR-AUDIT-001",
     "FR-AUTH-001",
     "FR-AUTH-002",
+    "FR-AUTH-004",
     "FR-AUTH-006",
     "FR-AUTH-007",
+    "FR-AUTH-008",
+    "FR-AUTH-009",
     "FR-AUTH-011",
     "FR-AUTH-012",
     "FR-NOTI-001",
     "FR-NOTI-002",
+    "FR-NOTI-003",
+    "FR-USER-001",
+    "FR-USER-003",
+    "FR-USER-004",
     "FR-USER-006",
     "FR-USER-008",
     "NFR-SEC-001",
@@ -131,7 +180,10 @@ const FIXTURE = {
   ],
   M2: [
     "FR-ADM-014",
+    "FR-COLL-001",
+    "FR-COLL-002",
     "FR-RES-001",
+    "FR-RES-002",
     "FR-RES-003",
     "FR-RES-004",
     "FR-RES-005",
@@ -142,13 +194,12 @@ const FIXTURE = {
     "FR-RES-014",
     "FR-RES-015",
     "FR-SRCH-001",
+    "FR-SRCH-002",
     "FR-SRCH-003",
     "FR-SRCH-004",
     "FR-SRCH-005",
     "FR-SRCH-006",
     "FR-SRCH-007",
-    "FR-COLL-001",
-    "FR-COLL-002",
     "NFR-A11Y-006",
   ],
   M3: [
@@ -161,6 +212,7 @@ const FIXTURE = {
     "FR-CLI-007",
     "FR-CLI-008",
     "FR-CLI-009",
+    "FR-CLI-010",
     "NFR-SEC-018",
   ],
   "M4.1": [
@@ -173,6 +225,32 @@ const FIXTURE = {
     "FR-TYPE-006",
     "FR-TYPE-007",
     "FR-TYPE-008",
+  ],
+  M5: [
+    "FR-ADM-001",
+    "FR-ADM-002",
+    "FR-ADM-003",
+    "FR-ADM-004",
+    "FR-ADM-005",
+    "FR-ADM-006",
+    "FR-ADM-007",
+    "FR-ADM-008",
+    "FR-ADM-009",
+    "FR-ADM-010",
+    "FR-ADM-011",
+    "FR-ADM-012",
+    "FR-ADM-013",
+    "FR-ADM-014",
+    "FR-ADM-015",
+    "FR-ADM-016",
+    "FR-AUDIT-002",
+    "FR-COLL-003",
+    "FR-COLL-004",
+    "FR-COLL-005",
+    "FR-COLL-006",
+    "FR-RES-009",
+    "FR-USER-002",
+    "FR-USER-007",
   ],
   "M4.2": [
     "FR-FILE-001",
@@ -188,6 +266,7 @@ const FIXTURE = {
     "FR-GH-005",
     "FR-GH-006",
     "FR-GH-007",
+    "FR-GH-008",
     "FR-RES-008",
     "FR-RES-012",
     "NFR-BACKUP-007",
@@ -306,10 +385,11 @@ function loadCorpus() {
 const doc = readFileSync(ROADMAP, "utf8");
 const phaseMap = phasesByMilestone(doc);
 const corpus = loadCorpus();
+const requirements = loadRequirements();
 
 const args = process.argv.slice(2);
 /** 끝난 페이즈의 마일스톤 — 새 페이즈를 닫을 때 여기에 더한다 */
-const DONE = ["M0", "M0.5", "M1", "M2", "M3", "M4.1", "M4.2"];
+const DONE = ["M0", "M0.5", "M1", "M2", "M3", "M4.1", "M4.2", "M5"];
 
 /**
  * `--all` 은 문서의 마일스톤 «절»에서 뽑습니다. 페이즈 목록표(7.11)에서 뽑으면
@@ -446,6 +526,65 @@ if (missingTotal > 0) {
   );
 }
 
+/* ────────────────────────────────────────────────────────────────────────
+ * 차집합 — **어느 작업표에도 없는 요구사항** (`OPEN-017` 해소)
+ *
+ * 위의 검사는 「작업표에 있는데 코드에 없는 것」을 봅니다. 그 반대 방향,
+ * 「대장에 있는데 **어느 작업표에도 없는 것**」은 아무도 안 봤습니다 —
+ * 번호를 한 행에서 빼고 아무 데도 안 넣으면 조용히 사라졌습니다.
+ *
+ * 실측: 그 상태가 **15건**이었고 그중 `P0` 가 **넷**이었습니다. 여덟 페이즈
+ * 동안 「없다」는 사실조차 보고되지 않았습니다.
+ *
+ * `--all` 이나 인자 없이(=`DONE` 전체) 돌 때만 봅니다. 마일스톤 하나만
+ * 지정한 실행에서 「나머지가 다 빠졌다」고 말하면 소음입니다.
+ * ──────────────────────────────────────────────────────────────────────── */
+let orphanFail = 0;
+if (!args.some((a) => /^M/.test(a))) {
+  const owned = new Set();
+  for (const m of allMilestones) {
+    for (const item of parseWorkTable(doc, m) ?? []) {
+      for (const id of item.ids) owned.add(id);
+    }
+  }
+
+  const orphans = [...requirements.values()].filter((r) => !owned.has(r.id));
+  if (requirements.size !== EXPECTED_REQUIREMENTS) {
+    console.log(
+      `\n✗ 요구사항 대장(REQ-03)을 ${requirements.size}건 읽었습니다 — 기대는 ${EXPECTED_REQUIREMENTS}건입니다.\n` +
+        `  요구사항을 더하거나 폐기했다면 \`EXPECTED_REQUIREMENTS\` 를 고치십시오.\n` +
+        `  아니라면 표 서식이 바뀌어 **일부만 읽히고 있는** 것입니다 — 그 상태의 초록은 거짓입니다.`
+    );
+    broken++;
+  } else if (orphans.length > 0) {
+    const byP = { P0: [], P1: [], P2: [] };
+    for (const o of orphans) (byP[o.priority] ??= []).push(o);
+
+    console.log(
+      `\n어느 작업표에도 없는 요구사항 ${orphans.length}건 (대장 ${requirements.size}건 기준)`
+    );
+    for (const p of Object.keys(byP).sort()) {
+      if (byP[p].length === 0) continue;
+      console.log(`  ${p} — ${byP[p].length}건`);
+      for (const o of byP[p]) {
+        const cited = corpus.some((f) => f.code.includes(o.id));
+        console.log(`    · ${o.id} ${o.name}${cited ? " (코드에는 있음 — 번호만 작업표에서 빠졌다)" : ""}`);
+      }
+    }
+    /*
+     * **`P0` 가 하나라도 있으면 실패입니다.** `P1`·`P2` 는 「나중에」가 정당한
+     * 답일 수 있으므로 보고만 합니다 — 다만 **보이게** 합니다.
+     */
+    if (byP.P0.length > 0) {
+      console.log(
+        `\n✗ 그중 «필수»(P0)가 ${byP.P0.length}건입니다. ` +
+          `로드맵의 어느 작업표에든 넣으십시오 — 안 넣으면 이 검사가 영원히 못 봅니다.`
+      );
+      orphanFail = byP.P0.length;
+    }
+  }
+}
+
 /**
  * **파서가 깨진 것과 요구사항이 빠진 것을 나눠 셉니다.**
  * 둘 다 실패지만 고치는 사람이 다릅니다 — 앞은 문서/검사기, 뒤는 코드입니다.
@@ -457,4 +596,4 @@ if (broken > 0) {
   );
 }
 
-if (missingTotal > 0 || broken > 0) process.exit(1);
+if (missingTotal > 0 || broken > 0 || orphanFail > 0) process.exit(1);

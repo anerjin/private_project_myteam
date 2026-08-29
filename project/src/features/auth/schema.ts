@@ -30,6 +30,7 @@ export const usernameSchema = z
  * 「2종 이상」을 정규식 하나로 쓰면 읽을 수 없어서 세어서 판정합니다.
  * 오류 메시지가 어떤 조건에 걸렸는지 알려줘야 사용자가 고칠 수 있습니다.
  */
+/** 비밀번호 규칙 검증 (`FR-AUTH-004`) — 화면과 서버가 이 하나를 함께 본다 */
 export const passwordSchema = z
   .string()
   .min(10, "비밀번호는 10자 이상이어야 합니다.")

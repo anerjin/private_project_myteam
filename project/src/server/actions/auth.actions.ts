@@ -118,7 +118,7 @@ export async function signInAction(
   });
 }
 
-/** API-005 로그아웃 */
+/** API-005 로그아웃 (`FR-AUTH-009`) */
 export async function signOutAction(): Promise<void> {
   const session = await getSession();
   const token = await readSessionToken();
@@ -237,7 +237,7 @@ export async function refreshPendingAction(): Promise<void> {
   revalidatePath("/pending");
 }
 
-/** API-006 비밀번호 변경 */
+/** API-006 비밀번호 변경 (`FR-USER-003`) */
 export async function changePasswordAction(
   input: unknown
 ): Promise<ActionResult<void>> {

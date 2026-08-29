@@ -62,6 +62,8 @@ export function SiteHeader({
   actions?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  /** 팔레트에 친 말 — 「전체 검색」이 이 값을 `/search` 로 넘긴다 (`FR-SRCH-002`) */
+  const [query, setQuery] = useState("");
   const unread = notifications.filter((n) => !n.read).length;
 
   useEffect(() => {
@@ -144,11 +146,48 @@ export function SiteHeader({
 
       <ThemeToggle />
 
+      {/*
+        헤더 검색 (`FR-SRCH-002`) — 어느 화면에서든 `Ctrl+K`.
+
+        **팔레트가 아는 것은 최근 8건뿐입니다.** 전체를 실으면 1만 건이 매
+        요청 RSC 페이로드로 나갑니다. 그래서 여기서 못 찾은 것을 「결과가
+        없습니다」라고 말하면 **거짓**입니다 — 시스템에는 있는데 팔레트만
+        모르는 것입니다 (`DEC-044` 「0건은 증거가 아니다」와 같은 자리).
+
+        그래서 **「전체 검색」이 항상 맨 위에** 있습니다. 친 말을 그대로 들고
+        `/search` 로 넘겨, 팔레트가 모르는 것도 사람이 찾을 수 있게 합니다.
+      */}
       <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput placeholder="자료 제목 · 태그로 검색…" />
+        <CommandInput
+          placeholder="자료 제목 · 태그로 검색…"
+          value={query}
+          onValueChange={setQuery}
+        />
         <CommandList>
-          <CommandEmpty>결과가 없습니다.</CommandEmpty>
-          <CommandGroup heading="자료">
+          {query.trim() && (
+            <CommandGroup heading="전체 검색">
+              {/*
+                `forceMount` — cmdk 의 필터에 안 걸리고 **항상** 보입니다.
+                이 항목이 사라지면 「결과가 없습니다」만 남습니다.
+              */}
+              <CommandItem forceMount value={`__search__${query}`} asChild>
+                <Link
+                  href={`/search?q=${encodeURIComponent(query.trim())}`}
+                  onClick={() => {
+                    setOpen(false);
+                    setQuery("");
+                  }}
+                >
+                  <Search className="size-4" />
+                  <span className="truncate">
+                    «{query.trim()}» 를 전체 자료에서 찾기
+                  </span>
+                </Link>
+              </CommandItem>
+            </CommandGroup>
+          )}
+          <CommandEmpty>최근 자료 중에는 없습니다.</CommandEmpty>
+          <CommandGroup heading="최근 자료">
             {searchItems.map((item) => (
               <CommandItem key={item.id} value={item.keywords} asChild>
                 <Link href={item.href} onClick={() => setOpen(false)}>

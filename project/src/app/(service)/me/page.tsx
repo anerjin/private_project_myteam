@@ -41,7 +41,13 @@ export default async function MePage() {
     apiKeyService.listFor(session.userId),
     listSessions(session.userId),
     notify.listFor(session.userId, 20),
-    // 내가 등록한 자료 — 「내 활동」 탭 (FR-USER-005)
+    /*
+     * 내가 등록한 자료 — 「내 활동」 탭 (`FR-USER-004`).
+     *
+     * **번호가 `FR-USER-005` 로 적혀 있었습니다.** 005 는 「알림 설정」이고
+     * 그건 아직 없습니다 — 즉 안 만든 것의 번호가 코드에 있어서
+     * `check:fr` 이 그것을 「만들었다」로 셀 뻔했습니다 (`DEC-049` 의 함정).
+     */
     resourceService.list(
       { author: session.username, sort: "recent" },
       { kind: "cursor", size: 12 },
@@ -83,6 +89,7 @@ export default async function MePage() {
         </TabsContent>
 
         <TabsContent value="security" className="mt-4 space-y-4">
+          {/* 알림함 (`FR-NOTI-003`) 은 아래 「알림」 탭입니다 */}
           <ApiKeyPanel
             keys={keys.map((k) => ({
               id: k.id,
