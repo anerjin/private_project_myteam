@@ -51,6 +51,10 @@ export type AuditAction =
   | "RESOURCE_DELETE"
   | "RESOURCE_RESTORE"
   | "RESOURCE_PURGE"
+  // `P6` — 파일은 디스크에 남으므로 «누가 올렸고 누가 지웠는가»가 특히 필요하다
+  | "FILE_UPLOAD"
+  | "FILE_DELETE"
+  | "ARCHIVE_RUN"
   | "SETTING_UPDATE";
 
 export interface AuditInput {

@@ -17,6 +17,7 @@ import * as storage from "@/lib/storage";
 import type { Actor } from "@/server/auth/actor";
 import { hashPassword } from "@/server/auth/password";
 import "@/server/jobs";
+import * as fileService from "@/server/services/file.service";
 import * as jobService from "@/server/services/job.service";
 import * as resourceWrite from "@/server/services/resource.write";
 
@@ -278,6 +279,112 @@ async function run() {
     );
   }
 
+  console.log("\n★ 첨부 — 3중 검증 (NFR-SEC-009 · FR-FILE-004)");
+  {
+    const parsed = parseResourceInput({
+      type: "DEV_NOTE",
+      title: "첨부 검증용",
+      summary: "",
+      url: "",
+      body: "본문",
+      category: "",
+      tags: "",
+      noteKind: "TIP",
+    });
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.fieldErrors));
+    const res = await resourceWrite.create(actor, parsed.data);
+    madeResources.push(res.id);
+
+    const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const stream = (b: Buffer) =>
+      Readable.toWeb(Readable.from([b])) as ReadableStream<Uint8Array>;
+
+    // ① 허용 목록에 없는 확장자
+    let m = await msg(() =>
+      fileService.attach(actor, {
+        resourceId: res.id,
+        filename: "evil.exe",
+        contentType: "application/octet-stream",
+        body: stream(PNG),
+      })
+    );
+    check("허용하지 않는 확장자를 막는다", m.includes("받지 않습니다"), m);
+
+    // ② 확장자와 선언 MIME 이 어긋남
+    m = await msg(() =>
+      fileService.attach(actor, {
+        resourceId: res.id,
+        filename: "a.png",
+        contentType: "application/pdf",
+        body: stream(PNG),
+      })
+    );
+    check("확장자와 형식이 어긋나면 막는다", m.includes("맞지 않습니다"), m);
+
+    /*
+     * ③ **이름만 바꾼 파일.** 확장자·MIME 은 통과하지만 내용이 PNG 가 아닙니다 —
+     * 매직 넘버만 이걸 잡습니다. 셋을 다 보는 이유가 이 줄입니다.
+     */
+    m = await msg(() =>
+      fileService.attach(actor, {
+        resourceId: res.id,
+        filename: "fake.png",
+        contentType: "image/png",
+        body: stream(Buffer.from("MZ\x90\x00 실행파일입니다")),
+      })
+    );
+    check("이름만 바꾼 파일을 매직 넘버로 잡는다", m.includes("아닙니다"), m);
+
+    // ④ 정상 첨부
+    const att = await fileService.attach(actor, {
+      resourceId: res.id,
+      filename: "보고서.png",
+      contentType: "image/png",
+      body: stream(PNG),
+    });
+    check("정상 파일은 첨부된다", att.sizeBytes === PNG.length, `${att.sizeBytes}B`);
+    check("원본 이름이 그대로 남는다", att.originalName === "보고서.png");
+
+    const stored = await db.file.findUniqueOrThrow({
+      where: { id: att.id },
+      select: { storageKey: true },
+    });
+    madeKeys.push(stored.storageKey);
+    /*
+     * **사용자 파일명이 경로에 들어가지 않습니다** (`NFR-SEC-019`).
+     * 한글·공백·`..` 를 다루는 문제 전부가 «안 쓰면» 사라집니다.
+     */
+    check(
+      "저장 키에 원본 이름이 없다",
+      !stored.storageKey.includes("보고서"),
+      stored.storageKey
+    );
+    check("디스크에 실제로 있다", await storage.exists(stored.storageKey));
+
+    const list = await fileService.listFor(res.id);
+    check("목록에 나온다", list.length === 1 && list[0].id === att.id);
+
+    // ⑤ 삭제 — 연결이 끊기고 파일도 사라진다
+    await fileService.detach(actor, att.id);
+    check("첨부가 목록에서 빠진다", (await fileService.listFor(res.id)).length === 0);
+    check("고아 파일이 디스크에서 지워진다", !(await storage.exists(stored.storageKey)));
+
+    const stranger = await mkUser("stranger");
+    const att2 = await fileService.attach(actor, {
+      resourceId: res.id,
+      filename: "b.png",
+      contentType: "image/png",
+      body: stream(PNG),
+    });
+    const k2 = await db.file.findUniqueOrThrow({
+      where: { id: att2.id },
+      select: { storageKey: true },
+    });
+    madeKeys.push(k2.storageKey);
+    m = await msg(() => fileService.detach(actorOf(stranger), att2.id));
+    check("남의 첨부는 못 지운다", m.includes("권한이 없습니다"), m);
+  }
+
   console.log(`\n합계: 통과 ${pass} · 실패 ${fail}`);
 }
 
@@ -286,7 +393,16 @@ async function cleanup() {
   if (madeResources.length) {
     await db.resource.deleteMany({ where: { id: { in: madeResources } } });
   }
+  /*
+   * **파일을 먼저 지웁니다.** `files.uploaded_by` 가 `users` 를 가리키는데
+   * `onDelete` 가 없어(기본 `Restrict`) 사용자 삭제가 막힙니다 —
+   * `resource_files` 는 자료 삭제로 정리되지만 `files` 행은 남습니다.
+   */
   if (madeUsers.length) {
+    await db.resourceFile.deleteMany({
+      where: { file: { uploadedById: { in: madeUsers } } },
+    });
+    await db.file.deleteMany({ where: { uploadedById: { in: madeUsers } } });
     await db.user.deleteMany({ where: { id: { in: madeUsers } } });
   }
   await db.job.deleteMany({ where: { resourceId: null, type: "CHECK_LINK" } });

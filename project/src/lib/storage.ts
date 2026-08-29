@@ -90,7 +90,14 @@ export interface WriteResult {
 export async function writeStream(
   key: string,
   source: ReadableStream<Uint8Array> | NodeJS.ReadableStream,
-  maxBytes: number
+  maxBytes: number,
+  /**
+   * **첫 바이트를 보고 거부할 기회.** 매직 넘버 판정이 여기 들어옵니다
+   * (`NFR-SEC-009`) — 다 받은 뒤에 보면 이미 디스크를 쓴 뒤이고,
+   * 밖에서 미리 읽으면 그 청크가 스트림에서 사라집니다.
+   * 던지면 쓰다 말고 끊고 지웁니다.
+   */
+  verifyHead?: (head: Uint8Array) => void
 ): Promise<WriteResult> {
   const full = resolve(key);
   await mkdir(path.dirname(full), { recursive: true });
@@ -98,11 +105,16 @@ export async function writeStream(
   const hash = createHash("sha256");
   let size = 0;
   let tooBig = false;
+  let headSeen = false;
 
   const counting = async function* (
     chunks: AsyncIterable<Uint8Array>
   ): AsyncGenerator<Uint8Array> {
     for await (const chunk of chunks) {
+      if (!headSeen) {
+        headSeen = true;
+        verifyHead?.(chunk);
+      }
       size += chunk.byteLength;
       if (size > maxBytes) {
         tooBig = true;
@@ -127,7 +139,8 @@ export async function writeStream(
   } catch (e) {
     // **반쯤 쓴 파일을 남기지 않습니다** — 다음 사람이 정상 파일로 오해합니다
     await rm(full, { force: true });
-    if (tooBig) throw e;
+    // 크기 초과와 «판정 거부»는 사용자가 고칠 수 있는 오류라 그대로 올린다
+    if (tooBig || e instanceof AppError) throw e;
     throw new AppError("INTERNAL_ERROR", "파일을 저장하지 못했습니다.");
   }
 
