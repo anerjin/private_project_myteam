@@ -1,4 +1,4 @@
-import { Eye, FolderPlus, Pencil } from "lucide-react";
+import { Eye, Pencil } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { canEditResource } from "@/server/auth/actor";
 import { requireActiveUser, toActor } from "@/server/auth/guards";
+import { AddToCollection } from "@/features/collections/components/add-to-collection";
 import { Attachments } from "@/features/resources/components/attachments";
 import { DeleteResourceDialog } from "@/features/resources/components/delete-resource-dialog";
 import { ExternalLinkButton } from "@/features/resources/components/external-link-button";
@@ -25,6 +26,7 @@ import {
 } from "@/features/resources/content-types";
 import { ResourceActions } from "@/features/resources/components/resource-actions";
 import { AppError } from "@/lib/errors";
+import * as collectionService from "@/server/services/collection.service";
 import * as fileService from "@/server/services/file.service";
 import * as relationService from "@/server/services/relation.service";
 import * as resourceService from "@/server/services/resource.service";
@@ -79,10 +81,14 @@ export default async function ResourceDetailPage({
     : undefined;
   const toc = resource.body ? extractToc(resource.body) : [];
   const canEdit = canEditResource(await toActor(session), resource.author.id);
-  const [related, attachments, linked] = await Promise.all([
+
+  const actor = await toActor(session);
+  const [related, attachments, linked, collections] = await Promise.all([
     resourceService.findRelated(resource.id, resource.tags),
     fileService.listFor(resource.id),
     relationService.listFor(resource.id),
+    // 「어디에 담을 수 있고 이미 담겼는가」를 한 번에 (`FR-COLL-004`)
+    collectionService.listForPicker(actor, resource.id),
   ]);
 
   return (
@@ -111,11 +117,10 @@ export default async function ResourceDetailPage({
               bookmarked={resource.bookmarked ?? false}
               bookmarkCount={resource.bookmarkCount}
             />
-            {/* 컬렉션은 아직 없다 — 「있는데 안 된다」보다 disabled 가 정직하다 */}
-            <Button variant="outline" size="sm" disabled>
-              <FolderPlus className="size-4" />
-              컬렉션에 담기
-            </Button>
+            <AddToCollection
+              resourceId={resource.id}
+              collections={collections}
+            />
             {canEdit ? (
               <div className="ml-auto flex gap-2">
                 <Button variant="ghost" size="sm" asChild>

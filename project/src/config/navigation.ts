@@ -40,6 +40,13 @@ export const serviceLibraryGroup: NavGroup = {
   ],
 };
 
+/**
+ * 관리 메뉴 — **전부 `ADMIN`** 입니다 (`DEC-057`).
+ *
+ * 등급별로 거르는 장치를 잠깐 두었다가 뺐습니다. `EDITOR` 를 관리 영역에
+ * 들이지 않기로 하면서 **거를 것이 없어졌고**, 아무것도 안 하는 장치를
+ * 남겨 두면 다음 사람이 「등급별 메뉴가 있다」고 믿습니다.
+ */
 export const adminNav: NavGroup[] = [
   {
     items: [{ title: "관리자 홈", href: "/admin", icon: LayoutDashboard }],
@@ -93,8 +100,4 @@ export const BREADCRUMB_ROOT = {
   admin: { href: "/admin", label: "관리자 홈" },
 } as const;
 
-export const adminEntry: NavItem = {
-  title: "관리자",
-  href: "/admin",
-  icon: ShieldCheck,
-};
+export const adminEntry: NavItem = { title: "관리자", href: "/admin", icon: ShieldCheck };

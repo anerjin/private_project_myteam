@@ -107,17 +107,41 @@ async function run() {
   try {
     await db.category.updateMany({ data: { isActive: false } });
 
+    /*
+     * ## 관리 화면은 **끈 것도 계속 보여줍니다** (`P8`, `FR-ADM-012`)
+     *
+     * 전에는 여기서 「사라졌는가」를 봤습니다. 그때는 관리 화면이 `listTree`
+     * (사용자용, `isActive` 를 거름)를 썼기 때문입니다. **그건 사실 결함이었습니다** —
+     * 끈 분류가 화면에서 사라지면 다시 켤 방법이 없어서 「끄기」가 사실상
+     * 「지우기」였습니다. 지금은 `listAllForAdmin` 을 쓰고 **숨김 표시**를 답니다.
+     *
+     * 그래서 이 절의 질문을 옮깁니다: 「관리 화면에서 사라지는가」가 아니라
+     * **「사용자 화면에서 사라지는가」**입니다. 원래 묻고 싶었던 것
+     * — *이 값이 DB 에서 오는가* — 은 그대로입니다.
+     */
     const empty = await get("/admin/taxonomy", cookie);
     check("화면은 그대로 열린다", empty.status === 200, `HTTP ${empty.status}`);
     check(
-      "빈 상태 문구가 나온다",
-      empty.body.includes("등록된 카테고리가 없습니다"),
-      "이 문구가 없으면 데이터가 DB 에서 오지 않는 것이다"
+      "관리 화면에는 남는다",
+      empty.body.includes(HARDCODED_LABELS[0]!),
+      "안 남으면 끈 분류를 다시 켤 방법이 없다"
     );
+    check(
+      "숨김 표시가 붙는다",
+      empty.body.includes("숨김"),
+      "코드 상수였다면 «숨김»이라는 상태 자체가 없다"
+    );
+
+    /*
+     * **사용자 화면에서는 사라져야 합니다.** 여기가 「DB 에서 오는가」의
+     * 진짜 증거입니다 — 하드코딩이었다면 DB 를 어떻게 만져도 안 사라집니다.
+     */
+    const browse = await get("/resources", cookie);
+    check("자료 목록이 열린다", browse.status === 200, `HTTP ${browse.status}`);
     for (const label of [...HARDCODED_LABELS, ...DB_ONLY_LABELS]) {
       check(
-        `«${label}» 이 화면에서 사라졌다`,
-        !empty.body.includes(label),
+        `목록 필터에서 «${label}» 이 사라졌다`,
+        !browse.body.includes(label),
         "남아 있으면 그 값은 DB 가 아니라 코드에서 온다"
       );
     }

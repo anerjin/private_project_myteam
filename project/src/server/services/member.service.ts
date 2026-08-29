@@ -55,9 +55,14 @@ export type Transition =
   | { kind: "APPROVE" }
   | { kind: "REJECT"; reason: string }
   | { kind: "REOPEN" }
+  /** 정지 (`FR-ADM-005`) — 세션 만료는 아래 「모든 전이가 세션을 끊습니다」 */
   | { kind: "SUSPEND"; reason: string }
+  /** 정지 해제 (`FR-ADM-005`) */
   | { kind: "REACTIVATE" }
-  | { kind: "CHANGE_ROLE"; role: Role };
+  /** `MEMBER` ↔ `EDITOR` ↔ `ADMIN` (`FR-ADM-006`) */
+  | { kind: "CHANGE_ROLE"; role: Role }
+  /** 강제 탈퇴 (`FR-ADM-008`) */
+  | { kind: "WITHDRAW"; reason: string };
 
 interface TransitionSpec {
   /** 이 전이가 허용되는 «현재» 상태 */
@@ -129,6 +134,26 @@ const SPECS: Record<Transition["kind"], TransitionSpec> = {
     action: "USER_ROLE_CHANGE",
     label: "역할 변경",
   },
+  /**
+   * 강제 탈퇴 (`FR-ADM-008`).
+   *
+   * **API 키를 따로 폐기하지 않습니다.** `verifyKey` 가 매 요청 소유자
+   * `status = ACTIVE` 를 보므로(`DEC-037`) 그 순간부터 전부 무효입니다.
+   * 여기서 또 폐기하면 **같은 규칙이 두 곳**에 생기고, 새 상태를 추가한 사람이
+   * 한쪽을 빠뜨립니다 — `DEC-037` 이 「폐기하지 않고 매 요청 판정」으로 정한 이유입니다.
+   *
+   * 익명화는 여기서 하지 않습니다 — `DEC-021` 은 **1년 뒤** 보존 배치의 몫으로
+   * 정했습니다. 즉시 지우면 「누가 무엇을 했는가」가 그 자리에서 사라집니다.
+   *
+   * 알림도 만들지 않습니다 (`DEC-041`) — 탈퇴한 계정은 로그인이 막혀
+   * 알림함에 영원히 도달하지 못합니다.
+   */
+  WITHDRAW: {
+    from: TRANSITION_FROM.WITHDRAW,
+    next: "WITHDRAWN",
+    action: "USER_WITHDRAW",
+    label: "강제 탈퇴",
+  },
 };
 
 export interface TransitionResult {
@@ -180,6 +205,33 @@ export async function countPending(): Promise<number> {
 export async function nameById(id: string): Promise<string | null> {
   const u = await db.user.findUnique({ where: { id }, select: { name: true } });
   return u?.name ?? null;
+}
+
+/**
+ * 회원 상세의 「활동 내역」 (`FR-ADM-003`).
+ *
+ * **삭제한 자료는 빼고 셉니다.** 「등록한 자료 12건」이라고 써 놓고 목록에
+ * 8건만 있으면 관리자는 어느 쪽이 맞는지 알 수 없습니다 — 화면이 세는
+ * 것과 보여주는 것이 같아야 합니다.
+ *
+ * 네 숫자를 한 번에 묻습니다. 카드마다 물으면 상세 화면이 질의 넷을 더 냅니다.
+ */
+export async function activityFor(userId: string): Promise<{
+  resources: number;
+  collections: number;
+  bookmarks: number;
+  apiKeys: number;
+}> {
+  const [resources, collections, bookmarks, apiKeys] = await Promise.all([
+    db.resource.count({ where: { authorId: userId, deletedAt: null } }),
+    db.collection.count({ where: { ownerId: userId, deletedAt: null } }),
+    db.bookmark.count({ where: { userId } }),
+    // **「지금 쓸 수 있는」 키**만 — 폐기·만료된 것을 세면 강제 폐기 버튼이 거짓말한다
+    db.apiKey.count({
+      where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+    }),
+  ]);
+  return { resources, collections, bookmarks, apiKeys };
 }
 
 export async function countAll(): Promise<number> {

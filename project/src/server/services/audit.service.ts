@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@prisma/client";
 
+import type { AuditAction } from "@/features/audit/actions";
 import { db } from "@/lib/db";
 import type { Actor } from "@/server/auth/actor";
 
@@ -27,35 +28,14 @@ import type { Actor } from "@/server/auth/actor";
  * **비밀번호·API 키 원문은 절대 넣지 않습니다** (`NFR-PRIV-004`).
  */
 
-export type AuditAction =
-  | "USER_SIGNUP"
-  | "USER_SIGNIN"
-  | "USER_SIGNIN_FAILED"
-  /** 비밀번호는 맞았지만 계정 상태로 막힌 경우 — 자격 증명 유출 신호 */
-  | "USER_SIGNIN_BLOCKED"
-  | "USER_SIGNOUT"
-  | "USER_APPROVE"
-  | "USER_REJECT"
-  /** 거부를 되돌려 재검토 대기로 (DEC-042) */
-  | "USER_REOPEN"
-  | "USER_SUSPEND"
-  | "USER_REACTIVATE"
-  | "USER_ROLE_CHANGE"
-  | "USER_PASSWORD_CHANGE"
-  | "USER_PASSWORD_RESET"
-  | "USER_WITHDRAW"
-  | "APIKEY_CREATE"
-  | "APIKEY_REVOKE"
-  | "RESOURCE_CREATE"
-  | "RESOURCE_UPDATE"
-  | "RESOURCE_DELETE"
-  | "RESOURCE_RESTORE"
-  | "RESOURCE_PURGE"
-  // `P6` — 파일은 디스크에 남으므로 «누가 올렸고 누가 지웠는가»가 특히 필요하다
-  | "FILE_UPLOAD"
-  | "FILE_DELETE"
-  | "ARCHIVE_RUN"
-  | "SETTING_UPDATE";
+/**
+ * 행위 목록은 `features/audit/actions.ts` 에 있습니다.
+ *
+ * **여기 두면 화면이 못 읽습니다** (`server-only`). 필터의 선택지를 화면에
+ * 다시 적으면 행위를 추가한 사람이 한쪽을 빠뜨리고, 그 행위는 **기록은 되는데
+ * 필터로는 영원히 못 찾는** 상태가 됩니다.
+ */
+export { AUDIT_ACTIONS, type AuditAction } from "@/features/audit/actions";
 
 export interface AuditInput {
   action: AuditAction;
@@ -123,20 +103,66 @@ export interface AuditPage {
 }
 
 /**
+ * 이 목록이 무엇으로 좁혀지는가 (`FR-AUDIT-002`: 기간·행위자·행위 유형).
+ *
+ * **`targetId` 는 요구사항에 없지만 여기 있습니다** — 회원 상세의
+ * 「상태 변경 이력」(`FR-ADM-003`)이 *그 회원에게 일어난 일*을 물어야 하고,
+ * 그것은 같은 표를 다른 각도로 보는 것뿐입니다. 화면마다 질의를 따로 쓰면
+ * 감사 로그를 읽는 경로가 둘이 되고, 한쪽만 인가를 갖게 됩니다.
+ */
+export interface AuditFilter {
+  /** 행위자 아이디 (`actor_username` 스냅샷과 정확히 일치) */
+  actor?: string;
+  action?: AuditAction;
+  via?: "WEB" | "MCP";
+  /** 이 날부터 (`YYYY-MM-DD`, 포함) */
+  from?: string;
+  /** 이 날까지 (`YYYY-MM-DD`, **그날 전체를 포함**) */
+  to?: string;
+  /** 이 대상에게 일어난 일만 */
+  targetId?: string;
+}
+
+/**
+ * 필터 → `where`.
+ *
+ * **`to` 는 그날 «끝»까지입니다.** `2026-08-29` 를 `<= 2026-08-29T00:00Z` 로
+ * 읽으면 그날 하루가 통째로 빠지고, 관리자는 「오늘 것이 안 보인다」를 겪습니다 —
+ * 날짜 한 칸을 넣었을 때 0건이 나오는 필터는 **없는 것보다 나쁩니다.**
+ */
+function toWhere(filter: AuditFilter): Prisma.AuditLogWhereInput {
+  const createdAt: Prisma.DateTimeFilter = {};
+  if (filter.from) createdAt.gte = new Date(`${filter.from}T00:00:00.000Z`);
+  if (filter.to) createdAt.lte = new Date(`${filter.to}T23:59:59.999Z`);
+
+  return {
+    ...(filter.actor ? { actorUsername: filter.actor } : {}),
+    ...(filter.action ? { action: filter.action } : {}),
+    ...(filter.via ? { via: filter.via } : {}),
+    ...(filter.targetId ? { targetId: filter.targetId } : {}),
+    ...(createdAt.gte || createdAt.lte ? { createdAt } : {}),
+  };
+}
+
+/**
  * 감사 로그 조회 (`FR-AUDIT-002`).
  *
  * **P3 가 감사 로그를 트랜잭션 필수로 만들었는데 읽을 방법이 없었습니다** —
  * 두 페이즈 동안 write-only 였습니다. 알림 행에 대해 「읽는 화면 없이 쓰지
  * 않는다」고 정한 것과 같은 상황이라 여기서 읽기 경로를 붙입니다.
  *
- * 행위자·기간 필터와 CSV 내보내기는 `P8` 입니다 — 여기는 **목록 + 페이징**까지.
+ * 필터는 **같은 `where` 를 세는 데도 씁니다** — 총 건수가 필터를 안 보면
+ * 「120건 중 3페이지」인데 2페이지가 비는 일이 생깁니다.
  */
 export async function list(page: {
   page: number;
   size: number;
+  filter?: AuditFilter;
 }): Promise<AuditPage> {
+  const where = toWhere(page.filter ?? {});
   const [items, total] = await Promise.all([
     db.auditLog.findMany({
+      where,
       select: {
         id: true,
         actorUsername: true,
@@ -152,7 +178,7 @@ export async function list(page: {
       skip: (page.page - 1) * page.size,
       take: page.size,
     }),
-    db.auditLog.count(),
+    db.auditLog.count({ where }),
   ]);
 
   return {
@@ -164,6 +190,26 @@ export async function list(page: {
     })),
     total,
   };
+}
+
+/**
+ * 행위자 필터의 선택지 (`FR-AUDIT-002`).
+ *
+ * **`users` 가 아니라 `audit_logs` 에서 뽑습니다.** 로그는 `actor_username` 을
+ * **스냅샷으로** 갖고 있어(`DEC-021` 익명화 대비) 탈퇴·익명화된 사람의 기록도
+ * 남습니다 — 회원 목록에서 뽑으면 그 사람들이 선택지에서 사라지고,
+ * **정확히 그들의 기록을 찾고 싶을 때** 필터가 답을 못 냅니다.
+ *
+ * 계정 50개 이하(`REQ-01 · 1.7`)라 `distinct` 한 번이면 됩니다.
+ */
+export async function listActors(): Promise<string[]> {
+  const rows = await db.auditLog.findMany({
+    where: { actorUsername: { not: null } },
+    distinct: ["actorUsername"],
+    select: { actorUsername: true },
+    orderBy: { actorUsername: "asc" },
+  });
+  return rows.flatMap((r) => (r.actorUsername ? [r.actorUsername] : []));
 }
 
 function toRow(actor: Actor, input: AuditInput) {

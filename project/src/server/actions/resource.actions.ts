@@ -176,3 +176,47 @@ export async function deleteResourceAction(
     return ok(undefined);
   });
 }
+
+/**
+ * API-034 자료 복구 (`FR-RES-008`, `FR-ADM-011`).
+ *
+ * `deleteResourceAction` 과 **같은 권한 규칙**을 지납니다 — service 가
+ * 판정합니다. 되살리기가 삭제보다 느슨하면 「내가 지운 것을 남이 되살린다」가
+ * 됩니다.
+ */
+export async function restoreResourceAction(
+  resourceId: unknown
+): Promise<ActionResult<void>> {
+  return guard(async () => {
+    const actor = await requireActor();
+    const parsed = idSchema.safeParse(resourceId);
+    if (!parsed.success) return validationError(parsed.error);
+
+    await resourceService.restore(actor, parsed.data);
+
+    revalidatePath("/admin/resources");
+    revalidatePath("/resources");
+    return ok(undefined);
+  });
+}
+
+/**
+ * API-035 자료 영구 삭제 (`FR-RES-009`, `FR-ADM-011`).
+ *
+ * **되돌릴 수 없습니다.** 권한은 `ADMIN` 이고 그 판정도 service 가 합니다 —
+ * 여기서 한 번 더 보면 규칙이 두 곳에 생기고, 한쪽만 고치는 날이 옵니다.
+ */
+export async function purgeResourceAction(
+  resourceId: unknown
+): Promise<ActionResult<void>> {
+  return guard(async () => {
+    const actor = await requireActor();
+    const parsed = idSchema.safeParse(resourceId);
+    if (!parsed.success) return validationError(parsed.error);
+
+    await resourceService.purge(actor, parsed.data);
+
+    revalidatePath("/admin/resources");
+    return ok(undefined);
+  });
+}

@@ -1,9 +1,6 @@
-import { GripVertical, Merge, Plus } from "lucide-react";
 import type { Metadata } from "next";
 
-import { TypeBadge } from "@/features/resources/components/badges";
 import { PageHeader } from "@/components/common/page-header";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,24 +8,35 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CategoryManager } from "@/features/admin/components/category-manager";
+import { getContentType } from "@/features/resources/content-types";
+import { TagManager } from "@/features/admin/components/tag-manager";
+import { TypeSettings } from "@/features/admin/components/type-settings";
+import { requireRole } from "@/server/auth/guards";
 import * as categoryService from "@/server/services/category.service";
 import * as contentTypeService from "@/server/services/content-type.service";
 import * as resourceService from "@/server/services/resource.service";
-import { requireRole } from "@/server/auth/guards";
+import * as tagService from "@/server/services/tag.service";
 
 export const metadata: Metadata = { title: "분류 · 타입 관리" };
 
 /**
- * SCR-231 분류 · 콘텐츠 타입 관리
+ * SCR-231 분류 · 콘텐츠 타입 관리 (`FR-ADM-012`·`013`·`014`).
+ *
+ * ## `ADMIN` 전용입니다 (`DEC-057`, `OPEN-016` 해소)
+ *
+ * `REQ-02` 권한 매트릭스는 「카테고리 생성」·「카테고리 체계 관리」를
+ * `EDITOR` 에 주는데, 이 화면을 `EDITOR` 에게 열어 봤더니 **관리 영역 전체의
+ * 차단이 약해졌습니다** — 레이아웃이 먼저 스트리밍돼 `ADMIN` 전용 화면이
+ * `307` 대신 `200 + 클라이언트 리다이렉트`가 됐습니다(실측). 그래서
+ * 매트릭스 쪽을 고쳤습니다. `EDITOR` 는 **자료를 등록·수정하며 태그를
+ * 만드는 일**을 계속하고, 「정리」만 `ADMIN` 입니다.
  *
  * > **이 파일에 `SUBCATEGORIES` 상수가 있었습니다.** `src/mocks/` 를 지우고
  * > 「목 부채 0」이라고 셌지만 그 게이트는 **import 형태**를 셌고, 목은 죽지 않고
- * > 화면 파일로 이사했을 뿐이었습니다. 그동안 `categories` 테이블에는
- * > **27행이 이미 있었고**, 하드코딩한 하위분류는 slug 가 DB 와 아예 달라서
- * > 화면에서 본 「사내 › 규약」으로 필터를 걸면 0건이 나왔습니다.
- * > 확인하는 법은 `scripts/verify-empty-db.ts` 입니다 — **DB 를 비우면 화면도 빕니다.**
+ * > 화면 파일로 이사했을 뿐이었습니다. 확인하는 법은
+ * > `scripts/verify-empty-db.ts` 입니다 — **DB 를 비우면 화면도 빕니다.**
  */
 export default async function AdminTaxonomyPage() {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
@@ -39,14 +47,15 @@ export default async function AdminTaxonomyPage() {
    * 메모리에서 집계하게 됩니다 — `tags.usage_count` 가 그 일을 하려고 있는
    * 표시용 캐시이고, 등록·수정이 세어서 씁니다.
    */
-  const [tagCounts, typeCounts, categoryCounts, typeSettings, categories] =
+  const [tags, unusedCount, typeCounts, typeSettings, categories] =
     await Promise.all([
-      resourceService.topTags(200),
+      tagService.listAll(),
+      tagService.countUnused(),
       resourceService.countByType(),
-      resourceService.countByCategory(),
       // 운영 설정은 DB, 표현은 코드 (DEC-032) — 병합은 service 가 한다
       contentTypeService.listSettings(),
-      categoryService.listTree(),
+      // 관리 화면은 **끈 분류도** 봅니다 — 안 그러면 다시 켤 방법이 없습니다
+      categoryService.listAllForAdmin(),
     ]);
 
   return (
@@ -59,146 +68,64 @@ export default async function AdminTaxonomyPage() {
       <Tabs defaultValue="category">
         <TabsList>
           <TabsTrigger value="category">카테고리</TabsTrigger>
-          <TabsTrigger value="tag">태그 ({tagCounts.length})</TabsTrigger>
+          <TabsTrigger value="tag">태그 ({tags.length})</TabsTrigger>
           <TabsTrigger value="type">콘텐츠 타입</TabsTrigger>
         </TabsList>
 
         <TabsContent value="category" className="mt-4">
           <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base">카테고리 트리</CardTitle>
-                <CardDescription>
-                  자료당 1개. 깊이는 2단계까지입니다.
-                </CardDescription>
-              </div>
-              {/* 태그 병합과 같은 이유로 disabled 다 — 「있는데 안 된다」보다 정직하다 */}
-              <Button size="sm" variant="outline" disabled>
-                <Plus className="size-4" />
-                대분류 추가
-              </Button>
+            <CardHeader>
+              <CardTitle className="text-base">카테고리 트리</CardTitle>
+              <CardDescription>
+                자료당 1개. 깊이는 2단계까지입니다. 지울 때 딸린 자료를 어디로
+                옮길지 고릅니다.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {categories.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  등록된 카테고리가 없습니다.
-                </p>
-              ) : (
-                categories.map((c) => (
-                  <div key={c.slug} className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <GripVertical className="text-muted-foreground size-4" />
-                      <span className="font-medium">{c.name}</span>
-                      <code className="text-muted-foreground text-xs">
-                        {c.slug}
-                      </code>
-                      <span className="text-muted-foreground ml-auto text-xs">
-                        {categoryCounts[c.slug] ?? 0}건
-                      </span>
-                    </div>
-                    <div className="ml-6 flex flex-wrap gap-1.5">
-                      {c.children.map((s) => (
-                        <span
-                          key={s.slug}
-                          className="bg-muted inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs"
-                        >
-                          {s.name}
-                          <span className="text-muted-foreground tabular-nums">
-                            {categoryCounts[s.slug] ?? 0}
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
+            <CardContent>
+              <CategoryManager categories={categories} canEdit />
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="tag" className="mt-4">
           <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base">태그</CardTitle>
-                <CardDescription>
-                  CLI 수집이 늘면 유사 태그가 빠르게 늘어납니다. 주기적으로
-                  병합하세요.
-                </CardDescription>
-              </div>
-              {/* 병합은 아직 없다 — 「있는데 안 된다」보다 disabled 가 정직하다 */}
-              <Button size="sm" variant="outline" disabled>
-                <Merge className="size-4" />
-                태그 병합
-              </Button>
+            <CardHeader>
+              <CardTitle className="text-base">태그</CardTitle>
+              <CardDescription>
+                CLI 수집이 늘면 유사 태그가 빠르게 늘어납니다. 주기적으로
+                병합하세요.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              {tagCounts.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  아직 태그가 없습니다. 자료를 등록하면 여기에 모입니다.
-                </p>
-              ) : (
-                tagCounts.map((t) => (
-                  <span
-                    key={t.slug}
-                    className="bg-muted inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm"
-                  >
-                    #{t.slug}
-                    <span className="text-muted-foreground text-xs tabular-nums">
-                      {t.count}
-                    </span>
-                  </span>
-                ))
-              )}
+            <CardContent>
+              <TagManager tags={tags} unusedCount={unusedCount} canEdit />
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="type" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">콘텐츠 타입</CardTitle>
-              <CardDescription>
-                타입의 <b>필드 구조는 코드</b>에 있습니다. 여기서는 노출 설정만
-                바꿉니다.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="divide-y">
-              {typeSettings.map((t) => (
-                <div
-                  key={t.code}
-                  className="flex flex-wrap items-center gap-4 py-3"
-                >
-                  <GripVertical className="text-muted-foreground size-4" />
-                  <TypeBadge type={t.code} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm">{t.description}</p>
-                    <code className="text-muted-foreground text-xs">
-                      {t.code}
-                    </code>
-                  </div>
-                  <span className="text-muted-foreground text-xs">
-                    {typeCounts[t.code] ?? 0}건
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground text-xs">
-                      사이드바
-                    </span>
-                    <Switch defaultChecked={t.showInNav} disabled />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground text-xs">활성</span>
-                    {/*
-                      `content_type_settings` 저장은 아직 없습니다 (`FR-ADM-014`).
-                      켜고 끌 수 있으면 저장됐다고 믿게 되므로 `disabled` 로 둡니다 —
-                      지금 값은 레지스트리의 상수입니다 (`DEC-032`: 표현은 코드).
-                    */}
-                    <Switch defaultChecked={t.isActive} disabled />
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">콘텐츠 타입</CardTitle>
+                <CardDescription>
+                  타입의 <b>필드 구조는 코드</b>에 있습니다. 여기서는 노출
+                  설정만 바꿉니다.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <TypeSettings
+                  types={typeSettings.map((t) => ({
+                    code: t.code,
+                    label: t.label,
+                    // 색은 레지스트리가 압니다 — 서버가 꺼내 넘깁니다 (`DEC-032`)
+                    badgeClass: getContentType(t.code).badgeClass,
+                    description: t.description,
+                    isActive: t.isActive,
+                    showInNav: t.showInNav,
+                    count: typeCounts[t.code] ?? 0,
+                  }))}
+                />
+              </CardContent>
+            </Card>
         </TabsContent>
       </Tabs>
     </>

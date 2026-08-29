@@ -1,6 +1,9 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import { isAdmin, type Actor } from "@/server/auth/actor";
+import * as audit from "@/server/services/audit.service";
 import type { CategoryChoice, CategoryNode } from "@/types";
 
 /**
@@ -88,4 +91,366 @@ export async function listChoices(): Promise<CategoryChoice[]> {
     { slug: c.slug, name: c.name, depth: 0 as const },
     ...c.children.map((s) => ({ slug: s.slug, name: s.name, depth: 1 as const })),
   ]);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * 쓰기 — 카테고리 관리 (`FR-ADM-012`)
+ *
+ * ## 누가 할 수 있는가 — `ADMIN` (`DEC-057`, `OPEN-016` 해소)
+ *
+ * `REQ-02` 권한 매트릭스는 「카테고리 생성」·「카테고리 체계 관리」를
+ * **`EDITOR`** 로 두었고, 편집 화면(`SCR-231`)은 `ADMIN` 전용이었습니다 —
+ * 둘이 어긋나 있었습니다. **매트릭스 쪽을 고쳤습니다.**
+ *
+ * 문을 여는 쪽도 해 봤는데, 관리 영역 전체의 차단이 약해졌습니다:
+ * 그룹 레이아웃을 `EDITOR` 로 낮추면 `ADMIN` 전용 화면의 `redirect()` 가
+ * **`307` 이 아니라 `200` + 클라이언트 리다이렉트**가 됩니다(레이아웃이 먼저
+ * 스트리밍되므로). 한 탭을 위해 그 보증을 바꾸지 않습니다.
+ *
+ * `EDITOR` 는 **자료를 등록·수정하며 분류를 «쓰는» 일**을 계속합니다 —
+ * 못 하는 것은 체계를 «고치는» 일뿐입니다.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** 깊이 2단계 상한 (`FR-SRCH-006`). DB 트리거도 같은 것을 막습니다 */
+const MAX_DEPTH = 2;
+
+function assertAdmin(actor: Actor): void {
+  if (!isAdmin(actor)) {
+    throw new AppError("FORBIDDEN", "분류를 편집할 권한이 없습니다.");
+  }
+}
+
+/**
+ * 카테고리 생성.
+ *
+ * **slug 는 사람이 정합니다.** 제목에서 만들어 주면 한글 이름이 퍼센트 인코딩된
+ * 주소가 되고(`P6` 에서 실제로 겪었습니다), 카테고리 slug 는 **필터 주소에
+ * 그대로 실립니다** — 자료 slug 와 달리 사람이 손으로 칠 일이 많습니다.
+ */
+export async function create(
+  actor: Actor,
+  input: { name: string; slug: string; parentSlug?: string; icon?: string }
+): Promise<{ slug: string }> {
+  assertAdmin(actor);
+
+  return db.$transaction(async (tx) => {
+    let parentId: string | null = null;
+    if (input.parentSlug) {
+      const parent = await tx.category.findUnique({
+        where: { slug: input.parentSlug },
+        select: { id: true, parentId: true },
+      });
+      if (!parent) {
+        throw new AppError("NOT_FOUND", "상위 분류를 찾을 수 없습니다.");
+      }
+      /*
+       * **깊이를 여기서도 봅니다.** DB 트리거가 막지만, 트리거가 내는 오류는
+       * 사용자에게 「처리 중 문제가 발생했습니다」로 보입니다 —
+       * 무엇이 잘못됐는지 말할 수 있을 때는 말합니다.
+       */
+      if (parent.parentId !== null) {
+        throw new AppError(
+          "VALIDATION_ERROR",
+          `분류는 ${MAX_DEPTH}단계까지입니다. 하위분류 아래에 또 만들 수 없습니다.`
+        );
+      }
+      parentId = parent.id;
+    }
+
+    const dup = await tx.category.findUnique({
+      where: { slug: input.slug },
+      select: { name: true },
+    });
+    if (dup) {
+      throw new AppError(
+        "DUPLICATE",
+        `이미 있는 주소입니다: ${input.slug} (${dup.name}).`
+      );
+    }
+
+    // 새 항목은 **맨 뒤**로 — 기존 순서를 흔들지 않습니다
+    const last = await tx.category.aggregate({
+      where: { parentId },
+      _max: { sortOrder: true },
+    });
+
+    const created = await tx.category.create({
+      data: {
+        name: input.name,
+        slug: input.slug,
+        parentId,
+        icon: input.icon,
+        sortOrder: (last._max.sortOrder ?? 0) + 10,
+      },
+      select: { id: true, slug: true },
+    });
+
+    await audit.log(
+      actor,
+      {
+        action: "SETTING_UPDATE",
+        targetType: "category",
+        targetId: created.id,
+        summary: `분류 추가 — ${input.name} (${input.slug})`,
+      },
+      tx
+    );
+    return { slug: created.slug };
+  });
+}
+
+/**
+ * 이름·아이콘·노출 수정.
+ *
+ * **`slug` 는 못 바꿉니다.** 필터 주소에 실려 있어서 바꾸는 순간 남이 공유한
+ * 링크가 전부 죽습니다. 이름을 고치는 것으로 충분하고, 정말 주소를 바꿔야
+ * 하면 새로 만들고 자료를 옮기는 것이 **무엇이 일어나는지 보이는** 방법입니다.
+ */
+export async function update(
+  actor: Actor,
+  slug: string,
+  input: { name?: string; icon?: string | null; isActive?: boolean }
+): Promise<void> {
+  assertAdmin(actor);
+
+  await db.$transaction(async (tx) => {
+    const target = await tx.category.findUnique({
+      where: { slug },
+      select: { id: true, name: true, icon: true, isActive: true },
+    });
+    if (!target) throw new AppError("NOT_FOUND", "분류를 찾을 수 없습니다.");
+
+    await tx.category.update({
+      where: { id: target.id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.icon !== undefined ? { icon: input.icon } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      },
+    });
+
+    await audit.log(
+      actor,
+      {
+        action: "SETTING_UPDATE",
+        targetType: "category",
+        targetId: target.id,
+        summary: `분류 수정 — ${input.name ?? target.name} (${slug})`,
+        diff: {
+          ...(input.name !== undefined
+            ? { name: { before: target.name, after: input.name } }
+            : {}),
+          ...(input.isActive !== undefined
+            ? {
+                isActive: {
+                  before: String(target.isActive),
+                  after: String(input.isActive),
+                },
+              }
+            : {}),
+        },
+      },
+      tx
+    );
+  });
+}
+
+/**
+ * 순서 변경 — **형제 목록 전체**를 받습니다.
+ *
+ * 「이 항목을 위로」 식으로 하나만 받으면 두 관리자가 동시에 움직였을 때
+ * 순서가 뒤엉킵니다. 목록 전체를 받아 **그 순간의 배열을 그대로** 씁니다 —
+ * 마지막에 저장한 사람의 순서가 남고, 그건 화면에서 본 대로입니다.
+ */
+export async function reorder(
+  actor: Actor,
+  slugs: string[]
+): Promise<void> {
+  assertAdmin(actor);
+  if (slugs.length === 0) return;
+
+  await db.$transaction(async (tx) => {
+    const rows = await tx.category.findMany({
+      where: { slug: { in: slugs } },
+      select: { id: true, slug: true, parentId: true },
+    });
+    if (rows.length !== slugs.length) {
+      throw new AppError("NOT_FOUND", "없는 분류가 목록에 있습니다.");
+    }
+    /*
+     * **형제끼리만 정렬합니다.** 부모가 섞인 목록을 받으면 화면이 보던 것과
+     * 다른 결과가 나옵니다 — 순서는 형제 안에서만 의미가 있습니다.
+     */
+    const parents = new Set(rows.map((r) => r.parentId));
+    if (parents.size > 1) {
+      throw new AppError(
+        "VALIDATION_ERROR",
+        "같은 상위 분류의 항목만 함께 정렬할 수 있습니다."
+      );
+    }
+
+    const bySlug = new Map(rows.map((r) => [r.slug, r.id]));
+    for (const [i, s] of slugs.entries()) {
+      await tx.category.update({
+        where: { id: bySlug.get(s)! },
+        data: { sortOrder: (i + 1) * 10 },
+      });
+    }
+
+    await audit.log(
+      actor,
+      {
+        action: "SETTING_UPDATE",
+        targetType: "category",
+        summary: `분류 순서 변경 — ${slugs.length}개`,
+        diff: { order: { before: "-", after: slugs.join(" > ") } },
+      },
+      tx
+    );
+  });
+}
+
+/**
+ * 삭제 — **자료를 어디로 옮길지 함께 받습니다** (`FR-ADM-012`).
+ *
+ * ## 자료가 있으면 그냥 못 지웁니다
+ *
+ * `resources.category_id` 는 `SetNull` 이 아닙니다. 그냥 지우면 FK 위반으로
+ * 실패하고, 그 오류는 관리자에게 「처리 중 문제가 발생했습니다」로 보입니다.
+ * 그래서 **몇 건이 딸려 있는지 말하고 옮길 곳을 묻습니다** — `moveTo` 가
+ * `null` 이면 「분류 없음」으로 보냅니다.
+ *
+ * ## 하위분류가 있으면 못 지웁니다
+ *
+ * 하위를 함께 지우면 그 아래 자료까지 조용히 움직입니다. 관리자가 하위를
+ * 먼저 정리하게 합니다 — **한 번에 하나씩 일어나는 편**이 무엇이 일어났는지
+ * 알기 쉽습니다.
+ */
+export async function remove(
+  actor: Actor,
+  slug: string,
+  moveTo: string | null
+): Promise<{ moved: number }> {
+  assertAdmin(actor);
+
+  return db.$transaction(async (tx) => {
+    const target = await tx.category.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        name: true,
+        _count: { select: { children: true, resources: true } },
+      },
+    });
+    if (!target) throw new AppError("NOT_FOUND", "분류를 찾을 수 없습니다.");
+
+    if (target._count.children > 0) {
+      throw new AppError(
+        "INVALID_STATE",
+        `하위분류 ${target._count.children}개를 먼저 정리해 주세요.`
+      );
+    }
+
+    let moved = 0;
+    if (target._count.resources > 0) {
+      let nextId: string | null = null;
+      if (moveTo) {
+        const dest = await tx.category.findUnique({
+          where: { slug: moveTo },
+          select: { id: true },
+        });
+        if (!dest) {
+          throw new AppError("NOT_FOUND", "옮길 분류를 찾을 수 없습니다.");
+        }
+        if (dest.id === target.id) {
+          throw new AppError("VALIDATION_ERROR", "자기 자신으로는 옮길 수 없습니다.");
+        }
+        nextId = dest.id;
+      }
+      const r = await tx.resource.updateMany({
+        where: { categoryId: target.id },
+        data: { categoryId: nextId },
+      });
+      moved = r.count;
+    }
+
+    await tx.category.delete({ where: { id: target.id } });
+
+    await audit.log(
+      actor,
+      {
+        action: "SETTING_UPDATE",
+        targetType: "category",
+        targetId: target.id,
+        summary: `분류 삭제 — ${target.name} (${slug})`,
+        diff: {
+          resources: {
+            before: String(target._count.resources),
+            after: moveTo ? `→ ${moveTo}` : "분류 없음",
+          },
+        },
+      },
+      tx
+    );
+
+    return { moved };
+  });
+}
+
+/**
+ * 관리 화면이 보는 트리 — **비활성도 함께** 봅니다.
+ *
+ * `listTree` 는 사용자용이라 `isActive` 를 거릅니다. 관리 화면이 그것을 쓰면
+ * **끈 분류가 화면에서 사라져 다시 켤 수 없습니다** — 「끄기」가 사실상
+ * 「지우기」가 됩니다.
+ */
+export async function listAllForAdmin(): Promise<
+  {
+    slug: string;
+    name: string;
+    icon: string | null;
+    isActive: boolean;
+    resourceCount: number;
+    children: {
+      slug: string;
+      name: string;
+      isActive: boolean;
+      resourceCount: number;
+    }[];
+  }[]
+> {
+  const rows = await db.category.findMany({
+    where: { parentId: null },
+    orderBy: ORDER,
+    select: {
+      slug: true,
+      name: true,
+      icon: true,
+      isActive: true,
+      _count: { select: { resources: true } },
+      children: {
+        orderBy: ORDER,
+        select: {
+          slug: true,
+          name: true,
+          isActive: true,
+          _count: { select: { resources: true } },
+        },
+      },
+    },
+  });
+
+  return rows.map((c) => ({
+    slug: c.slug,
+    name: c.name,
+    icon: c.icon,
+    isActive: c.isActive,
+    resourceCount: c._count.resources,
+    children: c.children.map((s) => ({
+      slug: s.slug,
+      name: s.name,
+      isActive: s.isActive,
+      resourceCount: s._count.resources,
+    })),
+  }));
 }

@@ -1,16 +1,15 @@
 import { Lock, Users } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/common/page-header";
-import { Card, CardContent } from "@/components/ui/card";
-import { TypeBadge } from "@/features/resources/components/badges";
+import { CollectionItems } from "@/features/collections/components/collection-items";
+import { EditCollectionButtons } from "@/features/collections/components/collection-form";
 import { getContentType } from "@/features/resources/content-types";
 import { AppError } from "@/lib/errors";
+import { decodeSegment } from "@/lib/route-params";
 import { requireActiveUser, toActor } from "@/server/auth/guards";
 import * as collectionService from "@/server/services/collection.service";
-import { decodeSegment } from "@/lib/route-params";
 
 /*
  * **`generateStaticParams` 를 두지 않습니다.** 이 페이지는 `requireActiveUser()`
@@ -22,17 +21,23 @@ export async function generateMetadata({
   params,
 }: PageProps<"/collections/[slug]">): Promise<Metadata> {
   const { slug: rawSlug } = await params;
-  const slug = decodeSegment(rawSlug);
-  // 제목만 필요하므로 접근 판정 없이 이름만 본다 (없으면 기본값)
-  return { title: slug ? "컬렉션" : "컬렉션" };
+  const name = await collectionService.nameBySlug(decodeSegment(rawSlug));
+  return { title: name ? `${name} · 컬렉션` : "컬렉션" };
 }
 
 /**
- * SCR-132 컬렉션 상세.
+ * SCR-132 컬렉션 상세 (`FR-COLL-004`·`005`·`006`).
  *
- * **읽기 경로만 있습니다.** 편집·담기·빼기·순서 바꾸기는 아직 없어서
- * 버튼을 두지 않았습니다 — 회원 상세에서 장식 버튼을 걷어낸 것과 같은 판단입니다
- * (`DEC-045`).
+ * ## 편집 버튼은 **배선과 함께** 왔습니다
+ *
+ * 여기에는 읽기 경로만 있었습니다 — 담기·빼기·순서가 없어서 버튼도 두지
+ * 않았고, 그게 그때는 정직했습니다 (`DEC-045`).
+ *
+ * ## 「고칠 수 있는가」는 **서버가** 판정합니다
+ *
+ * 본인 + `EDITOR` 이상입니다 (`REQ-02 · 2.5`). 읽기 판정과 같은 규칙이고,
+ * 화면은 그 결과를 받아 버튼을 그릴지만 정합니다 — 실제 차단은 액션이
+ * 지나는 service 가 다시 합니다.
  */
 export default async function CollectionDetailPage({
   params,
@@ -40,19 +45,41 @@ export default async function CollectionDetailPage({
   const session = await requireActiveUser();
   const { slug: rawSlug } = await params;
   const slug = decodeSegment(rawSlug);
+  const actor = await toActor(session);
 
   let data;
   try {
-    data = await collectionService.getBySlug(slug, await toActor(session));
+    data = await collectionService.getBySlug(slug, actor);
   } catch (e) {
     if (e instanceof AppError && e.code === "NOT_FOUND") notFound();
     throw e;
   }
   const { collection, items } = data;
 
+  // 읽기 판정과 **같은 규칙** — 본인 또는 `EDITOR` 이상
+  const canEdit =
+    collection.owner.id === session.userId ||
+    session.role === "EDITOR" ||
+    session.role === "ADMIN";
+
   return (
     <>
-      <PageHeader description={collection.description} count={items.length} />
+      <PageHeader
+        description={collection.description}
+        count={items.length}
+        action={
+          canEdit ? (
+            <EditCollectionButtons
+              collection={{
+                slug: collection.slug,
+                name: collection.name,
+                description: collection.description,
+                visibility: collection.visibility,
+              }}
+            />
+          ) : undefined
+        }
+      />
 
       <div className="text-muted-foreground flex flex-wrap items-center gap-4 text-sm">
         <span className="inline-flex items-center gap-1.5">
@@ -70,40 +97,27 @@ export default async function CollectionDetailPage({
         <span>마지막 수정 {collection.updatedAt.slice(0, 10)}</span>
       </div>
 
-      {items.length === 0 ? (
-        <p className="text-muted-foreground rounded-lg border py-8 text-center text-sm">
-          담긴 자료가 없습니다.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {items.map((resource, i) => (
-            <Card key={resource.id}>
-              <CardContent className="flex items-start gap-4 p-4">
-                <span className="text-muted-foreground mt-0.5 w-5 shrink-0 text-sm tabular-nums">
-                  {i + 1}
-                </span>
-
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <TypeBadge type={resource.type} />
-                    <Link
-                      href={`/resources/${getContentType(resource.type).slug}/${resource.slug}`}
-                      className="hover:text-primary font-medium"
-                    >
-                      {resource.title}
-                    </Link>
-                  </div>
-                  {resource.summary && (
-                    <p className="text-muted-foreground line-clamp-1 text-sm">
-                      {resource.summary}
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <CollectionItems
+        slug={collection.slug}
+        canEdit={canEdit}
+        items={items.map((r) => {
+          /*
+           * 주소 세그먼트·라벨·색은 **레지스트리가 압니다.** 클라이언트가
+           * 그것을 import 하면 `features/collections → features/resources` 가
+           * 되어 `check-deps` 가 막습니다 — 여기서 꺼내 문자열로 넘깁니다.
+           */
+          const meta = getContentType(r.type);
+          return {
+            id: r.id,
+            slug: r.slug,
+            typeSlug: meta.slug,
+            typeLabel: meta.label,
+            badgeClass: meta.badgeClass,
+            title: r.title,
+            summary: r.summary,
+          };
+        })}
+      />
     </>
   );
 }

@@ -93,7 +93,15 @@ function load(): Env {
 
 export const env = load();
 
+/*
+ * **업로드·아카이브 상한의 파생 상수를 두지 않습니다** (`FR-ADM-015`).
+ *
+ * `MAX_UPLOAD_BYTES`·`MAX_ARCHIVE_BYTES` 가 여기 있었는데, 관리자가 화면에서
+ * 바꾼 값이 **그 상수에는 닿지 않습니다.** 상수를 남겨 두면 「설정은 100MB 인데
+ * 업로드는 50MB 에서 막히는」 상태가 되고, 그 차이는 아무 데도 안 보입니다.
+ * 지금은 `settings.service.maxUploadBytes()`·`maxArchiveBytes()` 하나뿐이고
+ * **`.env` 는 그 함수의 기본값**입니다.
+ */
+
 /** 파생 상수 — 여기서 한 번만 계산한다 */
-export const MAX_UPLOAD_BYTES = env.MAX_UPLOAD_MB * 1024 * 1024;
-export const MAX_ARCHIVE_BYTES = env.MAX_ARCHIVE_MB * 1024 * 1024;
 export const SESSION_TTL_MS = env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;

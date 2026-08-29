@@ -24,7 +24,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -41,16 +40,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import {
   RoleBadge,
   UserStatusBadge,
 } from "@/features/members/components/badges";
 import {
   canAttempt,
-  isReasonLongEnough,
   isResettableStatus,
-  REASON_MIN_LENGTH,
 } from "@/features/members/schema";
 import {
   approveMembersAction,
@@ -61,6 +57,7 @@ import {
   resetMemberPasswordAction,
   suspendMemberAction,
 } from "@/server/actions/member.actions";
+import { ReasonDialog } from "@/features/members/components/reason-dialog";
 
 /**
  * SCR-211 회원 관리 (FR-ADM-002~007).
@@ -405,72 +402,6 @@ function BulkFailureDialog({
   );
 }
 
-/** 사유 입력이 필요한 처리 — 거부·정지 (REQ-02 · 2.4절) */
-function ReasonDialog({
-  target,
-  title,
-  hint,
-  onClose,
-  onSubmit,
-}: {
-  target: MemberRow | null;
-  title: string;
-  /** 이 사유가 **어디까지 가는지** 관리자에게 정확히 말한다 (`DEC-041`) */
-  hint: string;
-  onClose: () => void;
-  onSubmit: (reason: string) => Promise<void>;
-}) {
-  const [reason, setReason] = useState("");
-  const [pending, setPending] = useState(false);
-
-  return (
-    <Dialog
-      open={target !== null}
-      onOpenChange={(o) => {
-        if (!o) {
-          setReason("");
-          onClose();
-        }
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{hint}</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-2">
-          <Label htmlFor="reason">사유</Label>
-          <Textarea
-            id="reason"
-            rows={3}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-          <p className="text-muted-foreground text-xs">
-            {reason.trim().length} / {REASON_MIN_LENGTH}자 이상
-          </p>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            취소
-          </Button>
-          <Button
-            disabled={!isReasonLongEnough(reason) || pending}
-            onClick={async () => {
-              setPending(true);
-              await onSubmit(reason.trim());
-              setPending(false);
-              setReason("");
-            }}
-          >
-            {pending ? "처리 중…" : "확인"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export function MemberTable({ members }: { members: MemberRow[] }) {
   const router = useRouter();
   const [busy, startTransition] = useTransition();
@@ -655,11 +586,13 @@ export function MemberTable({ members }: { members: MemberRow[] }) {
       </Tabs>
 
       <ReasonDialog
-        target={rejecting}
-        title={`${rejecting?.name ?? ""}님의 가입을 거부합니다`}
+        open={rejecting !== null}
+        onOpenChange={(o) => !o && setRejecting(null)}
+        target={rejecting ? `${rejecting.name} (@${rejecting.username})` : ""}
+        title="가입 거부"
+        confirmLabel="거부"
         hint="사유는 본인이 다음에 로그인할 때 그대로 보입니다. 감사 로그에도 남습니다."
-        onClose={() => setRejecting(null)}
-        onSubmit={(reason) =>
+        onConfirm={(reason) =>
           run(async () => {
             const m = rejecting;
             if (!m) return;
@@ -675,11 +608,13 @@ export function MemberTable({ members }: { members: MemberRow[] }) {
       />
 
       <ReasonDialog
-        target={suspending}
-        title={`${suspending?.name ?? ""}님을 정지합니다`}
-        hint="사유는 감사 로그와 관리자 화면에만 남습니다. 본인에게는 전달되지 않습니다."
-        onClose={() => setSuspending(null)}
-        onSubmit={(reason) =>
+        open={suspending !== null}
+        onOpenChange={(o) => !o && setSuspending(null)}
+        target={suspending ? `${suspending.name} (@${suspending.username})` : ""}
+        title="회원 정지"
+        confirmLabel="정지"
+        hint="정지 즉시 모든 세션이 끊기고 API 키도 무효가 됩니다. 사유는 감사 로그와 관리자 화면에만 남고 본인에게는 전달되지 않습니다."
+        onConfirm={(reason) =>
           run(async () => {
             const m = suspending;
             if (!m) return;

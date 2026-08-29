@@ -2,6 +2,9 @@ import "server-only";
 
 import { listOperational } from "@/features/resources/content-types/operational";
 import { db } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import { isAdmin, type Actor } from "@/server/auth/actor";
+import * as audit from "@/server/services/audit.service";
 import type { ResourceType } from "@/types";
 
 /**
@@ -75,4 +78,129 @@ export async function listSettings(): Promise<TypeSetting[]> {
 export async function navTypes(): Promise<TypeSetting[]> {
   const all = await listSettings();
   return all.filter((t) => t.isActive && t.showInNav);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * 쓰기 — 콘텐츠 타입 운영 설정 (`FR-ADM-014`)
+ *
+ * ## 요구사항과 결정이 어긋난 자리입니다 (`DEC-058`)
+ *
+ * `REQ-03` 의 `FR-ADM-014` 수용 기준은 설정 항목에 **「표시 라벨, 아이콘,
+ * 설명」**을 넣었는데, `DEC-032` 는 **「표현은 코드, 운영은 DB」**로 정했고
+ * `content_type_settings` 테이블에는 그 세 칸이 아예 없습니다.
+ *
+ * `DEC-032` 를 따릅니다 — 라벨·아이콘·설명은 **폼·카드·상세 렌더러와 함께
+ * 움직이는 것**이라 코드에 있어야 타입 하나가 한 덩어리로 유지됩니다
+ * (`REQ-04 · 4.9` 의 「타입을 코드로 추가하면 자동 연결」이 그 전제입니다).
+ * DB 로 내리면 라벨만 바뀌고 아이콘 컴포넌트는 그대로인 상태가 가능해집니다.
+ *
+ * 그래서 여기서 바꾸는 것은 **활성 여부 · 사이드바 노출 · 정렬 순서** 셋입니다.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export interface TypeSettingInput {
+  code: ResourceType;
+  isActive: boolean;
+  showInNav: boolean;
+}
+
+/**
+ * 설정 저장 — **목록 전체**를 받습니다.
+ *
+ * 순서는 배열 순서입니다. 한 개씩 받으면 두 관리자가 동시에 움직였을 때
+ * 순서가 뒤엉키고, 화면에서 본 것과 다른 결과가 남습니다
+ * (`category.service.reorder` 와 같은 판단).
+ *
+ * **`ADMIN` 만 부릅니다.** 분류 정리는 `EDITOR` 도 하지만(`DEC-057`),
+ * 타입을 끄면 등록 화면에서 **통째로 사라지고** 기존 자료가 목록에서 숨습니다.
+ */
+export async function updateSettings(
+  actor: Actor,
+  items: TypeSettingInput[]
+): Promise<void> {
+  if (!isAdmin(actor)) {
+    throw new AppError("FORBIDDEN", "콘텐츠 타입 설정은 관리자만 바꿀 수 있습니다.");
+  }
+
+  const known = new Set(listOperational().map((t) => t.code));
+  for (const it of items) {
+    if (!known.has(it.code)) {
+      throw new AppError("VALIDATION_ERROR", `없는 타입입니다: ${it.code}`);
+    }
+  }
+
+  /*
+   * **`isActive` 가 꺼진 타입은 `showInNav` 도 끕니다.**
+   *
+   * 「비활성인데 메뉴에는 있다」는 조합은 화면에서 만들 수 없게 막아도,
+   * **액션으로는 만들 수 있습니다** — 인가와 같은 이유로 서버가 다시 봅니다.
+   * `navTypes()` 가 둘 다 보므로 결과는 같지만, 저장된 값이 모순이면
+   * 다음에 그 표를 읽는 사람이 헷갈립니다.
+   */
+  const normalized = items.map((it) => ({
+    ...it,
+    showInNav: it.isActive && it.showInNav,
+  }));
+
+  const before = await listSettings();
+
+  await db.$transaction(async (tx) => {
+    for (const [i, it] of normalized.entries()) {
+      await tx.contentTypeSetting.upsert({
+        where: { type: it.code },
+        create: {
+          type: it.code,
+          isActive: it.isActive,
+          showInNav: it.showInNav,
+          sortOrder: (i + 1) * 10,
+        },
+        update: {
+          isActive: it.isActive,
+          showInNav: it.showInNav,
+          sortOrder: (i + 1) * 10,
+        },
+      });
+    }
+
+    /*
+     * **무엇이 바뀌었는지만** 적습니다. 여섯 줄을 통째로 남기면 감사 로그에서
+     * 「이번에 뭘 건드렸나」를 사람이 다시 비교해야 합니다.
+     */
+    const changed = normalized.filter((it) => {
+      const b = before.find((x) => x.code === it.code);
+      return (
+        !b || b.isActive !== it.isActive || b.showInNav !== it.showInNav
+      );
+    });
+
+    await audit.log(
+      actor,
+      {
+        action: "SETTING_UPDATE",
+        targetType: "content_type",
+        summary:
+          changed.length > 0
+            ? `콘텐츠 타입 설정 — ${changed.map((c) => c.code).join(", ")}`
+            : "콘텐츠 타입 순서 변경",
+        diff: {
+          order: {
+            before: before.map((b) => b.code).join(" > "),
+            after: normalized.map((n) => n.code).join(" > "),
+          },
+          ...Object.fromEntries(
+            changed.map((c) => {
+              const b = before.find((x) => x.code === c.code);
+              return [
+                c.code,
+                {
+                  before: b ? `활성 ${b.isActive} · 메뉴 ${b.showInNav}` : "(기본값)",
+                  after: `활성 ${c.isActive} · 메뉴 ${c.showInNav}`,
+                },
+              ];
+            })
+          ),
+        },
+      },
+      tx
+    );
+  });
 }

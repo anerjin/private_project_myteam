@@ -3,6 +3,7 @@ import { access } from "node:fs/promises";
 
 import { pingDb } from "@/lib/db";
 import { getDiskStatus } from "@/lib/disk";
+import * as settingsService from "@/server/services/settings.service";
 import { env } from "@/lib/env";
 import { pingRedis } from "@/lib/redis";
 
@@ -73,11 +74,12 @@ export async function GET() {
 
   let diskFreeGb: number | null = null;
   try {
-    const disk = await getDiskStatus();
+    // 설정에서 임계치를 읽습니다 — 관리 화면과 «같은 숫자»여야 합니다 (`FR-ADM-015`)
+  const disk = await getDiskStatus(await settingsService.minFreeGb());
     diskFreeGb = disk.freeGb;
     checks.disk = disk.ok ? "ok" : "fail";
     if (!disk.ok) {
-      details.disk = `여유 ${disk.freeGb}GB — 임계치 ${env.DISK_MIN_FREE_GB}GB 미만`;
+      details.disk = `여유 ${disk.freeGb}GB — 임계치 ${disk.minFreeGb}GB 미만`;
     }
   } catch {
     checks.disk = "fail";

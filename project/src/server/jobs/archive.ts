@@ -6,6 +6,8 @@ import { AppError } from "@/lib/errors";
 import { githubHeaders, tarballUrl } from "@/lib/github";
 import * as storage from "@/lib/storage";
 import { register } from "@/server/services/job.service";
+import * as settingsService from "@/server/services/settings.service";
+import * as storageService from "@/server/services/storage.service";
 
 /**
  * 소스 아카이브 (`FR-GH-003`, `DEC-022`).
@@ -28,16 +30,13 @@ import { register } from "@/server/services/job.service";
  * 쓰기가 실패할 수 있습니다.
  */
 
-/** 아카이브 총량 상한 (`DEC-022`) — 80GB 에서 경고, 100GB 에서 거부 */
-const TOTAL_LIMIT_BYTES = 100 * 1024 ** 3;
-
-/** 지금까지 보관한 아카이브 총량 */
-export async function archivedTotalBytes(): Promise<number> {
-  const agg = await db.githubRepo.aggregate({
-    _sum: { archiveSizeBytes: true },
-  });
-  return Number(agg._sum.archiveSizeBytes ?? 0);
-}
+/*
+ * **총량과 상한은 `storage.service` 가 압니다.**
+ *
+ * 전에는 그 상수와 질의가 여기 있었고 **보여주는 화면이 없었습니다** —
+ * 관리자는 100GB 에 닿아 거부당하고 나서야 알았습니다. 게이지(`FR-FILE-006`)와
+ * 여기의 차단이 **같은 숫자**를 봐야 게이지가 경고 역할을 합니다.
+ */
 
 async function run(job: { resourceId: string | null }) {
   if (!job.resourceId) {
@@ -60,17 +59,19 @@ async function run(job: { resourceId: string | null }) {
   }
 
   // ── 받기 전에 막는다 ──
-  const disk = await getDiskStatus();
+  const disk = await getDiskStatus(await settingsService.minFreeGb());
   if (!disk.ok) {
     throw new AppError(
-      "INVALID_STATE",
+      "DISK_FULL",
       `디스크 여유가 부족해 아카이브를 받지 않습니다 (남은 용량 ${disk.freeGb}GB).`
     );
   }
-  const total = await archivedTotalBytes();
-  if (total >= TOTAL_LIMIT_BYTES) {
+  const total = await storageService.archivedTotalBytes();
+  if (total >= storageService.ARCHIVE_LIMIT_BYTES) {
+    // **전용 코드가 있습니다** (`DEV-05 · 5.11`) — `INVALID_STATE` 로 뭉개면
+    // CLI 가 「잘못 요청했다」와 「서버가 꽉 찼다」를 구별하지 못합니다.
     throw new AppError(
-      "INVALID_STATE",
+      "ARCHIVE_QUOTA_EXCEEDED",
       "아카이브 총량 100GB 상한에 닿았습니다. 관리자가 오래된 아카이브를 정리해야 합니다."
     );
   }
@@ -144,7 +145,8 @@ async function run(job: { resourceId: string | null }) {
     written = await storage.writeStream(
       key,
       res.body,
-      storage.ARCHIVE_MAX_BYTES
+      // 단건 상한도 설정에서 (`FR-ADM-015`) — `.env` 는 기본값 자리입니다
+      await settingsService.maxArchiveBytes()
     );
   } catch (e) {
     await db.githubRepo.update({

@@ -24,6 +24,24 @@ export default async function AdminLayout({ children }: LayoutProps<"/">) {
    * 여기서 `requireRole` 을 부르는 것은 **셸을 그릴 세션 정보를 얻기 위해서**이고,
    * 리다이렉트는 부수 효과일 뿐 이것에 기대지 않습니다.
    */
+  /*
+   * **관리 영역 전체가 `ADMIN` 입니다** (`DEC-057`, `OPEN-016` 해소).
+   *
+   * `EDITOR` 에게 이 그룹을 열어 봤고 **되돌렸습니다.** 이유는 측정된 것입니다:
+   *
+   * 이 레이아웃을 `EDITOR` 로 낮추면 `page` 의 `requireRole("ADMIN")` 이 내는
+   * `redirect()` 가 **HTTP 307 이 아니라 200 + 클라이언트 리다이렉트**가 됩니다 —
+   * 레이아웃이 «먼저» 스트리밍을 시작해 상태 코드를 더 이상 바꿀 수 없기
+   * 때문입니다. 실측: `EDITOR` 세션으로 `/admin/members` 가 **200** 이었고
+   * 본문에는 회원 데이터 없이 `/403` 으로 가는 스크립트만 있었습니다.
+   *
+   * 게다가 **이 레이아웃 자체가 관리 데이터를 읽습니다** — 승인 대기 수와
+   * 최근 자료 8건. 그것이 RSC 페이로드로 나갑니다.
+   *
+   * `DEC-035` 는 그대로입니다: **차단은 각 `page`** 가 합니다
+   * (`npm run check:guards`). 이 줄은 그 앞에 서서 **그룹 전체의 최소 등급**을
+   * 세웁니다 — 겹치는 방어는 비용이 없습니다.
+   */
   const session = await requireRole("ADMIN");
   // 배지는 실데이터다 (DEC-038) — 승인하면 숫자가 바뀌어야 한다
   const pendingMembers = await memberService.countPending();

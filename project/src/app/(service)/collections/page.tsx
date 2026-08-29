@@ -1,9 +1,9 @@
-import { FolderTree, Lock, Plus, Users } from "lucide-react";
+import { FolderTree, Lock, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/common/page-header";
-import { Button } from "@/components/ui/button";
+import { CreateCollectionButton } from "@/features/collections/components/collection-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Collection } from "@/types";
@@ -79,13 +79,7 @@ export default async function CollectionsPage() {
     <>
       <PageHeader
         description="목적에 따라 자료를 묶습니다. 온보딩 자료 묶음도 여기서 관리합니다."
-        action={
-          // 만들기는 아직 없다 — 「있는데 안 된다」보다 disabled 가 정직하다 (DEC-045)
-          <Button disabled>
-            <Plus className="size-4" />
-            컬렉션 만들기
-          </Button>
-        }
+        action={<CreateCollectionButton />}
       />
 
       <Tabs defaultValue="team">

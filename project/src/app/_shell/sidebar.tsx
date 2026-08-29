@@ -49,6 +49,14 @@ export function ServiceSidebar({
   );
 }
 
+/**
+ * 관리 사이드바.
+ *
+ * **등급으로 거르지 않습니다** — 관리 영역이 통째로 `ADMIN` 이라(`DEC-057`)
+ * 여기 오는 사람은 전부 다 볼 수 있습니다. 거르는 장치를 잠깐 뒀다가
+ * 뺐습니다: 아무것도 안 거르는 필터는 다음 사람에게 **등급별 메뉴가 있다**고
+ * 믿게 합니다.
+ */
 export function AdminSidebar({
   user,
   badges,

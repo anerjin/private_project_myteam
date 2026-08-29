@@ -8,6 +8,7 @@ import {
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { redis } from "@/lib/redis";
+import * as storage from "@/lib/storage";
 import type { Actor } from "@/server/auth/actor";
 import * as resourceRepo from "@/server/repositories/resource.repository";
 import * as audit from "@/server/services/audit.service";
@@ -481,4 +482,158 @@ export async function remove(actor: Actor, id: string): Promise<void> {
       tx
     );
   });
+}
+
+/**
+ * 휴지통에서 되살리기 (`FR-RES-008`, `FR-ADM-011`).
+ *
+ * ## 두 페이즈 동안 **읽는 쪽만** 있었습니다
+ *
+ * `scope: "trash"` 도 `RESOURCE_RESTORE` 감사 액션도 `P4` 부터 있었는데
+ * 되살리는 함수가 없었습니다 — 삭제한 자료를 보여주면서 되돌릴 방법을 주지
+ * 않는 화면이었습니다. `check:fr` 의 `DEBT` 에 그 사실이 적혀 있었고,
+ * 여기서 갚습니다.
+ *
+ * ## slug 가 그동안 남에게 갔을 수 있습니다
+ *
+ * 삭제해도 행은 남지만 `slug` 유니크는 **삭제된 행까지 봅니다**(`DEC-047` 이
+ * 「같은 URL 은 DB 가 막지 않는다」로 정리한 것과 달리 slug 는 유니크입니다).
+ * 그래서 되살리기가 유니크 위반을 낼 일은 없습니다 — 그 자리는 애초에
+ * 비지 않았습니다. 확인 없이 넘어가지 않으려고 여기 적어 둡니다.
+ *
+ * 권한은 **삭제와 같은 규칙**입니다. 자기 자료는 본인이, 남의 것은
+ * `EDITOR` 이상이 되살립니다 — 되살리기가 삭제보다 느슨하면
+ * 「내가 지운 것을 남이 되살린다」가 됩니다.
+ */
+export async function restore(actor: Actor, id: string): Promise<void> {
+  await db.$transaction(async (tx) => {
+    const target = await tx.resource.findFirst({
+      where: { id, deletedAt: { not: null } },
+      select: { id: true, title: true, authorId: true },
+    });
+    /*
+     * **「없다」와 「안 지워져 있다」를 구별하지 않습니다.** 둘 다 관리자가
+     * 할 일은 같고(목록을 새로 고친다), 나누면 「그 자료는 존재한다」를
+     * 알려 주게 됩니다.
+     */
+    if (!target) {
+      throw new AppError("NOT_FOUND", "휴지통에서 자료를 찾을 수 없습니다.");
+    }
+
+    if (actor.role === "MEMBER" && target.authorId !== actor.id) {
+      throw new AppError("FORBIDDEN", "이 자료를 되살릴 권한이 없습니다.");
+    }
+
+    await tx.resource.update({ where: { id }, data: { deletedAt: null } });
+
+    await audit.log(
+      actor,
+      {
+        action: "RESOURCE_RESTORE",
+        targetType: "resource",
+        targetId: id,
+        summary: `자료 복구 — ${target.title}`,
+      },
+      tx
+    );
+  });
+}
+
+/**
+ * 영구 삭제 (`FR-RES-009`, `FR-ADM-011`).
+ *
+ * ## **되돌릴 수 없습니다.** 그래서 `ADMIN` 만 부릅니다
+ *
+ * 소프트 삭제는 등록자도 할 수 있지만(`FR-RES-007`) 이것은 다릅니다 —
+ * 30일 유예가 있는 이유가 「실수로 지웠다」를 되돌리기 위해서인데,
+ * 그 유예를 없애는 동작을 같은 권한에 두면 유예가 없는 것과 같습니다.
+ *
+ * ## 감사 로그는 **행이 사라져도 남습니다**
+ *
+ * `audit_logs.target_id` 에는 FK 가 없습니다(`DEV-02 · TBL-audit_logs`) —
+ * 「무엇이 지워졌는가」를 남기려면 그 대상이 없어도 기록이 서 있어야 합니다.
+ * 제목을 `summary` 에 **스냅샷으로** 넣는 것도 같은 이유입니다.
+ *
+ * ## 파일은 **행과 함께 지우고, 디스크는 따로**
+ *
+ * 첨부·아카이브의 스토리지 키를 먼저 읽어 두고, 트랜잭션이 커밋된 «뒤»에
+ * 디스크에서 지웁니다. 트랜잭션 안에서 지우면 롤백됐을 때 **DB 는 살아 있고
+ * 파일만 없는** 상태가 됩니다 — `P6` 의 아카이브 교체에서 같은 판단을 했습니다.
+ */
+export async function purge(actor: Actor, id: string): Promise<void> {
+  if (actor.role !== "ADMIN") {
+    throw new AppError("FORBIDDEN", "영구 삭제는 관리자만 할 수 있습니다.");
+  }
+
+  const staleKeys: string[] = [];
+
+  await db.$transaction(async (tx) => {
+    const target = await tx.resource.findFirst({
+      where: { id, deletedAt: { not: null } },
+      select: { id: true, title: true },
+    });
+    if (!target) {
+      throw new AppError(
+        "NOT_FOUND",
+        "휴지통에서 자료를 찾을 수 없습니다. 먼저 삭제해야 영구 삭제할 수 있습니다."
+      );
+    }
+
+    /*
+     * **다른 자료도 쓰는 파일은 건드리지 않습니다.**
+     *
+     * `resource_files` 는 조인 테이블이라 한 파일이 두 자료에 붙을 수 있습니다.
+     * 지금 업로드 경로는 자료마다 새 파일을 만들지만, **스키마가 허용하는 것을
+     * 코드가 아니라고 가정하면** 나중에 「자료 하나 지웠더니 다른 자료의 첨부가
+     * 깨졌다」가 됩니다. 링크 수를 세어 **이 자료만 쓰던 것**만 지웁니다.
+     */
+    const links = await tx.resourceFile.findMany({
+      where: { resourceId: id },
+      select: {
+        file: {
+          select: {
+            id: true,
+            storageKey: true,
+            _count: { select: { resources: true } },
+          },
+        },
+      },
+    });
+    const orphans = links.filter((l) => l.file._count.resources <= 1);
+    for (const l of orphans) staleKeys.push(l.file.storageKey);
+
+    /*
+     * **행은 관계를 따라 지웁니다.** 상세 테이블 6종·태그·북마크·컬렉션 항목은
+     * 스키마의 `onDelete: Cascade` 가 처리합니다 — 여기에 목록을 적으면
+     * 일곱 번째 타입을 추가한 사람이 이 줄을 빠뜨립니다 (`DEC-051`).
+     */
+    await tx.file.deleteMany({
+      where: { id: { in: orphans.map((l) => l.file.id) } },
+    });
+    await tx.resource.delete({ where: { id } });
+
+    await audit.log(
+      actor,
+      {
+        action: "RESOURCE_PURGE",
+        targetType: "resource",
+        targetId: id,
+        // 행이 사라지므로 **제목은 여기 스냅샷으로만** 남습니다
+        summary: `자료 영구 삭제 — ${target.title}`,
+        diff: {
+          files: { before: String(links.length), after: "0" },
+          // 다른 자료가 함께 쓰던 파일은 남습니다 — 셋 다 적어야 나중에 설명이 됩니다
+          filesDeleted: { before: "-", after: String(orphans.length) },
+        },
+      },
+      tx
+    );
+  });
+
+  // 커밋 뒤에 디스크를 정리한다 — 실패해도 DB 는 이미 옳다
+  for (const key of staleKeys) {
+    await storage.remove(key).catch((e: unknown) => {
+      console.error("[purge] 파일 삭제 실패 — 고아 파일이 남습니다:", key, e);
+    });
+  }
 }

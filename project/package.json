@@ -23,6 +23,7 @@
     "verify:p5": "tsx --conditions=react-server --env-file=.env scripts/verify-p5.ts",
     "verify:p7": "tsx --conditions=react-server --env-file=.env scripts/verify-p7.ts",
     "seed:collect-skill": "tsx --conditions=react-server --env-file=.env scripts/register-collect-skill.ts",
+    "verify:p8": "tsx --conditions=react-server --env-file=.env scripts/verify-p8.ts",
     "verify:p7-mcp": "npm run --workspace @queenbee/mcp build && tsx --conditions=react-server --env-file=.env scripts/verify-p7-mcp.ts",
     "verify:p6": "tsx --conditions=react-server --env-file=.env scripts/verify-p6.ts",
     "verify:empty-db": "tsx --conditions=react-server --env-file=.env scripts/verify-empty-db.ts",

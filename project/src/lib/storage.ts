@@ -6,7 +6,7 @@ import { mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 
-import { env, MAX_ARCHIVE_BYTES } from "@/lib/env";
+import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 
 /**
@@ -173,5 +173,10 @@ export async function remove(key: string): Promise<void> {
   await rm(resolve(key), { force: true });
 }
 
-/** 아카이브 상한 — `DEC-022` 의 단일 500MB */
-export const ARCHIVE_MAX_BYTES = MAX_ARCHIVE_BYTES;
+/*
+ * **아카이브 단건 상한은 `settings.service` 가 압니다** (`FR-ADM-015`).
+ *
+ * 여기 상수로 두었을 때는 관리자 화면에서 바꿔도 아무 일이 없었을 자리입니다 —
+ * `.env` 는 이제 **기본값**이고, DB 에 행이 있으면 그쪽이 이깁니다
+ * (`content_type_settings` 와 같은 규칙).
+ */

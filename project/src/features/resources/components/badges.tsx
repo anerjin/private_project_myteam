@@ -1,20 +1,18 @@
+import { TypeChip } from "@/components/common/type-chip";
 import { getContentType } from "@/features/resources/content-types";
 import { cn } from "@/lib/utils";
 import type { ResourceType, UsageStatus } from "@/types";
 
-/** 콘텐츠 타입 배지 — 라벨과 색을 레지스트리에서 가져온다 */
+/**
+ * 콘텐츠 타입 배지 — **라벨과 색을 레지스트리에서** 가져온다.
+ *
+ * 그리는 일은 `components/common/type-chip` 이 합니다. 다른 feature 가
+ * 같은 배지를 쓸 때 이 파일을 import 하면 `features/A → features/B` 가 되고,
+ * 그건 `check-deps` 가 막습니다 — 그쪽은 `TypeChip` 에 값을 넘깁니다.
+ */
 export function TypeBadge({ type }: { type: ResourceType }) {
   const meta = getContentType(type);
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
-        meta.badgeClass
-      )}
-    >
-      {meta.label}
-    </span>
-  );
+  return <TypeChip label={meta.label} className={meta.badgeClass} />;
 }
 
 const USAGE_LABEL: Record<UsageStatus, string> = {

@@ -55,7 +55,13 @@ export type MemberStatus =
   "PENDING" | "ACTIVE" | "REJECTED" | "SUSPENDED" | "WITHDRAWN";
 
 export type TransitionKind =
-  "APPROVE" | "REJECT" | "REOPEN" | "SUSPEND" | "REACTIVATE" | "CHANGE_ROLE";
+  | "APPROVE"
+  | "REJECT"
+  | "REOPEN"
+  | "SUSPEND"
+  | "REACTIVATE"
+  | "CHANGE_ROLE"
+  | "WITHDRAW";
 
 /**
  * 각 전이가 허용되는 «현재» 상태 (`REQ-02 · 2.3`, `DEC-042`).
@@ -83,6 +89,17 @@ export const TRANSITION_FROM: Record<TransitionKind, readonly MemberStatus[]> =
     SUSPEND: ["ACTIVE"],
     REACTIVATE: ["SUSPENDED"],
     CHANGE_ROLE: ["ACTIVE"],
+    /*
+     * 강제 탈퇴 (`FR-ADM-008`).
+     *
+     * **`PENDING`·`REJECTED` 는 대상이 아닙니다.** 그쪽의 답은 「거부」이고,
+     * 거부는 `REOPEN` 으로 되돌릴 수 있습니다(`DEC-042`). 탈퇴는 되돌리는 전이가
+     * 없으므로, 되돌릴 수 있는 길이 있는 상태를 여기로 보내면 안 됩니다.
+     *
+     * **아이디는 돌려주지 않습니다** (`DEC-021`) — `users` 행이 남아 유니크가
+     * 유지되므로 남이 같은 아이디로 가입해 옛 감사 로그를 물려받는 일이 없습니다.
+     */
+    WITHDRAW: ["ACTIVE", "SUSPENDED"],
   };
 
 /** 이 상태에서 «시도라도 해 볼 수 있는» 전이인가. 최종 판정은 서버가 다시 한다 */

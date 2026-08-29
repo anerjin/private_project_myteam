@@ -28,6 +28,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { DeleteResourceDialog } from "@/features/resources/components/delete-resource-dialog";
+import { TagInput } from "@/features/resources/components/tag-input";
 import {
   getContentType,
   listContentTypes,
@@ -281,12 +282,12 @@ export function ResourceForm({
             </Field>
             <Field>
               <FieldLabel htmlFor="tags">태그</FieldLabel>
-              <Input
-                id="tags"
-                name="tags"
-                defaultValue={resource?.tags.join(", ")}
-                placeholder="쉼표로 구분 · 3~5개 권장"
-              />
+              {/*
+                자동완성이 붙었습니다 (`FR-SRCH-007`). 폼과의 계약은 그대로
+                **`name="tags"` 에 쉼표 문자열** 하나입니다 — `TagInput` 이
+                숨은 `input` 으로 그 값을 싣습니다.
+              */}
+              <TagInput id="tags" defaultValue={resource?.tags.join(", ") ?? ""} />
             </Field>
             <Field>
               <FieldLabel htmlFor="body">본문 (마크다운)</FieldLabel>

@@ -2,12 +2,12 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { getDiskStatus } from "@/lib/disk";
-import { MAX_UPLOAD_BYTES } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 import { extensionOf, verify } from "@/lib/file-type";
 import * as storage from "@/lib/storage";
 import { canEditResource, type Actor } from "@/server/auth/actor";
 import * as audit from "@/server/services/audit.service";
+import * as settingsService from "@/server/services/settings.service";
 
 /**
  * 파일 첨부 (`FR-FILE-001`~`004`).
@@ -53,11 +53,22 @@ export async function attach(
     throw new AppError("FORBIDDEN", "이 자료에 첨부할 권한이 없습니다.");
   }
 
-  const disk = await getDiskStatus();
+  /*
+   * **상한과 임계치를 설정에서 읽습니다** (`FR-ADM-015`). 전에는 `.env` 상수라
+   * 관리자 화면에서 바꿔도 아무 일도 일어나지 않았을 자리입니다 — 설정 화면이
+   * 거짓말을 하지 않으려면 «읽는 쪽»이 같은 값을 봐야 합니다.
+   */
+  const [minFree, maxBytes] = await Promise.all([
+    settingsService.minFreeGb(),
+    settingsService.maxUploadBytes(),
+  ]);
+
+  const disk = await getDiskStatus(minFree);
   if (!disk.ok) {
+    // **전용 코드가 있습니다** (`DEV-05 · 5.11`) — 507 이라야 「내 잘못이 아니다」가 전달됩니다
     throw new AppError(
-      "INVALID_STATE",
-      `디스크 여유가 부족해 업로드를 받지 않습니다 (남은 용량 ${disk.freeGb}GB).`
+      "DISK_FULL",
+      `디스크 여유가 부족해 업로드를 받지 않습니다 (남은 용량 ${disk.freeGb}GB, 임계치 ${disk.minFreeGb}GB).`
     );
   }
 
@@ -71,7 +82,7 @@ export async function attach(
   const written = await storage.writeStream(
     key,
     input.body,
-    MAX_UPLOAD_BYTES,
+    maxBytes,
     (head) => {
       const v = verify(input.filename, input.contentType, head);
       if (!v.ok) throw new AppError("VALIDATION_ERROR", v.reason!);
