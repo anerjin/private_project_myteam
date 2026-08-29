@@ -2,6 +2,8 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import type { Actor } from "@/server/auth/actor";
+import { draftScope } from "@/server/services/file.service";
 
 /**
  * GitHub 자료의 아카이브 상태 (`FR-GH-003`·`004`).
@@ -24,10 +26,15 @@ export interface ArchiveDownload {
  * 사람이 무엇을 해야 할지 모릅니다.
  */
 export async function archiveForDownload(
-  resourceId: string
+  resourceId: string,
+  viewer: Actor
 ): Promise<ArchiveDownload> {
+  // 초안의 아카이브도 새면 안 된다 — `file.service` 와 같은 규칙
   const row = await db.githubRepo.findFirst({
-    where: { resourceId, resource: { deletedAt: null } },
+    where: {
+      resourceId,
+      resource: { deletedAt: null, ...draftScope(viewer) },
+    },
     select: { archiveStatus: true },
   });
   if (!row) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");

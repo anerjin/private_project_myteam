@@ -128,7 +128,20 @@ export async function fetchRepoMeta(
     license: d.license?.spdx_id ?? d.license?.name ?? null,
     topics: d.topics ?? [],
     pushedAt: d.pushed_at ? new Date(d.pushed_at) : null,
-    latestRelease: await fetchLatestRelease(owner, repo),
+    /*
+     * **토큰이 없으면 릴리스를 안 받습니다.**
+     *
+     * 자료 1건 등록에 저장소 조회 + 릴리스 + README = **3회**를 씁니다.
+     * 비인증은 시간당 60회이므로 **20건**이 상한이고, `P7` 의 CLI 가
+     * 「찾아서 등록해줘」로 여러 건을 밀어 넣는 순간 첫 배치에서 한도를 칩니다.
+     *
+     * 릴리스 태그는 `FR-GH-006`(**P1**)이고 저장소 메타·README 는 `P0` 입니다.
+     * 예산이 빠듯할 때 **P0 를 지키는 쪽**으로 씁니다 — 토큰을 넣으면
+     * 5,000회가 되어 자동으로 다시 받습니다.
+     */
+    latestRelease: env.GITHUB_TOKEN
+      ? await fetchLatestRelease(owner, repo)
+      : null,
   };
 }
 

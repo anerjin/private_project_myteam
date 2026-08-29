@@ -423,6 +423,69 @@ async function run() {
     madeKeys.push(k2.storageKey);
     m = await msg(() => fileService.detach(actorOf(stranger), att2.id));
     check("남의 첨부는 못 지운다", m.includes("권한이 없습니다"), m);
+
+    /*
+     * **초안의 첨부가 새면 안 됩니다.** 자료 자체는 `getBySlug` 가 막는데
+     * 파일 경로는 `deletedAt: null` 만 보고 있었습니다 — 지금은 전부
+     * `PUBLISHED` 라 잠복이지만 `P7` 의 CLI 가 초안을 밀어 넣으면 열립니다.
+     */
+    await db.resource.update({
+      where: { id: res.id },
+      data: { status: "DRAFT" },
+    });
+    m = await msg(() => fileService.forDownload(att2.id, actorOf(stranger)));
+    check("남의 초안 첨부는 못 받는다", m.includes("찾을 수 없습니다"), m);
+    check(
+      "작성자는 자기 초안 첨부를 받는다",
+      (await msg(() => fileService.forDownload(att2.id, actor))) ===
+        "(오류 없음)"
+    );
+    const editor = { ...actorOf(stranger), role: "EDITOR" as const };
+    check(
+      "EDITOR 는 초안 첨부를 받는다",
+      (await msg(() => fileService.forDownload(att2.id, editor))) ===
+        "(오류 없음)"
+    );
+    await db.resource.update({
+      where: { id: res.id },
+      data: { status: "PUBLISHED" },
+    });
+  }
+
+  console.log("\n★ 동시 실행 상한 — P7 의 대량 유입에 대비 (DEC-053)");
+  {
+    /*
+     * CLI 가 10건을 한 번에 등록하면 `runNow` 10개가 동시에 뜨고 아무도
+     * 세지 않았습니다 — GitHub 한도를 한 번에 태우고 아카이브 여럿이 같은
+     * 디스크에 씁니다. BullMQ 없이 **상한 하나**로 받습니다.
+     */
+    let peak = 0;
+    let live = 0;
+    jobService.register("CHECK_LINK", async () => {
+      live++;
+      peak = Math.max(peak, live);
+      await new Promise((r) => setTimeout(r, 60));
+      live--;
+    });
+
+    const jobs = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        jobService.enqueue({ type: "CHECK_LINK" })
+      )
+    );
+    await Promise.all(jobs.map((j) => jobService.runNow(j.id)));
+    check("동시에 도는 작업이 상한을 넘지 않는다", peak <= 2, `최대 ${peak}개`);
+    check(
+      "그래도 전부 끝난다",
+      (
+        await db.job.findMany({
+          where: { id: { in: jobs.map((j) => j.id) } },
+          select: { status: true },
+        })
+      ).every((j) => j.status === "DONE"),
+      "상한이 작업을 버리면 안 된다"
+    );
+    await db.job.deleteMany({ where: { id: { in: jobs.map((j) => j.id) } } });
   }
 
   console.log("\n★ 자료 간 연결 — 한 행을 «양쪽에서» 읽는다 (FR-RES-012)");

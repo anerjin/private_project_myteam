@@ -128,6 +128,34 @@ export async function enqueue(input: {
  * (`NFR-PERF-006`: 외부 API 를 요청 스레드에서 3초 넘게 기다리지 않는다).
  * 실패는 `jobs` 행에 남으므로 **삼켜지지 않습니다.**
  */
+/**
+ * 동시에 도는 작업 수 상한.
+ *
+ * `P7` 의 CLI 가 10건을 한 번에 등록하면 `runNow` 10개가 동시에 뜨고
+ * **아무도 세지 않습니다** — GitHub 한도를 한 번에 태우고 아카이브 여럿이
+ * 같은 디스크에 씁니다. BullMQ 없이도 **상한 하나**면 됩니다.
+ *
+ * `DEC-053` 이 「다시 볼 시점」으로 적은 자리가 여기인데, 구조를 바꿀 필요가
+ * 없었습니다 — 실행하는 자리를 이미 한 곳(`runNow`)으로 모아 뒀기 때문입니다.
+ */
+const MAX_CONCURRENT = 2;
+let running = 0;
+const waiting: (() => void)[] = [];
+
+async function acquire(): Promise<void> {
+  if (running < MAX_CONCURRENT) {
+    running++;
+    return;
+  }
+  await new Promise<void>((resolve) => waiting.push(resolve));
+  running++;
+}
+
+function release(): void {
+  running--;
+  waiting.shift()?.();
+}
+
 export async function enqueueAndRun(
   input: Parameters<typeof enqueue>[0]
 ): Promise<{ id: string }> {
@@ -179,6 +207,15 @@ export function isRetryable(job: {
  * 통과합니다 — 조건을 코드가 아니라 `where` 에 두는 것이 그 이유입니다.
  */
 export async function runNow(jobId: string): Promise<void> {
+  await acquire();
+  try {
+    await runClaimed(jobId);
+  } finally {
+    release();
+  }
+}
+
+async function runClaimed(jobId: string): Promise<void> {
   const stale = new Date(Date.now() - STALE_AFTER_MS);
   const claimed = await db.job.updateMany({
     where: {

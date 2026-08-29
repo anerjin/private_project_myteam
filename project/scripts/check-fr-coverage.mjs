@@ -175,6 +175,25 @@ const FIXTURE = {
     "FR-TYPE-007",
     "FR-TYPE-008",
   ],
+  "M4.2": [
+    "FR-FILE-001",
+    "FR-FILE-002",
+    "FR-FILE-003",
+    "FR-FILE-004",
+    "FR-FILE-005",
+    "FR-FILE-006",
+    "FR-GH-001",
+    "FR-GH-002",
+    "FR-GH-003",
+    "FR-GH-004",
+    "FR-GH-005",
+    "FR-GH-006",
+    "FR-GH-007",
+    "FR-RES-008",
+    "FR-RES-012",
+    "NFR-BACKUP-007",
+    "NFR-SEC-009",
+  ],
 };
 
 /** 페이즈 목록 표(7.11)와 같은 사실이므로 여기 적지 않고 문서에서 읽는다 */
@@ -291,7 +310,7 @@ const corpus = loadCorpus();
 
 const args = process.argv.slice(2);
 /** 끝난 페이즈의 마일스톤 — 새 페이즈를 닫을 때 여기에 더한다 */
-const DONE = ["M0", "M0.5", "M1", "M2", "M4.1"];
+const DONE = ["M0", "M0.5", "M1", "M2", "M4.1", "M4.2"];
 
 /**
  * `--all` 은 문서의 마일스톤 «절»에서 뽑습니다. 페이즈 목록표(7.11)에서 뽑으면

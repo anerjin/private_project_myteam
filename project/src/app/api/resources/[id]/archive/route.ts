@@ -18,9 +18,9 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> }
 ): Promise<Response> {
   try {
-    await requireActor();
+    const actor = await requireActor();
     const { id } = await ctx.params;
-    const archive = await githubService.archiveForDownload(id);
+    const archive = await githubService.archiveForDownload(id, actor);
     return streamFile(req, {
       storageKey: archive.storageKey,
       filename: archive.filename,

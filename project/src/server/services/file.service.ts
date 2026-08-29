@@ -158,6 +158,17 @@ export async function listFor(resourceId: string): Promise<Attachment[]> {
   }));
 }
 
+/**
+ * 초안을 볼 수 있는 범위 — `resource.service.getBySlug` 와 **같은 규칙**입니다.
+ * 작성자와 `EDITOR` 이상만 보고, 나머지는 게시된 것만 봅니다.
+ */
+export function draftScope(viewer: Actor) {
+  if (viewer.role === "EDITOR" || viewer.role === "ADMIN") return {};
+  return {
+    OR: [{ status: "PUBLISHED" as const }, { authorId: viewer.id }],
+  };
+}
+
 export interface Downloadable {
   storageKey: string;
   originalName: string;
@@ -174,9 +185,24 @@ export interface Downloadable {
  * 자료는 승인 회원 전원이 봅니다(`DEC-018`). 그래서 「이 파일이 살아 있는
  * 자료에 붙어 있는가」만 봅니다 — 지운 자료의 첨부는 안 나갑니다.
  */
-export async function forDownload(fileId: string): Promise<Downloadable> {
+export async function forDownload(
+  fileId: string,
+  viewer: Actor
+): Promise<Downloadable> {
   const link = await db.resourceFile.findFirst({
-    where: { fileId, resource: { deletedAt: null } },
+    where: {
+      fileId,
+      resource: {
+        deletedAt: null,
+        /*
+         * **초안의 첨부는 새면 안 됩니다.** 자료 자체는 `getBySlug` 가
+         * 「작성자·`EDITOR` 이상만」으로 막는데(`P4` 의 M3), 파일 경로는
+         * `deletedAt: null` 만 보고 있었습니다 — 지금은 전부 `PUBLISHED` 라
+         * 무해하지만 **`P7` 의 CLI 가 초안으로 밀어 넣는 순간 열립니다.**
+         */
+        ...draftScope(viewer),
+      },
+    },
     select: {
       file: {
         select: {

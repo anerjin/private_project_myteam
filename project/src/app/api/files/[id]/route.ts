@@ -15,9 +15,9 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> }
 ): Promise<Response> {
   try {
-    await requireActor();
+    const actor = await requireActor();
     const { id } = await ctx.params;
-    const file = await fileService.forDownload(id);
+    const file = await fileService.forDownload(id, actor);
     return streamFile(req, {
       storageKey: file.storageKey,
       filename: file.originalName,
