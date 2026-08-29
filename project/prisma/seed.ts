@@ -12,7 +12,7 @@
 
 import { hash } from "@node-rs/argon2";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Prisma, PrismaClient, type ResourceType } from "@prisma/client";
+import { PrismaClient, type ResourceType } from "@prisma/client";
 
 try {
   process.loadEnvFile(".env");
@@ -115,21 +115,20 @@ const CATEGORIES: {
  * `Prisma.JsonNull`(= JSON 의 null)로 써야 합니다. `undefined` 를 넘기면
  * Prisma 가 «필드를 지정하지 않았다»로 보고 거부합니다.
  */
-const SYSTEM_SETTINGS: {
-  key: string;
-  value: Prisma.InputJsonValue | typeof Prisma.JsonNull;
-}[] = [
-  { key: "signup.enabled", value: true },
-  { key: "upload.max_mb", value: 50 },
-  { key: "archive.max_mb", value: 500 },
-  { key: "archive.total_limit_gb", value: 100 },
-  { key: "archive.warn_pct", value: 80 },
-  { key: "disk.min_free_gb", value: 20 },
-  { key: "github.token_set", value: false },
-  { key: "retention.account_days", value: 365 },
-  { key: "retention.audit_days", value: 365 },
-  { key: "notice.banner", value: Prisma.JsonNull },
-];
+/*
+ * **시스템 설정을 시드하지 않습니다** (`DEC-059`).
+ *
+ * 전에는 아홉 개를 넣었는데, 그중 **여덟 개를 아무도 읽지 않았습니다** —
+ * 시드는 `upload.max_mb` 를 쓰고 코드는 `upload.maxMb` 를 읽습니다.
+ * 나머지도 코드 상수(`ARCHIVE_LIMIT_BYTES`·`RETAIN_MS`)이거나 환경변수에서
+ * 파생되는 값이었습니다.
+ *
+ * 그리고 **읽는 키조차 넣으면 안 됩니다.** `DEC-059` 의 규칙이
+ * 「행이 있으면 DB 가 이기고, 없으면 `.env`」이므로, 아무도 안 바꾼 값에 행이
+ * 있으면 설정 화면이 **「이 화면에서 정한 값」이라고 거짓말**합니다.
+ *
+ * 설정의 기본값은 `features/admin/settings.schema.ts` + `.env` 한 벌입니다.
+ */
 
 /** `server/auth/password.ts` 와 **같은 파라미터**여야 합니다 (측정 기준 49ms) */
 const ARGON2 = {
@@ -266,24 +265,12 @@ async function main() {
     }
   }
 
-  // ── 시스템 설정 ────────────────────────────────────────
-  for (const { key, value } of SYSTEM_SETTINGS) {
-    await db.systemSetting.upsert({
-      where: { key },
-      update: {},
-      create: { key, value },
-    });
-  }
-
-  const [types, categories, settings] = await Promise.all([
+  const [types, categories] = await Promise.all([
     db.contentTypeSetting.count(),
     db.category.count(),
-    db.systemSetting.count(),
   ]);
 
-  console.log(
-    `시드 완료 — 콘텐츠 타입 ${types} · 카테고리 ${categories} · 시스템 설정 ${settings}`
-  );
+  console.log(`시드 완료 — 콘텐츠 타입 ${types} · 카테고리 ${categories}`);
 }
 
 main()

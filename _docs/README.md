@@ -153,9 +153,15 @@ _docs/
 > 실제로 부릅니다). service 를 직접 부르는 검증은 **화면 검증이 아닙니다** — `P6` 에서
 > 그 구별이 세 페이즈 묵은 결함을 잡았습니다.
 
-**개발 계정** (`NODE_ENV !== production` 에서만 시드):
-`admin`(ADMIN, `.env` 의 `ADMIN_SEED_PASSWORD`) · `minsu`(MEMBER) · `seoyeon`(EDITOR) —
-뒤 둘의 비밀번호는 `queenbee-dev-1234`.
+**계정** — 지금 DB 에는 **`admin` 하나**뿐입니다 (`.env` 의 `ADMIN_SEED_PASSWORD`).
+
+가짜 사람(`minsu`·`seoyeon`)은 오픈 준비로 지웠습니다 (`DEC-063`).
+개발 중 필요하면 `.env` 의 `SEED_DEV_USERS` 를 `true` 로 바꾸고
+`npx prisma db seed` 를 다시 돌리십시오 — 비밀번호는 `queenbee-dev-1234` 입니다.
+
+> **오픈 전 정리는 `npm run purge:mock` 한 곳입니다.** 기본이 미리보기이고
+> `--apply` 를 붙여야 지웁니다. **오픈 뒤에는 쓰지 마십시오** — 감사 로그를
+> 통째로 지웁니다(보존 1년은 유지보수 배치가 지킵니다).
 
 0. **사내망 개방** (`DEC-023`) — `P8` 에 남은 하나이고 **사람이 결정할 항목**입니다:
    Windows 방화벽 인바운드 허용, `APP_URL` 을 PC IP 로 변경, 팀원에게 접속 주소·가입
