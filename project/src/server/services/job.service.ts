@@ -2,7 +2,9 @@ import "server-only";
 
 import type { Prisma } from "@prisma/client";
 
+import { OPERATIONAL } from "@/features/resources/content-types/operational";
 import { db } from "@/lib/db";
+import * as notify from "@/server/services/notification.service";
 import type { JobStatus, JobType } from "@/types";
 
 /**
@@ -231,20 +233,25 @@ async function runClaimed(jobId: string): Promise<void> {
 
   const job = await db.job.findUnique({
     where: { id: jobId },
-    select: { id: true, type: true, resourceId: true, payload: true },
+    select: {
+      id: true,
+      type: true,
+      resourceId: true,
+      payload: true,
+      // 누구에게 알릴지 (`FR-NOTI-004`) — 요청자가 없는 배치 작업도 있다
+      requestedById: true,
+    },
   });
   if (!job) return;
 
   const handler = HANDLERS.get(job.type);
   if (!handler) {
+    const message = `처리기가 등록되지 않은 작업입니다: ${job.type}`;
     await db.job.update({
       where: { id: jobId },
-      data: {
-        status: "FAILED",
-        finishedAt: new Date(),
-        errorMessage: `처리기가 등록되지 않은 작업입니다: ${job.type}`,
-      },
+      data: { status: "FAILED", finishedAt: new Date(), errorMessage: message },
     });
+    await announce(job, "FAILED", message);
     return;
   }
 
@@ -259,20 +266,128 @@ async function runClaimed(jobId: string): Promise<void> {
         attempts: { increment: 1 },
       },
     });
+    await announce(job, "DONE");
   } catch (e) {
     /*
      * **오류 문구를 그대로 남깁니다.** `admin/jobs` 가 그것을 보여주고,
      * 사람이 「다시 눌러야 하는가」를 판단합니다 — rate limit 이면 기다리면
      * 되고, 저장소가 사라졌으면 눌러도 소용없습니다.
      */
+    const message = e instanceof Error ? e.message : String(e);
     await db.job.update({
       where: { id: jobId },
       data: {
         status: "FAILED",
         finishedAt: new Date(),
-        errorMessage: e instanceof Error ? e.message : String(e),
+        errorMessage: message,
         attempts: { increment: 1 },
       },
     });
+    await announce(job, "FAILED", message);
   }
+}
+
+/**
+ * 작업 완료·실패 알림 (`FR-NOTI-004`).
+ *
+ * ## 왜 필요한가
+ *
+ * 아카이브는 **최대 500MB 를 받습니다.** 걸어 놓고 끝났는지 알 방법이
+ * 관리자 화면을 계속 새로고침하는 것뿐이었습니다 — `JOB_DONE`·`JOB_FAILED`
+ * 알림 타입은 `P1` 부터 있었는데 **아무도 만들지 않았습니다.**
+ *
+ * ## 요청자가 없으면 안 보냅니다
+ *
+ * 스케줄 작업(`CLEANUP_TRASH` 등)은 사람이 시킨 것이 아닙니다. 「휴지통을
+ * 정리했습니다」를 매일 받으면 알림함이 그것으로 찹니다 — 그런 것은
+ * `admin/jobs` 가 보여줍니다.
+ *
+ * 다만 **배치가 실패하면** 알립니다. 요청자가 없어도 관리자는 알아야 합니다.
+ *
+ * ## 실패해도 작업 결과를 뒤집지 않습니다
+ *
+ * `notify` 가 이미 자기 안에서 삼킵니다(`notification.service`) — 알림을 못
+ * 남겼다고 성공한 아카이브를 실패로 만들 이유가 없습니다.
+ */
+async function announce(
+  job: { id: string; type: JobType; resourceId: string | null; requestedById: string | null },
+  status: "DONE" | "FAILED",
+  error?: string
+): Promise<void> {
+  const label = JOB_LABEL[job.type] ?? job.type;
+
+  if (!job.requestedById) {
+    // 사람이 시키지 않은 배치 — **실패했을 때만** 관리자에게
+    if (status === "FAILED") {
+      await notify.notifyAdmins({
+        type: "JOB_FAILED",
+        title: `${label} 작업이 실패했습니다`,
+        body: error?.slice(0, 200),
+        linkUrl: "/admin/jobs",
+      });
+    }
+    return;
+  }
+
+  /*
+   * **자료로 바로 갈 수 있게 합니다.** 「아카이브가 끝났습니다」만 오면
+   * 사용자는 그 자료를 다시 찾아야 합니다 — 링크가 알림의 절반입니다.
+   */
+  const link = job.resourceId
+    ? await resourceLink(job.resourceId)
+    : "/admin/jobs";
+
+  await notify.notify({
+    userId: job.requestedById,
+    type: status === "DONE" ? "JOB_DONE" : "JOB_FAILED",
+    title:
+      status === "DONE"
+        ? `${label} 작업이 끝났습니다`
+        : `${label} 작업이 실패했습니다`,
+    body: status === "FAILED" ? error?.slice(0, 200) : undefined,
+    linkUrl: link,
+  });
+}
+
+/** 사람이 읽는 작업 이름 — 알림 문구가 `ARCHIVE_GITHUB` 라고 말하면 안 된다 */
+const JOB_LABEL: Partial<Record<JobType, string>> = {
+  FETCH_URL_META: "URL 정보 수집",
+  FETCH_GITHUB_META: "GitHub 메타 수집",
+  ARCHIVE_GITHUB: "소스 아카이브",
+  REFRESH_GITHUB_META: "저장소 메타 갱신",
+  CHECK_LINK: "원본 링크 확인",
+  GENERATE_THUMBNAIL: "썸네일 생성",
+  CLEANUP_TRASH: "휴지통 정리",
+};
+
+/**
+ * 자료 주소.
+ *
+ * ## `content-types/index` 를 부르면 안 됩니다
+ *
+ * 처음에 `getContentType()` 을 썼다가 **`npm run maintenance` 가 죽었습니다**:
+ *
+ * ```
+ * TypeError: react.createContext is not a function
+ *   at lucide-react/src/context.ts
+ *   at content-types/ai-material/meta.ts
+ * ```
+ *
+ * 레지스트리는 `Card`·`Detail`·`Form`(React 컴포넌트)과 `lucide` 아이콘을
+ * 알고 있어서, service 가 그것을 부르면 **화면 컴포넌트가 서버 그래프에
+ * 들어옵니다.** Next 안에서는 티가 안 나지만 **React 가 없는 프로세스**
+ * (배치 스크립트·검증 스크립트)에서는 그 자리에서 터집니다.
+ *
+ * `operational.ts` 가 정확히 그 이유로 있습니다 — `content-type.service` 의
+ * 주석이 이미 경고하고 있었고, 저는 그것을 읽고도 같은 실수를 했습니다.
+ *
+ * 못 찾으면 작업 화면으로 보냅니다 — **죽은 링크를 보내지 않습니다.**
+ */
+async function resourceLink(resourceId: string): Promise<string> {
+  const r = await db.resource.findUnique({
+    where: { id: resourceId },
+    select: { slug: true, type: true },
+  });
+  if (!r) return "/admin/jobs";
+  return `/resources/${OPERATIONAL[r.type].slug}/${r.slug}`;
 }

@@ -13,12 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { canEditResource } from "@/server/auth/actor";
 import { requireActiveUser, toActor } from "@/server/auth/guards";
+import { AUDIT_ACTION_LABEL } from "@/features/audit/actions";
 import { AddToCollection } from "@/features/collections/components/add-to-collection";
 import { Attachments } from "@/features/resources/components/attachments";
 import { DeleteResourceDialog } from "@/features/resources/components/delete-resource-dialog";
 import { ExternalLinkButton } from "@/features/resources/components/external-link-button";
 import { GithubPanel } from "@/features/resources/components/github-panel";
 import { LinkedResources } from "@/features/resources/components/linked-resources";
+import { ResourceHistory } from "@/features/resources/components/resource-history";
 import { TypeDetail } from "@/features/resources/components/type-detail";
 import {
   getContentType,
@@ -26,6 +28,7 @@ import {
 } from "@/features/resources/content-types";
 import { ResourceActions } from "@/features/resources/components/resource-actions";
 import { AppError } from "@/lib/errors";
+import * as audit from "@/server/services/audit.service";
 import * as collectionService from "@/server/services/collection.service";
 import * as fileService from "@/server/services/file.service";
 import * as relationService from "@/server/services/relation.service";
@@ -90,6 +93,19 @@ export default async function ResourceDetailPage({
     // 「어디에 담을 수 있고 이미 담겼는가」를 한 번에 (`FR-COLL-004`)
     collectionService.listForPicker(actor, resource.id),
   ]);
+
+  /*
+   * 변경 이력 (`FR-RES-013`) — **고칠 수 있는 사람에게만.**
+   * 「누가 언제 뭘 고쳤나」는 그 자료를 고칠 수 있는 사람이 알아야 하는
+   * 것이고, 아무나 보면 «누가 무엇을 하는지»가 새어 나갑니다.
+   */
+  const history = canEdit
+    ? await audit.list({
+        page: 1,
+        size: 10,
+        filter: { targetId: resource.id },
+      })
+    : null;
 
   return (
     <>
@@ -173,6 +189,24 @@ export default async function ResourceDetailPage({
             files={attachments}
             canEdit={canEdit}
           />
+
+          {history && (
+            <ResourceHistory
+              canSeeAll={session.role === "ADMIN"}
+              entries={history.items.map((l) => ({
+                id: l.id,
+                // 라벨을 여기서 붙입니다 — 조립은 app 계층 (`DEV-06 · 6.9`)
+                actionLabel:
+                  AUDIT_ACTION_LABEL[
+                    l.action as keyof typeof AUDIT_ACTION_LABEL
+                  ] ?? l.action,
+                summary: l.summary,
+                actorUsername: l.actorUsername,
+                via: l.via,
+                createdAt: l.createdAt.toISOString(),
+              }))}
+            />
+          )}
         </div>
 
         <aside className="space-y-4">

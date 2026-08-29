@@ -1045,6 +1045,141 @@ async function run() {
      */
     check("역할·상태는 그대로다", p.role === "MEMBER" && p.status === "ACTIVE");
   }
+  /* ── 작업 알림 · 변경 이력 (FR-NOTI-004 · FR-RES-013) ───────────── */
+  console.log("\n★ 작업이 끝나면 «요청한 사람»에게 알린다 (FR-NOTI-004)");
+  {
+    const { enqueue, runNow } = await import("@/server/services/job.service");
+    await import("@/server/jobs");
+
+    const input = parseResourceInput({
+      type: "DEV_NOTE",
+      title: "P8 알림 검증 자료",
+      noteKind: "TIP",
+    });
+    if (!input.ok) throw new Error("입력 스키마 실패");
+    const res = await resourceWrite.create(editorActor, input.data);
+    madeResources.push(res.id);
+
+    // ── 성공 ──
+    const okJob = await enqueue({
+      type: "CLEANUP_TRASH",
+      resourceId: res.id,
+      requestedById: editor.id,
+    });
+    await runNow(okJob.id);
+
+    const done = await db.notification.findFirst({
+      where: { userId: editor.id, type: "JOB_DONE" },
+      orderBy: { createdAt: "desc" },
+      select: { title: true, linkUrl: true },
+    });
+    check("완료 알림이 온다", Boolean(done), done?.title ?? "");
+    /*
+     * **작업 이름이 사람 말이어야 합니다.** `CLEANUP_TRASH` 라고 뜨면
+     * 받는 사람이 무슨 일인지 모릅니다.
+     */
+    check(
+      "기계 이름이 아니라 사람 말이다",
+      (done?.title ?? "").includes("휴지통 정리"),
+      done?.title ?? ""
+    );
+    /*
+     * **링크가 알림의 절반입니다.** 「끝났습니다」만 오면 그 자료를 다시
+     * 찾아야 합니다.
+     */
+    check(
+      "자료로 바로 가는 링크가 붙는다",
+      (done?.linkUrl ?? "").includes(`/${res.slug}`),
+      done?.linkUrl ?? ""
+    );
+
+    // ── 실패 ── 처리기가 없는 타입으로 일부러 실패시킨다
+    const badJob = await enqueue({
+      type: "GENERATE_THUMBNAIL",
+      requestedById: editor.id,
+    });
+    await runNow(badJob.id);
+    const failed = await db.notification.findFirst({
+      where: { userId: editor.id, type: "JOB_FAILED" },
+      orderBy: { createdAt: "desc" },
+      select: { title: true, body: true },
+    });
+    check("실패 알림도 온다", Boolean(failed), failed?.title ?? "");
+    check(
+      "왜 실패했는지 싣는다",
+      (failed?.body ?? "").includes("처리기가 등록되지 않은"),
+      failed?.body ?? ""
+    );
+
+    /*
+     * **요청자가 없는 배치는 «성공»을 안 알립니다.** 「휴지통을 정리했습니다」를
+     * 매일 받으면 알림함이 그것으로 찹니다.
+     */
+    const before = await db.notification.count({
+      where: { type: "JOB_DONE" },
+    });
+    const batch = await enqueue({ type: "CLEANUP_TRASH" });
+    await runNow(batch.id);
+    const after = await db.notification.count({ where: { type: "JOB_DONE" } });
+    check("요청자 없는 배치는 성공을 안 알린다", after === before, `${before} → ${after}`);
+  }
+
+  console.log("\n★ 자료 변경 이력 (FR-RES-013)");
+  {
+    const input = parseResourceInput({
+      type: "DEV_NOTE",
+      title: "P8 이력 검증 자료",
+      noteKind: "TIP",
+    });
+    if (!input.ok) throw new Error("입력 스키마 실패");
+    const res = await resourceWrite.create(editorActor, input.data);
+    madeResources.push(res.id);
+
+    const input2 = parseResourceInput({
+      type: "DEV_NOTE",
+      title: "P8 이력 검증 자료 (수정됨)",
+      noteKind: "TIP",
+    });
+    if (!input2.ok) throw new Error("입력 스키마 실패");
+    await resourceWrite.update(editorActor, res.id, input2.data);
+
+    const h = await audit.list({
+      page: 1,
+      size: 10,
+      filter: { targetId: res.id },
+    });
+    check("등록과 수정이 둘 다 남는다", h.total >= 2, `${h.total}건`);
+    check(
+      "행위자를 안다",
+      h.items.every((l) => l.actorUsername === editor.username)
+    );
+
+    /*
+     * **이력 테이블을 새로 만들지 않았습니다.** 감사 로그를 자료 각도로
+     * 본 것뿐이라, 감사 로그에 남는 것이 곧 이력입니다.
+     */
+    const page = await get(
+      `/resources/dev-note/${encodeURIComponent(res.slug)}`,
+      editorCookie
+    );
+    check("자료 상세가 열린다", page.status === 200, `${page.status}`);
+    check("변경 이력 카드가 있다", page.body.includes("변경 이력"));
+    check(
+      "행위가 사람 말로 보인다",
+      page.body.includes("자료 등록") || page.body.includes("자료 수정")
+    );
+
+    /*
+     * **고칠 수 없는 사람에게는 안 보입니다.** 「누가 언제 뭘 고쳤나」는
+     * 그 자료를 고칠 수 있는 사람이 알아야 하는 것입니다.
+     */
+    const memberCookie = await cookieFor(member.id);
+    const asMember = await get(
+      `/resources/dev-note/${encodeURIComponent(res.slug)}`,
+      memberCookie
+    );
+    check("남에게는 이력이 안 보인다", !asMember.body.includes("변경 이력"));
+  }
   /* ── 권한 경계 (DEC-057, OPEN-016 해소) ─────────────────────────── */
   console.log("\n★ 관리 영역은 통째로 ADMIN 이다 (DEC-057)");
   {
@@ -1104,6 +1239,9 @@ async function cleanup() {
   if (madeCategories.length) {
     await db.category.deleteMany({ where: { slug: { in: madeCategories } } });
   }
+  await db.notification.deleteMany({
+    where: { user: { username: { startsWith: "vp8_" } } },
+  });
   if (madeUsers.length) {
     // 익명화가 만든 예약 아이디도 치웁니다 — 안 그러면 매 실행마다 쌓입니다
     const leftovers = await db.user.findMany({
