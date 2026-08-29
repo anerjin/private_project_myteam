@@ -388,7 +388,114 @@ async function run() {
     }
   }
 
+  await checkFormNames();
+
   console.log(`\n합계: 통과 ${pass} · 실패 ${fail}`);
+}
+
+/**
+ * ## 폼의 `name` ↔ zod 키 대조
+ *
+ * `FormData` 는 **`name` 없는 입력을 싣지 않습니다.** 오류도 안 납니다 —
+ * 「사용자가 안 적었다」와 구별되지 않습니다. 실제로 폼 6종 중 **다섯이
+ * `name` 을 하나도 갖고 있지 않았고**, `skill` 은 `id="trigger"` 인데 스키마
+ * 키가 `triggerCondition` 이라 이름을 붙여도 안 맞았습니다.
+ *
+ * ## 대조는 **비대칭**입니다
+ *
+ * | 방향 | 규칙 |
+ * | --- | --- |
+ * | 폼 → 스키마 | 모든 `name` 이 그 타입 스키마의 키여야 한다 (오타·잉여) |
+ * | 스키마 → 폼 | **필수** 키는 폼에 `name` 이 있어야 한다 (누락) |
+ * | 선택 키 | 없어도 되지만 **목록으로 남긴다** — 안 그리면 「폼을 만들었다」면서 스키마 절반을 못 넣는 폼이 조용히 나갑니다 |
+ *
+ * ## 양성 대조가 있습니다
+ *
+ * 추출이 아무것도 못 잡으면 **「불일치 0건」이 초록으로 찍힙니다** —
+ * `DEC-044` 의 「0건은 증거가 아니다」가 여기 그대로 적용됩니다.
+ * `AI_MATERIAL` 에서 `materialKind`(Select)와 `applicability`(Textarea)가
+ * **반드시 발견돼야** 하고, 못 찾으면 검사가 죽습니다.
+ *
+ * `type`·`body` 는 `name` 이 아니라 `resource-form` 의 `onSubmit` 이 주입합니다.
+ */
+async function checkFormNames() {
+  console.log("\n★ 폼의 name 이 zod 키와 맞는가");
+
+  const { readFileSync } = await import("node:fs");
+  const INJECTED = new Set(["type", "body"]);
+  const ROOT = "src/features/resources/content-types";
+  const FOLDER: Record<ResourceType, string> = {
+    AI_MATERIAL: "ai-material",
+    GITHUB_REPO: "github-repo",
+    MCP_SERVER: "mcp-server",
+    SKILL: "skill",
+    DEV_NOTE: "dev-note",
+    PROMPT: "prompt",
+  };
+
+  /** `name="x"` 만. `className="…"` 의 꼬리가 걸리지 않게 앞을 막는다 */
+  const NAME_RE = /(?<![A-Za-z])name="([^"]+)"/g;
+
+  for (const [type, folder] of Object.entries(FOLDER) as [
+    ResourceType,
+    string,
+  ][]) {
+    const src = readFileSync(`${ROOT}/${folder}/form.tsx`, "utf8");
+    const names = [...src.matchAll(NAME_RE)].map((m) => m[1]);
+    const disabled = /\bdisabled\b/.test(src);
+
+    const shape = (DETAIL_SCHEMAS[type] as { shape?: Record<string, unknown> })
+      .shape;
+    if (!shape) {
+      // `GITHUB_REPO` 는 `z.object().transform()` 이라 shape 이 없다 — 아래에서 따로
+      check(
+        `${type}: 사람이 적는 칸이 없다`,
+        names.length === 0,
+        names.join(", ")
+      );
+      continue;
+    }
+
+    const keys = Object.keys(shape);
+    const required = keys.filter((k) => {
+      const f = shape[k] as { safeParse?: (v: unknown) => { success: boolean } };
+      return f.safeParse ? !f.safeParse(undefined).success : false;
+    });
+
+    const stray = names.filter((n) => !keys.includes(n) && !INJECTED.has(n));
+    check(`${type}: 모르는 name 이 없다`, stray.length === 0, stray.join(", "));
+
+    const missing = required.filter((k) => !names.includes(k));
+    check(
+      `${type}: 필수 칸이 폼에 다 있다`,
+      missing.length === 0,
+      missing.join(", ")
+    );
+
+    const optionalGap = keys.filter(
+      (k) => !required.includes(k) && !names.includes(k)
+    );
+    if (optionalGap.length > 0) {
+      console.log(`       (선택 칸 없음: ${optionalGap.join(", ")})`);
+    }
+
+    /*
+     * `disabled` 입력은 `name` 이 있어도 `FormData` 에 안 들어갑니다.
+     * 「칸은 보이는데 저장이 안 된다」가 되므로 실패로 칩니다.
+     */
+    check(`${type}: disabled 입력이 없다`, !disabled);
+  }
+
+  /*
+   * **양성 대조.** 추출이 깨지면 위가 전부 초록으로 통과합니다.
+   */
+  const ai = readFileSync(`${ROOT}/ai-material/form.tsx`, "utf8");
+  const aiNames = [...ai.matchAll(NAME_RE)].map((m) => m[1]);
+  check(
+    "양성 대조 — Select 와 Textarea 의 name 을 실제로 뽑는다",
+    aiNames.includes("materialKind") && aiNames.includes("applicability"),
+    `뽑힌 것: ${aiNames.join(", ")}`
+  );
 }
 
 async function cleanup() {

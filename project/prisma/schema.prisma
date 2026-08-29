@@ -336,11 +336,7 @@ model Resource {
   @@index([authorId])
   @@index([status])
   @@index([sourceChannel])
-  /// 정렬 4축의 **부분 인덱스**는 Prisma 스키마가 표현하지 못합니다
-  /// (`WHERE deleted_at IS NULL AND status = 'PUBLISHED'`).
-  /// `migrations/20260829120000_list_indexes` 가 정본이고, 그 파일에 근거와
-  /// 측정값이 있습니다 — `prisma migrate diff` 가 「없는 인덱스」로 보고할 수
-  /// 있으니 **지우지 마십시오** (`DEC-052`).
+
   @@map("resources")
 }
 

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { USAGE_STATUSES } from "@/features/resources/content-types/usage-status";
+
 import {
   commaList,
   optionalText,
@@ -23,7 +25,6 @@ import {
  */
 
 export const MCP_TRANSPORTS = ["STDIO", "SSE", "HTTP"] as const;
-export const USAGE_STATUSES = ["REVIEWING", "ADOPTED", "DEPRECATED"] as const;
 
 /** `[{key, description, required, example}]` — 폼은 JSON 문자열로 보냅니다 */
 const envVarSchema = z.object({

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { USAGE_STATUSES } from "@/features/resources/content-types/usage-status";
+
 import {
   commaList,
   optionalText,
@@ -18,7 +20,6 @@ import {
  * > zod 는 없는 키를 「안 적었다」로 봅니다. 둘 다 오류를 내지 않습니다.
  */
 
-export const USAGE_STATUSES = ["REVIEWING", "ADOPTED", "DEPRECATED"] as const;
 
 export const skillSchema = z.object({
   skillName: z

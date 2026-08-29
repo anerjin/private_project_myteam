@@ -1,10 +1,7 @@
 import type { Resource } from "@/types";
+import { USAGE_STATUS_LABEL } from "@/features/resources/content-types/usage-status";
 
-const USAGE: Record<string, string> = {
-  REVIEWING: "검토 중",
-  ADOPTED: "사내 사용",
-  DEPRECATED: "사용 중단",
-};
+
 
 export function Card({ resource }: { resource: Resource }) {
   const d = resource.detail;
@@ -14,7 +11,7 @@ export function Card({ resource }: { resource: Resource }) {
     <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <span>{d.useCase}</span>
       {d.targetModel && <span>{d.targetModel}</span>}
-      <span>{USAGE[d.usageStatus]}</span>
+      <span>{USAGE_STATUS_LABEL[d.usageStatus]}</span>
     </span>
   );
 }

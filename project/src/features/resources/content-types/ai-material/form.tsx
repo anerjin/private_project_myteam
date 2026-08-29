@@ -8,7 +8,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { MATERIAL_KIND_LABEL } from "@/features/resources/content-types/ai-material/meta";
+import {
+  LANGUAGE_LABEL,
+  MATERIAL_KIND_LABEL,
+} from "@/features/resources/content-types/ai-material/meta";
 import type { ResourceDetail } from "@/types";
 
 export function Form({ detail }: { detail?: ResourceDetail }) {
@@ -43,14 +46,58 @@ export function Form({ detail }: { detail?: ResourceDetail }) {
       </Field>
 
       <Field>
-        <FieldLabel htmlFor="publishedAt">발행일</FieldLabel>
+        <FieldLabel htmlFor="authors">저자</FieldLabel>
         <Input
-          id="publishedAt"
-          name="publishedAt"
-          type="date"
-          defaultValue={d?.publishedAt}
+          id="authors"
+          name="authors"
+          defaultValue={d?.authors?.join(", ")}
+          placeholder="홍길동, 김철수"
         />
       </Field>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field>
+          <FieldLabel htmlFor="publishedAt">발행일</FieldLabel>
+          <Input
+            id="publishedAt"
+            name="publishedAt"
+            type="date"
+            defaultValue={d?.publishedAt}
+          />
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="language">언어</FieldLabel>
+          <Select name="language" defaultValue={d?.language ?? "KO"}>
+            <SelectTrigger id="language">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(LANGUAGE_LABEL).map(([v, label]) => (
+                <SelectItem key={v} value={v}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="readingTime">읽는 시간(분)</FieldLabel>
+          {/*
+            빈 칸이 `0` 이 되지 않습니다 — `optionalInt` 가 빈 문자열을
+            `undefined` 로 떨어뜨립니다. 안 그러면 `z.coerce.number()` 가
+            `Number("") = 0` 을 만들어 `min(1)` 에서 **엉뚱한 메시지**를 냅니다.
+          */}
+          <Input
+            id="readingTime"
+            name="readingTime"
+            type="number"
+            min={1}
+            defaultValue={d?.readingTime}
+          />
+        </Field>
+      </div>
 
       <Field>
         <FieldLabel htmlFor="keyPoints">핵심 요약</FieldLabel>

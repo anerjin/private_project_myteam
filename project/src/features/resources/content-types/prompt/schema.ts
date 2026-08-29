@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { USAGE_STATUSES } from "@/features/resources/content-types/usage-status";
+
 import { optionalText } from "@/features/resources/content-types/fields";
 
 /**
@@ -17,7 +19,6 @@ import { optionalText } from "@/features/resources/content-types/fields";
  * **한 사실을 두 곳에 두지 않습니다.** 원문이 정본이고 목록은 파생입니다.
  */
 
-export const USAGE_STATUSES = ["REVIEWING", "ADOPTED", "DEPRECATED"] as const;
 
 /** `[이름]` 을 순서대로, 중복 없이 */
 export function extractVariables(text: string): { name: string }[] {
