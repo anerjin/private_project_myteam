@@ -16,6 +16,9 @@ export type Role = "MEMBER" | "EDITOR" | "ADMIN";
 export type UserStatus =
   "PENDING" | "ACTIVE" | "REJECTED" | "SUSPENDED" | "WITHDRAWN";
 
+/** 자료 간 관계 (`FR-RES-012`) — 한 행을 «양쪽에서» 읽는다 */
+export type RelationType = "RELATED" | "SOURCE_OF" | "SUPERSEDES" | "PART_OF";
+
 export type JobStatus = "QUEUED" | "RUNNING" | "DONE" | "FAILED";
 /** `prisma/schema.prisma` 의 `JobType` 과 같아야 한다 — 화면·서비스가 함께 읽는다 */
 export type JobType =

@@ -19,6 +19,7 @@ import { hashPassword } from "@/server/auth/password";
 import "@/server/jobs";
 import * as fileService from "@/server/services/file.service";
 import * as jobService from "@/server/services/job.service";
+import * as relationService from "@/server/services/relation.service";
 import * as resourceWrite from "@/server/services/resource.write";
 
 let pass = 0;
@@ -383,6 +384,72 @@ async function run() {
     madeKeys.push(k2.storageKey);
     m = await msg(() => fileService.detach(actorOf(stranger), att2.id));
     check("남의 첨부는 못 지운다", m.includes("권한이 없습니다"), m);
+  }
+
+  console.log("\n★ 자료 간 연결 — 한 행을 «양쪽에서» 읽는다 (FR-RES-012)");
+  {
+    const mk = async (title: string) => {
+      const p = parseResourceInput({
+        type: "DEV_NOTE",
+        title,
+        summary: "",
+        url: "",
+        body: "본문",
+        category: "",
+        tags: "",
+        noteKind: "TIP",
+      });
+      if (!p.ok) throw new Error(JSON.stringify(p.fieldErrors));
+      const r = await resourceWrite.create(actor, p.data);
+      madeResources.push(r.id);
+      return r;
+    };
+
+    const a = await mk("연결 A");
+    const b = await mk("연결 B");
+
+    let m = await msg(() =>
+      relationService.link(actor, a.id, a.id, "RELATED")
+    );
+    check("자기 자신과는 못 잇는다", m.includes("자기 자신"), m);
+
+    await relationService.link(actor, a.id, b.id, "SUPERSEDES");
+
+    const fromA = await relationService.listFor(a.id);
+    const fromB = await relationService.listFor(b.id);
+    check("A 에서 B 가 보인다", fromA.length === 1 && fromA[0].id === b.id);
+    check("B 에서도 A 가 보인다", fromB.length === 1 && fromB[0].id === a.id);
+    /*
+     * **행은 하나입니다.** 두 개를 만들면 한쪽만 지워지는 순간
+     * 「A 에서는 보이는데 B 에서는 안 보이는」 상태가 됩니다.
+     */
+    check(
+      "행은 하나뿐이다",
+      (await db.resourceRelation.count({
+        where: { OR: [{ fromId: a.id }, { toId: a.id }] },
+      })) === 1
+    );
+    check("방향이 구별된다", fromA[0].outgoing && !fromB[0].outgoing);
+
+    // 같은 연결을 다시 만들어도 오류가 아니다 — 같은 판단일 뿐
+    m = await msg(() => relationService.link(actor, b.id, a.id, "SUPERSEDES"));
+    check("반대 방향으로 또 이어도 조용하다", m === "(오류 없음)", m);
+    check(
+      "그래도 행은 하나다",
+      (await db.resourceRelation.count({
+        where: { OR: [{ fromId: a.id }, { toId: a.id }] },
+      })) === 1
+    );
+
+    const stranger = await mkUser("rel-stranger");
+    m = await msg(() =>
+      relationService.unlink(actorOf(stranger), b.id, a.id, "SUPERSEDES")
+    );
+    check("남의 연결은 못 끊는다", m.includes("권한이 없습니다"), m);
+
+    // 반대쪽에서 끊어도 된다 — 한 행이므로
+    await relationService.unlink(actor, b.id, a.id, "SUPERSEDES");
+    check("끊으면 양쪽에서 사라진다", (await relationService.listFor(a.id)).length === 0);
   }
 
   console.log(`\n합계: 통과 ${pass} · 실패 ${fail}`);

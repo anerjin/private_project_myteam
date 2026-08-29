@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/common/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -14,9 +13,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AutoRefresh } from "@/features/jobs/components/auto-refresh";
+import { RetryJobButton } from "@/features/jobs/components/retry-job-button";
 import { EmptyState } from "@/components/common/empty-state";
 import type { JobStatus } from "@/types";
 import { requireRole } from "@/server/auth/guards";
+import { rateLimit as githubRateLimit } from "@/lib/github";
 import * as jobService from "@/server/services/job.service";
 
 export const metadata: Metadata = { title: "작업 모니터" };
@@ -49,7 +50,11 @@ export default async function AdminJobsPage() {
    * 하드코딩한 안내문은 「작업이 있는가」에 대한 두 번째 출처이고,
    * 워커가 붙은 날 그 문장이 남아 있게 됩니다.
    */
-  const { counts, recent: jobs } = await jobService.board();
+  const [{ counts, recent: jobs }, rate] = await Promise.all([
+    jobService.board(),
+    // 못 읽어도 화면이 깨질 이유가 없다 — 카드만 빠진다
+    githubRateLimit().catch(() => null),
+  ]);
 
   return (
     <>
@@ -71,10 +76,29 @@ export default async function AdminJobsPage() {
           </Card>
         ))}
         {/*
-          GitHub API 잔여량 카드는 **뺐습니다.** 하드코딩한 「4,860」은
-          그럴듯해서 더 나쁩니다 — 그 숫자를 아는 것은 GitHub 클라이언트이고
-          그건 `P6` 입니다. 없는 카드는 그때 더합니다.
+          GitHub API 잔여량 — `P6` 이 됐으므로 이제 «진짜 숫자»를 보여줍니다.
+          전에는 하드코딩한 「4,860」이 있었고, 그럴듯한 숫자가 더 나빴습니다.
+          못 읽으면 카드를 안 그립니다 — 「0」이라고 쓰면 그것도 거짓말입니다.
         */}
+        {rate && (
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-muted-foreground text-sm">GitHub 잔여 호출</p>
+              <p className="text-2xl font-semibold tabular-nums">
+                {rate.remaining.toLocaleString()}
+                <span className="text-muted-foreground text-sm">
+                  {" / "}
+                  {rate.limit.toLocaleString()}
+                </span>
+              </p>
+              <p className="text-muted-foreground text-xs">
+                {rate.limit <= 60
+                  ? "토큰 없음 — GITHUB_TOKEN 을 넣으면 5,000회"
+                  : `${rate.resetAt.toISOString().slice(11, 16)} 에 초기화`}
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {jobs.length === 0 ? (
@@ -144,11 +168,12 @@ export default async function AdminJobsPage() {
                     {j.createdAt.toISOString().slice(5, 16).replace("T", " ")}
                   </TableCell>
                   <TableCell className="text-right">
-                    {j.status === "FAILED" && (
-                      <Button size="sm" variant="outline">
-                        <RotateCcw className="size-3.5" />
-                        재실행
-                      </Button>
+                    {/*
+                      QUEUED 도 다시 집을 수 있습니다 — PC 가 꺼져 있던 사이에
+                      만들어진 작업은 아무도 안 돌립니다 (`DEC-053` 의 잃는 것).
+                    */}
+                    {(j.status === "FAILED" || j.status === "QUEUED") && (
+                      <RetryJobButton jobId={j.id} />
                     )}
                   </TableCell>
                 </TableRow>

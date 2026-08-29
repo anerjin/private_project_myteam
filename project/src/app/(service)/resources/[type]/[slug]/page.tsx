@@ -13,8 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { canEditResource } from "@/server/auth/actor";
 import { requireActiveUser, toActor } from "@/server/auth/guards";
+import { Attachments } from "@/features/resources/components/attachments";
 import { DeleteResourceDialog } from "@/features/resources/components/delete-resource-dialog";
 import { ExternalLinkButton } from "@/features/resources/components/external-link-button";
+import { GithubPanel } from "@/features/resources/components/github-panel";
 import { TypeDetail } from "@/features/resources/components/type-detail";
 import {
   getContentType,
@@ -22,6 +24,7 @@ import {
 } from "@/features/resources/content-types";
 import { ResourceActions } from "@/features/resources/components/resource-actions";
 import { AppError } from "@/lib/errors";
+import * as fileService from "@/server/services/file.service";
 import * as resourceService from "@/server/services/resource.service";
 
 export async function generateMetadata({
@@ -71,7 +74,10 @@ export default async function ResourceDetailPage({
     : undefined;
   const toc = resource.body ? extractToc(resource.body) : [];
   const canEdit = canEditResource(await toActor(session), resource.author.id);
-  const related = await resourceService.findRelated(resource.id, resource.tags);
+  const [related, attachments] = await Promise.all([
+    resourceService.findRelated(resource.id, resource.tags),
+    fileService.listFor(resource.id),
+  ]);
 
   return (
     <>
@@ -121,6 +127,19 @@ export default async function ResourceDetailPage({
             )}
           </div>
 
+          {/*
+            GitHub 자료만의 조작 — 메타 갱신·아카이브·내려받기 (`FR-GH-003`~`005`).
+            타입 폴더가 아니라 여기 있는 이유: **서버 작업을 부르는 버튼**이라
+            `Detail` 컴포넌트(`Resource` 하나만 받는 순수 표현)의 계약을 벗어납니다.
+          */}
+          {resource.detail.type === "GITHUB_REPO" && (
+            <GithubPanel
+              resourceId={resource.id}
+              archiveStatus={resource.detail.archiveStatus}
+              canEdit={canEdit}
+            />
+          )}
+
           {resource.body && (
             <Card>
               <CardContent className="p-6">
@@ -130,6 +149,12 @@ export default async function ResourceDetailPage({
           )}
 
           <TypeDetail resource={resource} />
+
+          <Attachments
+            resourceId={resource.id}
+            files={attachments}
+            canEdit={canEdit}
+          />
         </div>
 
         <aside className="space-y-4">
