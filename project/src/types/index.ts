@@ -17,6 +17,15 @@ export type UserStatus =
   "PENDING" | "ACTIVE" | "REJECTED" | "SUSPENDED" | "WITHDRAWN";
 
 export type JobStatus = "QUEUED" | "RUNNING" | "DONE" | "FAILED";
+/** `prisma/schema.prisma` 의 `JobType` 과 같아야 한다 — 화면·서비스가 함께 읽는다 */
+export type JobType =
+  | "FETCH_URL_META"
+  | "FETCH_GITHUB_META"
+  | "ARCHIVE_GITHUB"
+  | "REFRESH_GITHUB_META"
+  | "CHECK_LINK"
+  | "GENERATE_THUMBNAIL"
+  | "CLEANUP_TRASH";
 export type UsageStatus = "REVIEWING" | "ADOPTED" | "DEPRECATED";
 
 export interface Author {

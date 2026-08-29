@@ -21,6 +21,7 @@
     "verify:p3-keys": "tsx --conditions=react-server --env-file=.env scripts/verify-p3-keys.ts",
     "verify:p4": "tsx --conditions=react-server --env-file=.env scripts/verify-p4.ts",
     "verify:p5": "tsx --conditions=react-server --env-file=.env scripts/verify-p5.ts",
+    "verify:p6": "tsx --conditions=react-server --env-file=.env scripts/verify-p6.ts",
     "verify:empty-db": "tsx --conditions=react-server --env-file=.env scripts/verify-empty-db.ts",
     "bench:list": "tsx --conditions=react-server --env-file=.env scripts/bench-list.ts",
     "db:up": "docker compose -f ../docker/docker-compose.dev.yml up -d",

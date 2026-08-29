@@ -7,6 +7,9 @@ import { parseResourceInput } from "@/features/resources/form.schema";
 import { AppError } from "@/lib/errors";
 import { guard, ok, validationError, type ActionResult } from "@/lib/result";
 import { getSession, requireActor } from "@/server/auth/guards";
+// 이 import 가 작업 처리기를 등록합니다 (`DEC-053`)
+import "@/server/jobs";
+import * as jobService from "@/server/services/job.service";
 import * as resourceService from "@/server/services/resource.service";
 import * as resourceWrite from "@/server/services/resource.write";
 
@@ -42,6 +45,24 @@ export async function createResourceAction(
     }
 
     const result = await resourceWrite.create(actor, parsed.data);
+
+    /*
+     * **「URL 하나로 등록하면 메타데이터가 자동으로 채워진다」** (`REQ-01 · 1.2`).
+     *
+     * 작업을 만들고 **기다리지 않습니다** — GitHub 이 느리면 등록이 매달립니다
+     * (`NFR-PERF-006`). 사용자는 바로 상세로 가고, 스타·언어·README 는 잠시 뒤
+     * 채워집니다. 실패는 `jobs` 행에 남아 `admin/jobs` 가 보여줍니다.
+     *
+     * **아카이브는 여기서 하지 않습니다** — `DEC-022` 가 「선택 실행」으로
+     * 정했습니다. 등록마다 받으면 개발 PC 디스크가 며칠 만에 찹니다.
+     */
+    if (result.type === "GITHUB_REPO") {
+      await jobService.enqueueAndRun({
+        type: "FETCH_GITHUB_META",
+        resourceId: result.id,
+        requestedById: actor.id,
+      });
+    }
 
     revalidatePath("/resources");
     revalidatePath("/search");
