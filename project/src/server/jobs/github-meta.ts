@@ -1,6 +1,6 @@
 import "server-only";
 
-import { fetchReadme, fetchRepoMeta } from "@/lib/github";
+import { fetchReadme, fetchRepoMeta, RepoGoneError } from "@/lib/github";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { register } from "@/server/services/job.service";
@@ -34,7 +34,30 @@ async function run(job: { resourceId: string | null }) {
     );
   }
 
-  const meta = await fetchRepoMeta(detail.owner, detail.repo);
+  let meta;
+  try {
+    meta = await fetchRepoMeta(detail.owner, detail.repo);
+  } catch (e) {
+    /*
+     * **원본 소실 감지** (`FR-GH-007`).
+     *
+     * `is_gone` 컬럼이 있는데 **아무도 `true` 로 만들지 않고 있었습니다** —
+     * 성공했을 때 `false` 로 되돌리기만 했습니다. 그러면 그 컬럼은 「아직
+     * 확인 안 함」과 「살아 있음」을 구별하지 못하는 상수가 됩니다.
+     *
+     * 저장소가 사라진 것은 **작업 실패이면서 동시에 알아야 할 사실**입니다.
+     * 그래서 표시를 남기고 오류는 그대로 올립니다 — 화면이 「원본이 사라졌으니
+     * 아카이브를 쓰세요」라고 말할 수 있게 됩니다.
+     */
+    if (e instanceof RepoGoneError) {
+      await db.githubRepo.update({
+        where: { resourceId: job.resourceId },
+        data: { isGone: true },
+      });
+    }
+    throw e;
+  }
+
   const readme = await fetchReadme(meta.owner, meta.repo);
 
   await db.$transaction(async (tx) => {

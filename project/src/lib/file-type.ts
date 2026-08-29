@@ -28,7 +28,7 @@ export interface FileKind {
   mime: string;
   /** 파일 머리 바이트. 없으면 매직 넘버가 없는 형식(텍스트) */
   magic?: number[][];
-  /** 이미지인가 — 썸네일(`FR-FILE-005`)과 미리보기가 본다 */
+  /** 이미지인가 — 미리보기·썸네일이 볼 값. 그 화면은 아직 없다 (`P8`) */
   image?: boolean;
 }
 

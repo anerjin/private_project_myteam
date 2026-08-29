@@ -62,6 +62,18 @@ const DEBT = [
     until: "P8",
   },
   {
+    id: "FR-FILE-005",
+    priority: "P1",
+    why: "첨부 이미지 썸네일. `GENERATE_THUMBNAIL` 작업 타입과 `files.role=THUMBNAIL` 자리는 있지만 만드는 코드가 없다 — 이미지 처리 라이브러리가 하나 늘고, 200건 규모에서 급하지 않다",
+    until: "P8",
+  },
+  {
+    id: "FR-FILE-006",
+    priority: "P1",
+    why: "스토리지 사용량 화면. 총량은 이미 `getDiskStatus` 와 `archivedTotalBytes` 가 알고 있고, 그것을 «보여주는» 관리자 화면이 `P8` 몫이라 함께 만든다",
+    until: "P8",
+  },
+  {
     id: "FR-RES-008",
     priority: "P1",
     why: "자료 복구(휴지통에서 되살리기). 읽는 쪽(`scope: \"trash\"`)과 감사 액션(`RESOURCE_RESTORE`)은 있지만 되살리는 service·action 이 없다 — 휴지통 화면 자체가 `P8`(관리자 전체) 몫이라 함께 만든다",

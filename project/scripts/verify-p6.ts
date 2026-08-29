@@ -118,11 +118,7 @@ async function run() {
       key
     );
     const evil = storage.newKey("attachments", "../../x.exe");
-    check(
-      "이상한 확장자는 붙지 않는다",
-      !evil.includes(".."),
-      evil
-    );
+    check("이상한 확장자는 붙지 않는다", !evil.includes(".."), evil);
   }
 
   console.log("\n★ 저장소 — 상한을 «쓰면서» 본다 (NFR-SEC-009)");
@@ -209,17 +205,22 @@ async function run() {
     await jobService.runNow(job.id);
     const done = await jobOf(job.id);
 
-    if (done.status === "FAILED" && (done.errorMessage ?? "").includes("한도")) {
-      console.log(
-        `       (GitHub 한도로 건너뜀 — ${done.errorMessage})`
-      );
+    if (
+      done.status === "FAILED" &&
+      (done.errorMessage ?? "").includes("한도")
+    ) {
+      console.log(`       (GitHub 한도로 건너뜀 — ${done.errorMessage})`);
       check(
         "한도 초과 문구가 «언제 풀리는지»를 말한다",
         /\d+분/.test(done.errorMessage ?? ""),
         done.errorMessage ?? ""
       );
     } else {
-      check("작업이 DONE 이다", done.status === "DONE", done.errorMessage ?? "");
+      check(
+        "작업이 DONE 이다",
+        done.status === "DONE",
+        done.errorMessage ?? ""
+      );
       const filled = await db.githubRepo.findUniqueOrThrow({
         where: { resourceId: created.id },
       });
@@ -343,7 +344,11 @@ async function run() {
       contentType: "image/png",
       body: stream(PNG),
     });
-    check("정상 파일은 첨부된다", att.sizeBytes === PNG.length, `${att.sizeBytes}B`);
+    check(
+      "정상 파일은 첨부된다",
+      att.sizeBytes === PNG.length,
+      `${att.sizeBytes}B`
+    );
     check("원본 이름이 그대로 남는다", att.originalName === "보고서.png");
 
     const stored = await db.file.findUniqueOrThrow({
@@ -367,8 +372,14 @@ async function run() {
 
     // ⑤ 삭제 — 연결이 끊기고 파일도 사라진다
     await fileService.detach(actor, att.id);
-    check("첨부가 목록에서 빠진다", (await fileService.listFor(res.id)).length === 0);
-    check("고아 파일이 디스크에서 지워진다", !(await storage.exists(stored.storageKey)));
+    check(
+      "첨부가 목록에서 빠진다",
+      (await fileService.listFor(res.id)).length === 0
+    );
+    check(
+      "고아 파일이 디스크에서 지워진다",
+      !(await storage.exists(stored.storageKey))
+    );
 
     const stranger = await mkUser("stranger");
     const att2 = await fileService.attach(actor, {
@@ -408,9 +419,7 @@ async function run() {
     const a = await mk("연결 A");
     const b = await mk("연결 B");
 
-    let m = await msg(() =>
-      relationService.link(actor, a.id, a.id, "RELATED")
-    );
+    let m = await msg(() => relationService.link(actor, a.id, a.id, "RELATED"));
     check("자기 자신과는 못 잇는다", m.includes("자기 자신"), m);
 
     await relationService.link(actor, a.id, b.id, "SUPERSEDES");
@@ -449,11 +458,229 @@ async function run() {
 
     // 반대쪽에서 끊어도 된다 — 한 행이므로
     await relationService.unlink(actor, b.id, a.id, "SUPERSEDES");
-    check("끊으면 양쪽에서 사라진다", (await relationService.listFor(a.id)).length === 0);
+    check(
+      "끊으면 양쪽에서 사라진다",
+      (await relationService.listFor(a.id)).length === 0
+    );
   }
+
+  await checkScreens(user.id);
 
   console.log(`\n합계: 통과 ${pass} · 실패 ${fail}`);
 }
+
+/**
+ * ## 화면으로 확인 — **service 를 직접 부른 것은 화면 검증이 아니다**
+ *
+ * `DEV-07 · 7.11` 리뷰 체크리스트의 문장입니다. `P2` 에서 폼이 액션을 부르지
+ * 않는 것을 놓쳤고, `P4` 에서 삭제 버튼이 토스트만 띄우는 것을 놓쳤습니다.
+ *
+ * 여기서는 **dev 서버에 쿠키를 들고** 상세·작업 화면을 열어
+ * ① 등록한 GitHub 자료의 메타가 화면에 나오고
+ * ② 아카이브 다운로드 주소가 실제로 응답하고
+ * ③ 첨부가 스트림으로 내려오는지를 봅니다. `npm run dev` 가 떠 있어야 합니다.
+ */
+/**
+ * ## 화면으로 확인 — **service 를 직접 부른 것은 화면 검증이 아니다**
+ *
+ * `DEV-07 · 7.11` 리뷰 체크리스트의 문장입니다. 그리고 이번에 그 값이 나왔습니다:
+ *
+ * > **한국어 제목의 자료는 URL 로 열리지 않았습니다.** `params.slug` 가
+ * > 퍼센트 인코딩된 채로 들어와 `findBySlug("%ED%99%94…")` 가 못 찾았고,
+ * > 화면은 404 였습니다. `P4`·`P5` 의 검증은 전부 service 를 직접 불렀기 때문에
+ * > 이 구멍이 세 페이즈를 지나 살아 있었습니다.
+ *
+ * ## 「무엇이 있는가」로 확인할 때의 함정
+ *
+ * 처음엔 `html.includes("첨부")` 로 봤는데 **커맨드 팔레트 색인**에 모든 자료
+ * 제목이 들어 있어 404 페이지에서도 통과했습니다. 셋이 그렇게 초록이었습니다.
+ * 그래서 지금은 **본문에만 나오는 문자열**과 **not-found 표식의 부재**를 봅니다.
+ */
+async function checkScreens(userId: string) {
+  console.log("\n★ 화면으로 확인 — 관통 (P6 DoD)");
+
+  const { issue } = await import("@/server/auth/session");
+  const { token } = await issue(userId, { userAgent: "verify-p6" });
+  const cookie = `${process.env.SESSION_COOKIE_NAME || "qb_session"}=${token}`;
+  const BASE = "http://localhost:3100";
+  const NOT_FOUND = "NEXT_HTTP_ERROR_FALLBACK;404";
+
+  /**
+   * dev 서버는 **첫 컴파일에서 간헐적으로 500** 을 냅니다(Turbopack 이 청크를
+   * 만드는 사이의 경합 — `Tooltip must be used within TooltipProvider`).
+   * 두 번째 요청은 항상 정상이고 `npm run build` 는 통과하므로, 여기서만
+   * 한 번 더 시도합니다. **제품 결함이 아니라 개발 서버의 성질**입니다.
+   */
+  const get = async (path: string, headers: Record<string, string> = {}) => {
+    for (let i = 0; i < 2; i++) {
+      try {
+        const r = await fetch(BASE + path, { headers: { cookie, ...headers } });
+        if (r.status !== 500) return r;
+      } catch {
+        return null;
+      }
+    }
+    return fetch(BASE + path, { headers: { cookie, ...headers } });
+  };
+
+  const p = parseResourceInput({
+    type: "GITHUB_REPO",
+    title: "화면 관통 검증",
+    summary: "",
+    url: "https://github.com/octocat/Spoon-Knife",
+    body: "",
+    category: "",
+    tags: "",
+  });
+  if (!p.ok) throw new Error(JSON.stringify(p.fieldErrors));
+  const res = await resourceWrite.create(actorOfId(userId), p.data);
+  madeResources.push(res.id);
+
+  const job = await jobService.enqueue({
+    type: "FETCH_GITHUB_META",
+    resourceId: res.id,
+  });
+  await jobService.runNow(job.id);
+  const meta = await jobOf(job.id);
+
+  /*
+   * **한국어 slug 회귀 검사.** `P4` 가 slug 에 한글을 남기기로 했으므로
+   * (라틴만 남기면 「검증용 AI 자료」가 `-ai-` 가 됩니다) 이 경로가 살아 있어야
+   * 팀이 쓰는 대부분의 자료가 열립니다.
+   */
+  check("slug 에 한글이 남아 있다", /[가-힣]/.test(res.slug), res.slug);
+
+  const detail = await get(
+    `/resources/github-repo/${encodeURIComponent(res.slug)}`
+  );
+  if (!detail) {
+    check("상세 화면이 열린다", false, "dev 서버가 꺼져 있습니다");
+    return;
+  }
+  const html = (await detail.text()).replaceAll("<!-- -->", "");
+  check(
+    "한국어 slug 로 상세가 열린다",
+    detail.status === 200 && !html.includes(NOT_FOUND),
+    `HTTP ${detail.status}${html.includes(NOT_FOUND) ? " · 본문은 404" : ""}`
+  );
+
+  /*
+   * **본문에만 나오는 문자열로 봅니다.** 자료 제목은 커맨드 팔레트 색인에도
+   * 있어서 404 페이지에서도 잡힙니다 — 실제로 그것에 속았습니다.
+   */
+  check("GitHub 상세 카드가 그려진다", html.includes("저장소 정보"));
+  check(
+    "owner/repo 가 화면에 나온다",
+    html.includes("octocat"),
+    "등록 시점에 URL 에서 넣는 값이다"
+  );
+  check(
+    "메타 갱신·아카이브 버튼이 있다",
+    html.includes("메타 갱신"),
+    "canEdit 인데 안 보이면 배선이 끊긴 것"
+  );
+
+  if (meta.status === "DONE") {
+    const row = await db.githubRepo.findUniqueOrThrow({
+      where: { resourceId: res.id },
+      select: { stars: true },
+    });
+    /*
+     * 화면은 `toLocaleString()` 으로 그립니다 — `13997` 이 아니라 `13,997`.
+     * 원시 숫자로 찾다가 「코드는 맞는데 검사가 틀린」 실패를 한 번 봤습니다.
+     */
+    check(
+      "수집한 스타 수가 화면에 나온다",
+      html.includes(row.stars!.toLocaleString()),
+      `${row.stars?.toLocaleString()}`
+    );
+  } else {
+    console.log(`       (GitHub 한도로 건너뜀 — ${meta.errorMessage})`);
+  }
+
+  /*
+   * **아카이브가 없을 때 «왜 없는지»를 말합니다.** 404 로 뭉뚱그리면
+   * 사람이 「고장인가?」로 읽습니다.
+   */
+  const noArchive = await get(`/api/resources/${res.id}/archive`);
+  check(
+    "아카이브가 없으면 409 와 안내",
+    noArchive?.status === 409,
+    `HTTP ${noArchive?.status}`
+  );
+  const msgText = noArchive ? await noArchive.text() : "";
+  check(
+    "무엇을 해야 하는지 말한다",
+    msgText.includes("상세에서 실행"),
+    msgText
+  );
+
+  // 첨부를 HTTP 로 올리고 다시 받는다 — 라우트가 실제로 스트리밍하는가
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const up = await fetch(
+    `${BASE}/api/files?resourceId=${encodeURIComponent(res.id)}`,
+    {
+      method: "POST",
+      headers: {
+        cookie,
+        "x-filename": encodeURIComponent("스크린샷.png"),
+        "content-type": "image/png",
+      },
+      body: PNG,
+    }
+  );
+  check("업로드 라우트가 201 을 준다", up.status === 201, `HTTP ${up.status}`);
+  const uploaded = (await up.json()) as { data?: { id: string } };
+  const fileId = uploaded.data?.id;
+  check("첨부 id 를 돌려준다", Boolean(fileId));
+
+  if (fileId) {
+    const down = await get(`/api/files/${fileId}`);
+    check("다운로드가 200 이다", down?.status === 200, `HTTP ${down?.status}`);
+    check(
+      "실행되지 않게 내려준다 (NFR-SEC-020)",
+      down?.headers.get("x-content-type-options") === "nosniff" &&
+        (down?.headers.get("content-disposition") ?? "").startsWith(
+          "attachment"
+        ),
+      down?.headers.get("content-disposition") ?? ""
+    );
+    check(
+      "한글 이름이 살아 있다",
+      (down?.headers.get("content-disposition") ?? "").includes(
+        encodeURIComponent("스크린샷.png")
+      )
+    );
+    check("Range 를 받는다", down?.headers.get("accept-ranges") === "bytes");
+
+    const partial = await get(`/api/files/${fileId}`, { range: "bytes=0-3" });
+    check(
+      "부분 요청이 206 이다",
+      partial?.status === 206,
+      `HTTP ${partial?.status}`
+    );
+    check(
+      "구간이 맞다",
+      partial?.headers.get("content-range") === `bytes 0-3/${PNG.length}`,
+      partial?.headers.get("content-range") ?? ""
+    );
+
+    // 로그인 없이는 못 받는다 (`NFR-SEC-021`)
+    const anon = await fetch(`${BASE}/api/files/${fileId}`);
+    check(
+      "로그인 없이는 못 받는다",
+      anon.status === 401,
+      `HTTP ${anon.status}`
+    );
+  }
+}
+
+const actorOfId = (id: string): Actor => ({
+  id,
+  username: "verify",
+  role: "MEMBER",
+  via: "WEB",
+});
 
 async function cleanup() {
   for (const k of madeKeys) await storage.remove(k).catch(() => {});

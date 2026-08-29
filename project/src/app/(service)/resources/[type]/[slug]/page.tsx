@@ -26,11 +26,13 @@ import { ResourceActions } from "@/features/resources/components/resource-action
 import { AppError } from "@/lib/errors";
 import * as fileService from "@/server/services/file.service";
 import * as resourceService from "@/server/services/resource.service";
+import { decodeSegment } from "@/lib/route-params";
 
 export async function generateMetadata({
   params,
 }: PageProps<"/resources/[type]/[slug]">): Promise<Metadata> {
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = decodeSegment(rawSlug);
   try {
     const r = await resourceService.getBySlug(slug);
     return { title: r.title };
@@ -45,7 +47,8 @@ export default async function ResourceDetailPage({
 }: PageProps<"/resources/[type]/[slug]">) {
   const session = await requireActiveUser();
 
-  const { type, slug } = await params;
+  const { type, slug: rawSlug } = await params;
+  const slug = decodeSegment(rawSlug);
   const meta = getContentTypeBySlug(type);
   if (!meta) notFound();
 
@@ -136,6 +139,7 @@ export default async function ResourceDetailPage({
             <GithubPanel
               resourceId={resource.id}
               archiveStatus={resource.detail.archiveStatus}
+              isGone={resource.detail.isGone}
               canEdit={canEdit}
             />
           )}

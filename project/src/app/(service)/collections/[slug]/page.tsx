@@ -10,6 +10,7 @@ import { getContentType } from "@/features/resources/content-types";
 import { AppError } from "@/lib/errors";
 import { requireActiveUser, toActor } from "@/server/auth/guards";
 import * as collectionService from "@/server/services/collection.service";
+import { decodeSegment } from "@/lib/route-params";
 
 /*
  * **`generateStaticParams` 를 두지 않습니다.** 이 페이지는 `requireActiveUser()`
@@ -20,7 +21,8 @@ import * as collectionService from "@/server/services/collection.service";
 export async function generateMetadata({
   params,
 }: PageProps<"/collections/[slug]">): Promise<Metadata> {
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = decodeSegment(rawSlug);
   // 제목만 필요하므로 접근 판정 없이 이름만 본다 (없으면 기본값)
   return { title: slug ? "컬렉션" : "컬렉션" };
 }
@@ -36,7 +38,8 @@ export default async function CollectionDetailPage({
   params,
 }: PageProps<"/collections/[slug]">) {
   const session = await requireActiveUser();
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = decodeSegment(rawSlug);
 
   let data;
   try {
