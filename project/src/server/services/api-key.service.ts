@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 
-import type { Role } from "@prisma/client";
+import type { Prisma, Role } from "@prisma/client";
 
 import {
   MAX_KEYS_PER_USER,
@@ -279,4 +279,35 @@ export async function revokeAllKeysFor(
 
     return targets.length;
   });
+}
+
+/**
+ * 트랜잭션 안에서 한 회원의 키를 전부 폐기한다 — **탈퇴 전용**.
+ *
+ * ## 왜 `revokeAllKeysFor` 를 안 쓰는가
+ *
+ * 그쪽은 자기 트랜잭션을 열고 감사 로그를 따로 남깁니다. 탈퇴는 **이미
+ * 트랜잭션 안**이고(`member.service.transition`), 거기서 또 트랜잭션을 열면
+ * 회원 상태는 커밋됐는데 키는 롤백되는 상태가 가능해집니다.
+ *
+ * ## 왜 여기 있는가
+ *
+ * `api_keys` 쓰기는 이 파일과 `auth/api-key.ts` 만 합니다 (`DEC-037`·`DEC-044`).
+ * `member.service` 에서 직접 `tx.apiKey.updateMany` 를 부르면
+ * `check-deps` 가 막습니다 — 실제로 막혔고, 그 규칙이 옳습니다:
+ * 「정지는 폐기가 아니라 판정」이라는 전제가 흐려지는 자리가 바로 여기입니다.
+ *
+ * **감사 로그를 여기서 안 남깁니다.** 부르는 쪽이 `USER_WITHDRAW` 한 줄에
+ * 개수를 실어 남깁니다 — 탈퇴 한 번에 로그 두 줄은 읽는 사람을 헷갈리게 합니다.
+ */
+export async function revokeAllInTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  revokedBy: string
+): Promise<number> {
+  const { count } = await tx.apiKey.updateMany({
+    where: { userId, revokedAt: null },
+    data: { revokedAt: new Date(), revokedBy },
+  });
+  return count;
 }

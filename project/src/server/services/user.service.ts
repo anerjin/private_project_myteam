@@ -40,3 +40,22 @@ export async function getProfile(userId: string): Promise<Profile> {
     lastLoginAt: user.lastLoginAt,
   };
 }
+
+/**
+ * 프로필 수정 (`FR-USER-002`).
+ *
+ * **아이디는 못 바꿉니다.** 감사 로그가 `actor_username` 을 스냅샷으로
+ * 갖고 있고(`DEC-021`), 아이디가 바뀌면 옛 기록이 다른 사람을 가리키는
+ * 것처럼 보입니다. `reserved_usernames` 도 「이 아이디는 영원히 그 사람의
+ * 것」이라는 전제 위에 있습니다.
+ *
+ * 감사 로그를 남기지 **않습니다.** `REQ-02 · 2.10` 의 기록 대상은 권한·계정
+ * 상태·자료이고, 본인이 자기 소개를 고치는 것은 그 목록에 없습니다 —
+ * 전부 남기면 정작 봐야 할 줄이 묻힙니다.
+ */
+export async function updateProfile(
+  userId: string,
+  input: { name: string; department?: string | null; bio?: string | null }
+): Promise<void> {
+  await userRepo.updateProfile(userId, input);
+}

@@ -25,12 +25,14 @@ import * as audit from "@/server/services/audit.service";
 import * as categoryService from "@/server/services/category.service";
 import * as collectionService from "@/server/services/collection.service";
 import * as contentTypeService from "@/server/services/content-type.service";
+import * as maintenanceService from "@/server/services/maintenance.service";
 import * as memberService from "@/server/services/member.service";
 import * as resourceService from "@/server/services/resource.service";
 import * as resourceWrite from "@/server/services/resource.write";
 import * as settingsService from "@/server/services/settings.service";
 import * as storageService from "@/server/services/storage.service";
 import * as tagService from "@/server/services/tag.service";
+import * as userService from "@/server/services/user.service";
 
 const BASE = "http://localhost:3100";
 const COOKIE = process.env.SESSION_COOKIE_NAME || "qb_session";
@@ -727,6 +729,322 @@ async function run() {
     check("만들기 버튼이 있다", list.body.includes("컬렉션 만들기"));
   }
 
+  /* ── 탈퇴 즉시 처리 (DEC-021) ───────────────────────────────────── */
+  console.log("\n★ 탈퇴는 «즉시» 개인정보를 지운다 (DEC-021)");
+  {
+    const leaver = await mkUser("leaver", "MEMBER");
+    const apiKeyService = await import("@/server/services/api-key.service");
+    await apiKeyService.issue(actorOf(leaver), "탈퇴 전 키", ["resources:read"]);
+
+    const col = await collectionService.create(actorOf(leaver), {
+      name: `P8 비공개 ${randomBytes(2).toString("hex")}`,
+      visibility: "PRIVATE",
+    });
+    madeCollections.push(col.slug);
+    const teamCol = await collectionService.create(actorOf(leaver), {
+      name: `P8 팀공개 ${randomBytes(2).toString("hex")}`,
+      visibility: "TEAM",
+    });
+    madeCollections.push(teamCol.slug);
+
+    const anyResource = await db.resource.findFirst({
+      where: { deletedAt: null },
+      select: { id: true },
+    });
+    if (anyResource) {
+      await db.bookmark.create({
+        data: { userId: leaver.id, resourceId: anyResource.id },
+      });
+    }
+
+    await memberService.transition(adminActor, leaver.id, {
+      kind: "WITHDRAW",
+      reason: "즉시 처리 경로를 확인합니다",
+    });
+
+    const after = await db.user.findUniqueOrThrow({
+      where: { id: leaver.id },
+      select: { name: true, department: true, bio: true, username: true },
+    });
+    /*
+     * **이름은 마스킹만** 합니다 — 완전 익명화는 1년 뒤 배치입니다.
+     * 그때까지 관리자가 감사 로그와 이어 볼 수 있어야 합니다.
+     */
+    check("이름이 마스킹된다", after.name.includes("*"), after.name);
+    check("아이디는 그대로 (1년 뒤 익명화)", after.username === leaver.username);
+    check("소속·자기소개가 지워진다", after.department === null && after.bio === null);
+
+    const liveKeys = await db.apiKey.count({
+      where: { userId: leaver.id, revokedAt: null },
+    });
+    check("API 키가 폐기된다", liveKeys === 0, `${liveKeys}개 남음`);
+
+    const privateLeft = await db.collection.count({
+      where: { slug: col.slug, deletedAt: null },
+    });
+    const teamLeft = await db.collection.count({
+      where: { slug: teamCol.slug, deletedAt: null },
+    });
+    check("비공개 컬렉션은 삭제된다", privateLeft === 0);
+    /*
+     * **팀 공개는 남깁니다.** 온보딩 묶음을 만든 사람이 나갔다고 그것이
+     * 사라지면 안 됩니다 — 팀의 자산입니다.
+     */
+    check("팀 공개 컬렉션은 남는다", teamLeft === 1);
+
+    const marks = await db.bookmark.count({ where: { userId: leaver.id } });
+    check("북마크가 삭제된다", marks === 0);
+  }
+
+  /* ── 스케줄 · 보존 배치 (REQ-04 · 4.8, DEC-020·DEC-021) ─────────── */
+  console.log("\n★ 스케줄 작업과 보존 배치");
+  {
+    const rows = await maintenanceService.schedules();
+    check("스케줄 셋을 안다", rows.length === 3, rows.map((r) => r.type).join(","));
+    /*
+     * **한 번도 안 돈 것은 «밀린 것»입니다.** 「아직 때가 아니다」로 두면
+     * 처음 켠 시스템에서 영원히 안 돕니다.
+     */
+    check(
+      "한 번도 안 돈 것은 밀린 것으로 본다",
+      rows.every((r) => r.lastRunAt !== null || r.due),
+      rows.map((r) => `${r.type}:${r.due}`).join(" ")
+    );
+
+    const status = await maintenanceService.retentionStatus();
+    check(
+      "보존 상태를 «읽기만» 하고 센다",
+      typeof status.anonymizeDue === "number" &&
+        typeof status.keysExpiringSoon === "number"
+    );
+
+    // 1년 지난 탈퇴 계정을 만들어 익명화를 실제로 돌린다
+    const old = await mkUser("old", "MEMBER");
+    await memberService.transition(adminActor, old.id, {
+      kind: "WITHDRAW",
+      reason: "1년 경과 익명화 경로를 확인합니다",
+    });
+    await db.user.update({
+      where: { id: old.id },
+      data: {
+        statusChangedAt: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000),
+      },
+    });
+    const oldUsername = (
+      await db.user.findUniqueOrThrow({
+        where: { id: old.id },
+        select: { username: true },
+      })
+    ).username;
+
+    const before = await maintenanceService.retentionStatus();
+    check("익명화 대상으로 잡힌다", before.anonymizeDue >= 1, `${before.anonymizeDue}건`);
+
+    const r = await maintenanceService.runRetention(adminActor);
+    check("익명화된다", r.anonymized >= 1, `${r.anonymized}건`);
+
+    const anon = await db.user.findUniqueOrThrow({
+      where: { id: old.id },
+      select: { username: true, name: true, passwordHash: true },
+    });
+    check("아이디가 바뀐다", anon.username.startsWith("deleted_"), anon.username);
+    check("이름이 익명이 된다", anon.name === "탈퇴한 사용자", anon.name);
+    check("비밀번호 해시가 무효화된다", anon.passwordHash.startsWith("!anonymized:"));
+
+    /*
+     * **옛 아이디는 «예약»됩니다** — 남이 같은 아이디로 가입해 옛 감사
+     * 로그를 물려받으면 안 됩니다.
+     */
+    const reserved = await db.reservedUsername.findUnique({
+      where: { username: oldUsername },
+    });
+    check("옛 아이디가 예약된다", reserved !== null, oldUsername);
+
+    const taken = await import("@/server/repositories/user.repository");
+    check(
+      "그 아이디로는 가입할 수 없다",
+      await taken.isUsernameTaken(oldUsername),
+      "users 와 reserved 양쪽을 본다"
+    );
+
+    // 두 번 돌려도 같은 계정을 다시 잡지 않는다
+    const again = await maintenanceService.runRetention(adminActor);
+    check("이미 익명화된 계정은 다시 안 잡는다", again.anonymized === 0, `${again.anonymized}건`);
+  }
+
+  /*
+   * ## **0건으로 통과시키지 않습니다** (`DEC-044`)
+   *
+   * 스케줄 작업 셋을 처음 돌렸을 때 전부 `DONE` 이었지만 결과가
+   * `{checked: 0}`·`{purged: 0}` 이었습니다 — DB 에 대상이 없었기 때문입니다.
+   * 「돌았다」와 「일했다」는 다릅니다. 그래서 **대상을 만들어 두고** 돌립니다.
+   */
+  console.log("\n★ 스케줄 작업이 실제로 일한다");
+  {
+    const { runNow, enqueue } = await import("@/server/services/job.service");
+    await import("@/server/jobs");
+
+    // ── 링크 확인: 사는 링크와 죽은 링크를 하나씩 ──
+    const mkUrl = async (title: string, url: string) => {
+      const input = parseResourceInput({
+        type: "DEV_NOTE",
+        title,
+        noteKind: "TIP",
+        url,
+      });
+      if (!input.ok) throw new Error("입력 스키마 실패");
+      const r = await resourceWrite.create(editorActor, input.data);
+      madeResources.push(r.id);
+      return r;
+    };
+    /*
+     * **바깥 인터넷을 안 씁니다.** 검증이 네트워크 사정에 따라 흔들리면
+     * 안 되고, `/api/health` 는 이 서버가 항상 200 을 줍니다.
+     */
+    const alive = await mkUrl("P8 링크 살아있음", `${BASE}/api/health`);
+    /*
+     * **`/api/` 아래를 씁니다.** 처음에 `/vp8-definitely-not-here` 를 썼더니
+     * `MOVED` 가 나왔습니다 — 그 경로는 `proxy` 가 로그인으로 307 을 보내고,
+     * 링크 확인은 쿠키가 없으니 `/login` 까지 따라가 **200 + 다른 주소**를
+     * 봅니다. 검사가 틀린 것이지만, **로그인 뒤에 있는 URL 은 죽었는지
+     * 확인할 수 없다**는 사실도 함께 드러났습니다(그래서 `MOVED` 가 맞습니다).
+     */
+    const dead = await mkUrl("P8 링크 죽음", `${BASE}/api/vp8-not-here`);
+
+    const linkJob = await enqueue({ type: "CHECK_LINK" });
+    await runNow(linkJob.id);
+
+    const [a, d] = await Promise.all([
+      db.resource.findUniqueOrThrow({
+        where: { id: alive.id },
+        select: { sourceStatus: true, sourceCheckedAt: true },
+      }),
+      db.resource.findUniqueOrThrow({
+        where: { id: dead.id },
+        select: { sourceStatus: true },
+      }),
+    ]);
+    check("사는 링크는 OK", a.sourceStatus === "OK", String(a.sourceStatus));
+    check("확인 시각을 남긴다", a.sourceCheckedAt !== null);
+    check("404 는 GONE", d.sourceStatus === "GONE", String(d.sourceStatus));
+
+    /*
+     * **로그인 뒤의 주소는 `GONE` 이 아닙니다.** 확인할 수 없는 것을
+     * 「죽었다」로 표시하면 멀쩡한 자료에 「원본 없음」이 붙고, 되돌리는
+     * 사람이 아무도 없습니다.
+     */
+    const walled = await mkUrl("P8 로그인 뒤", `${BASE}/vp8-behind-login`);
+    const j2 = await enqueue({ type: "CHECK_LINK" });
+    await runNow(j2.id);
+    const w = await db.resource.findUniqueOrThrow({
+      where: { id: walled.id },
+      select: { sourceStatus: true },
+    });
+    check(
+      "확인할 수 없는 링크는 GONE 이 아니다",
+      w.sourceStatus === "MOVED",
+      String(w.sourceStatus)
+    );
+
+    const linkResult = await db.job.findUniqueOrThrow({
+      where: { id: linkJob.id },
+      select: { status: true, result: true },
+    });
+    const lr = linkResult.result as { checked: number } | null;
+    check("작업이 끝나고 «몇 건 봤는지» 남긴다", linkResult.status === "DONE" && (lr?.checked ?? 0) >= 2, JSON.stringify(lr));
+
+    // ── 휴지통 정리: 31일 전에 지운 자료 ──
+    const oldTrash = await mkUrl("P8 오래된 휴지통", `${BASE}/api/health`);
+    await db.resource.update({
+      where: { id: oldTrash.id },
+      data: { deletedAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000) },
+    });
+    const fresh = await mkUrl("P8 방금 지운 것", `${BASE}/api/health`);
+    await resourceService.remove(editorActor, fresh.id);
+
+    const trashJob = await enqueue({ type: "CLEANUP_TRASH" });
+    await runNow(trashJob.id);
+
+    const goneRow = await db.resource.findUnique({ where: { id: oldTrash.id } });
+    const freshRow = await db.resource.findUnique({ where: { id: fresh.id } });
+    check("30일 지난 것은 지워진다", goneRow === null);
+    /*
+     * **방금 지운 것은 남아야 합니다.** 유예 기간이 있는 이유가 그것이고,
+     * 경계를 안 보면 「휴지통이 즉시 비는」 코드도 이 검사를 통과합니다.
+     */
+    check("방금 지운 것은 남는다", freshRow !== null);
+
+    const purgeLog = await db.auditLog.findFirst({
+      where: { action: "RESOURCE_PURGE", summary: { contains: "자동 정리" } },
+      select: { summary: true, actorId: true },
+    });
+    check("자동 정리가 기록된다", Boolean(purgeLog), purgeLog?.summary ?? "");
+    /*
+     * **행위자가 없습니다.** 배치가 한 일에 사람 이름을 찍으면
+     * 「그 사람이 새벽에 200건을 지웠다」가 됩니다.
+     */
+    check("배치는 행위자 없이 남는다", purgeLog?.actorId === null);
+  }
+
+  /* ── 마이페이지 (FR-USER-002·007) ───────────────────────────────── */
+  console.log("\n★ 마이페이지 — 프로필 수정과 탈퇴 (FR-USER-002 · 007)");
+  {
+    const meCookie = await cookieFor(member.id);
+    const page = await get("/me", meCookie);
+    check("마이페이지가 열린다", page.status === 200, `${page.status}`);
+    check(
+      "「준비 중」 문구가 사라졌다",
+      !page.body.includes("자기소개 수정은 준비"),
+      "이 문구가 남아 있으면 화면이 옛 상태다"
+    );
+    /*
+     * **탭 안의 것은 HTML 에 없습니다.** Radix `Tabs` 는 활성 탭만 마운트하므로
+     * 「계정」 탭의 탈퇴 버튼은 첫 응답에 안 들어옵니다 — 처음에 그걸 찾다가
+     * 「없다」로 잡혔는데, **화면이 아니라 검사가 틀린** 것이었습니다.
+     * 기본 탭(프로필)에 있는 것으로 «배선됐는가»를 봅니다.
+     */
+    check("프로필 저장 버튼이 있다", page.body.includes("저장"));
+    check(
+      "이름 칸이 잠겨 있지 않다",
+      !/id="name"[^>]*disabled/.test(page.body),
+      "disabled 면 옛 화면이다"
+    );
+
+    // 본인 탈퇴는 **강제 탈퇴와 같은 함수**를 지납니다 — 액션은 앞에 비밀번호만 더합니다
+    const selfLeaver = await mkUser("self", "MEMBER");
+    await memberService.transition(actorOf(selfLeaver), selfLeaver.id, {
+      kind: "WITHDRAW",
+      reason: "본인 요청으로 탈퇴했습니다.",
+    });
+    const selfLog = await db.auditLog.findFirst({
+      where: { targetId: selfLeaver.id, action: "USER_WITHDRAW" },
+      select: { actorUsername: true },
+    });
+    /*
+     * **행위자가 본인입니다.** 관리자가 한 것과 구별되어야 합니다 —
+     * 「누가 이 계정을 없앴나」의 답이 달라집니다.
+     */
+    check(
+      "본인 탈퇴는 행위자가 본인이다",
+      selfLog?.actorUsername === selfLeaver.username,
+      selfLog?.actorUsername ?? ""
+    );
+
+    await userService.updateProfile(member.id, {
+      name: "이름바꿈",
+      department: "검증팀",
+      bio: "한 줄 소개",
+    });
+    const p = await userService.getProfile(member.id);
+    check("프로필이 바뀐다", p.name === "이름바꿈" && p.department === "검증팀");
+
+    /*
+     * **`updateProfile` 로는 상태·역할을 못 바꿉니다** — 그 문은
+     * `member.service.transition` 하나뿐입니다 (`DEC-036`).
+     * 타입이 막으므로 여기서는 «그 인자가 없다»는 사실만 확인합니다.
+     */
+    check("역할·상태는 그대로다", p.role === "MEMBER" && p.status === "ACTIVE");
+  }
   /* ── 권한 경계 (DEC-057, OPEN-016 해소) ─────────────────────────── */
   console.log("\n★ 관리 영역은 통째로 ADMIN 이다 (DEC-057)");
   {
@@ -787,6 +1105,15 @@ async function cleanup() {
     await db.category.deleteMany({ where: { slug: { in: madeCategories } } });
   }
   if (madeUsers.length) {
+    // 익명화가 만든 예약 아이디도 치웁니다 — 안 그러면 매 실행마다 쌓입니다
+    const leftovers = await db.user.findMany({
+      where: { id: { in: madeUsers } },
+      select: { username: true },
+    });
+    void leftovers;
+    await db.reservedUsername.deleteMany({
+      where: { username: { startsWith: "vp8_" } },
+    });
     await db.apiKey.deleteMany({ where: { userId: { in: madeUsers } } });
     await db.session.deleteMany({ where: { userId: { in: madeUsers } } });
     await db.notification.deleteMany({ where: { userId: { in: madeUsers } } });

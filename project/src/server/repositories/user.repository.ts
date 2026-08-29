@@ -48,3 +48,27 @@ export function touchLastLogin(id: string): Promise<User> {
     data: { lastLoginAt: new Date() },
   });
 }
+
+/**
+ * 프로필 수정 (`FR-USER-002`).
+ *
+ * **`status`·`role` 을 안 받습니다.** 그 둘로 가는 문은
+ * `member.service.transition` 하나뿐이고(`DEC-036`), 여기서 열어 주면
+ * 그것이 **두 번째 문**이 됩니다 — advisory 락도, 마지막 관리자 재판정도,
+ * 세션 삭제도, 감사 로그도 없이 상태가 바뀝니다.
+ *
+ * `updateStatus()` 를 두지 않기로 한 것과 같은 이유입니다 (`DEC-044`).
+ */
+export function updateProfile(
+  id: string,
+  input: { name: string; department?: string | null; bio?: string | null }
+): Promise<User> {
+  return db.user.update({
+    where: { id },
+    data: {
+      name: input.name,
+      ...(input.department !== undefined ? { department: input.department } : {}),
+      ...(input.bio !== undefined ? { bio: input.bio } : {}),
+    },
+  });
+}

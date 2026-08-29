@@ -146,7 +146,22 @@ async function run() {
 
   console.log("\n★ 작업 — 만드는 자리와 실행하는 자리가 나뉜다 (DEC-053)");
   {
-    const job = await jobService.enqueue({ type: "CHECK_LINK" });
+    /*
+     * **처리기가 «없는» 타입이어야 합니다.**
+     *
+     * 처음에는 `CHECK_LINK` 를 썼는데 `P8` 이 그 처리기를 만들면서 이 검사가
+     * 깨졌습니다 — 코드가 아니라 **검사의 전제**가 낡은 것입니다.
+     * `GENERATE_THUMBNAIL` 은 작업 타입과 `files.role=THUMBNAIL` 자리는 있고
+     * 만드는 코드가 없는, `check:fr` 이 **부채로 인정한** 상태입니다.
+     * 그것이 채워지는 날 이 검사도 같은 이유로 깨질 텐데, 그때는 처리기가
+     * 없는 타입을 다시 고르면 됩니다 — 「처리기가 없으면 조용히 성공하지
+     * 않는다」는 성질 자체는 그대로입니다.
+     *
+     * > **요구사항 번호를 여기 안 적습니다** (`DEC-049`). 「아직 없다」를
+     * > 설명하는 주석이 그 번호를 달면 `check:fr` 이 「만들었다」로 셉니다 —
+     * > 실제로 여기서 잡혔습니다.
+     */
+    const job = await jobService.enqueue({ type: "GENERATE_THUMBNAIL" });
     const before = await jobOf(job.id);
     check("enqueue 는 QUEUED 만 만든다", before.status === "QUEUED");
     check("아직 시작하지 않았다", before.startedAt === null);

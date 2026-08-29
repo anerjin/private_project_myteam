@@ -4,7 +4,6 @@ import {
   RoleBadge,
   UserStatusBadge,
 } from "@/features/members/components/badges";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -12,13 +11,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import { ChangePasswordForm } from "@/features/auth/components/change-password-form";
 import { ApiKeyPanel } from "@/features/members/components/api-key-panel";
+import {
+  ProfileForm,
+  WithdrawButton,
+} from "@/features/members/components/profile-form";
 import { SessionList } from "@/features/members/components/session-list";
 import { ResourceCard } from "@/features/resources/components/resource-card";
 import { env } from "@/lib/env";
@@ -61,51 +61,23 @@ export default async function MePage() {
         </TabsList>
 
         <TabsContent value="profile" className="mt-4">
-          {/*
-            **입력은 전부 `disabled` 입니다.** 프로필 수정은 `P8`(마이페이지 잔여 기능)
-            몫인데, 전에는 고칠 수 있는 칸과 `onClick` 없는 「저장」 버튼이 있었습니다 —
-            눌러도 아무 일이 안 일어나고 경고도 없습니다.
-            같은 커밋이 관리자 상세에서 장식 버튼 4종을 같은 이유로 걷어냈습니다
-            (`DEC-045`). **「있는데 안 된다」보다 「아직 없다」가 정직합니다.**
-          */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">프로필</CardTitle>
               <CardDescription>
-                아이디는 변경할 수 없습니다. 이름·소속·자기소개 수정은 준비
-                중입니다.
+                아이디는 변경할 수 없습니다. 이름·소속·자기소개를 고칠 수
+                있습니다.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="username">아이디</FieldLabel>
-                  <Input id="username" defaultValue={me.username} disabled />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="name">이름</FieldLabel>
-                  <Input id="name" defaultValue={me.name} disabled />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="dept">소속 팀</FieldLabel>
-                  <Input
-                    id="dept"
-                    defaultValue={me.department ?? ""}
-                    disabled
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="bio">자기소개</FieldLabel>
-                  {/* 읽어 온 값을 그린다 — 안 그리면 P8 이 값을 넣는 순간
-                      사용자가 «사라진» 화면을 보고 빈 칸으로 덮어씁니다 */}
-                  <Textarea
-                    id="bio"
-                    rows={3}
-                    defaultValue={me.bio ?? ""}
-                    disabled
-                  />
-                </Field>
-              </FieldGroup>
+              <ProfileForm
+                profile={{
+                  username: me.username,
+                  name: me.name,
+                  department: me.department,
+                  bio: me.bio,
+                }}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -277,9 +249,14 @@ export default async function MePage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="outline" className="text-destructive" disabled>
-                탈퇴하기 (마지막 관리자는 탈퇴할 수 없습니다)
-              </Button>
+              <WithdrawButton name={me.name} />
+              {/*
+                마지막 관리자 판정은 **서버가** 합니다 (`FR-ADM-009`) — 화면이
+                미리 세면 그 사이 다른 관리자가 생기거나 사라질 수 있습니다.
+              */}
+              <p className="text-muted-foreground mt-2 text-xs">
+                관리자가 한 명뿐이면 탈퇴할 수 없습니다.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>

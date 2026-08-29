@@ -2,6 +2,7 @@ import { RotateCcw } from "lucide-react";
 import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/common/page-header";
+import { MaintenancePanel } from "@/features/admin/components/maintenance-panel";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -19,6 +20,7 @@ import type { JobStatus } from "@/types";
 import { requireRole } from "@/server/auth/guards";
 import { rateLimit as githubRateLimit } from "@/lib/github";
 import * as jobService from "@/server/services/job.service";
+import * as maintenanceService from "@/server/services/maintenance.service";
 
 export const metadata: Metadata = { title: "작업 모니터" };
 
@@ -38,6 +40,24 @@ const JOB_LABEL: Record<string, string> = {
   CLEANUP_TRASH: "휴지통 정리",
 };
 
+/**
+ * 스케줄 표시 이름 — **주기는 `maintenance.service` 가 압니다.**
+ *
+ * 여기에는 사람이 읽을 문구만 둡니다. 숫자를 다시 적으면 주기를 고칠 때
+ * 화면만 옛 값을 말하게 됩니다.
+ */
+const SCHEDULE_LABEL: Record<string, string> = {
+  REFRESH_GITHUB_META: "저장소 메타 갱신",
+  CHECK_LINK: "원본 링크 확인",
+  CLEANUP_TRASH: "휴지통 정리",
+};
+
+const SCHEDULE_EVERY: Record<string, string> = {
+  REFRESH_GITHUB_META: "주 1회",
+  CHECK_LINK: "월 1회",
+  CLEANUP_TRASH: "일 1회 · 30일 경과분",
+};
+
 /** SCR-241 수집 작업 모니터 */
 export default async function AdminJobsPage() {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
@@ -50,10 +70,14 @@ export default async function AdminJobsPage() {
    * 하드코딩한 안내문은 「작업이 있는가」에 대한 두 번째 출처이고,
    * 워커가 붙은 날 그 문장이 남아 있게 됩니다.
    */
-  const [{ counts, recent: jobs, requesterNames }, rate] = await Promise.all([
-    jobService.board(),
+  const [{ counts, recent: jobs, requesterNames }, rate, schedules, retention] =
+    await Promise.all([
+      jobService.board(),
     // 못 읽어도 화면이 깨질 이유가 없다 — 카드만 빠진다
     githubRateLimit().catch(() => null),
+    // **읽기만** 하는 것들입니다 — 렌더가 데이터를 바꾸면 안 됩니다
+    maintenanceService.schedules(),
+    maintenanceService.retentionStatus(),
   ]);
 
   return (
@@ -62,6 +86,20 @@ export default async function AdminJobsPage() {
         title="수집 작업 모니터"
         description="백그라운드 작업의 진행 상황과 실패를 확인합니다."
         action={<AutoRefresh />}
+      />
+
+      <MaintenancePanel
+        schedules={schedules.map((s) => ({
+          type: s.type,
+          label: SCHEDULE_LABEL[s.type],
+          every: SCHEDULE_EVERY[s.type],
+          lastRunAt: s.lastRunAt?.toISOString() ?? null,
+          due: s.due,
+        }))}
+        retention={{
+          keysExpiringSoon: retention.keysExpiringSoon,
+          githubTokenMissing: retention.githubTokenMissing,
+        }}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">

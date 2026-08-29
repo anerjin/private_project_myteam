@@ -13,6 +13,7 @@ import {
   invalidateSessionCache,
 } from "@/server/auth/session";
 import * as memberRepo from "@/server/repositories/member.repository";
+import * as apiKeyService from "@/server/services/api-key.service";
 import * as audit from "@/server/services/audit.service";
 import * as notify from "@/server/services/notification.service";
 
@@ -50,6 +51,9 @@ import * as notify from "@/server/services/notification.service";
  * `BigInt()` 로 만든다. `pg_advisory_xact_lock` 은 bigint 를 받는다.
  */
 const MEMBER_STATE_LOCK = BigInt(51420001);
+
+/** 익명화된 계정의 아이디 접두사 — 「이미 처리됨」 판정이 이 하나를 봅니다 */
+const ANON_PREFIX = "deleted_";
 
 export type Transition =
   | { kind: "APPROVE" }
@@ -137,13 +141,15 @@ const SPECS: Record<Transition["kind"], TransitionSpec> = {
   /**
    * 강제 탈퇴 (`FR-ADM-008`).
    *
-   * **API 키를 따로 폐기하지 않습니다.** `verifyKey` 가 매 요청 소유자
-   * `status = ACTIVE` 를 보므로(`DEC-037`) 그 순간부터 전부 무효입니다.
-   * 여기서 또 폐기하면 **같은 규칙이 두 곳**에 생기고, 새 상태를 추가한 사람이
-   * 한쪽을 빠뜨립니다 — `DEC-037` 이 「폐기하지 않고 매 요청 판정」으로 정한 이유입니다.
+   * **즉시 처리와 1년 뒤 배치가 나뉩니다** (`DEC-021`, `REQ-02 · 2.3`).
    *
-   * 익명화는 여기서 하지 않습니다 — `DEC-021` 은 **1년 뒤** 보존 배치의 몫으로
-   * 정했습니다. 즉시 지우면 「누가 무엇을 했는가」가 그 자리에서 사라집니다.
+   * 즉시: 이름 마스킹 · 전 세션 만료 · **전 API 키 폐기** · 개인 컬렉션·북마크 삭제.
+   * 1년 뒤(`maintenance.service`): 아이디를 `reserved_usernames` 로 옮기고
+   * 계정을 익명화합니다.
+   *
+   * 키를 여기서 «폐기»하는 것이 `DEC-037` 과 모순이 아닌 이유: 그 결정은
+   * **되돌아올 수 있는 상태**(`SUSPENDED → ACTIVE`)를 겨눈 것이고, 탈퇴에는
+   * 돌아오는 전이가 없습니다.
    *
    * 알림도 만들지 않습니다 (`DEC-041`) — 탈퇴한 계정은 로그인이 막혀
    * 알림함에 영원히 도달하지 못합니다.
@@ -171,6 +177,21 @@ export interface TransitionResult {
  * 「어떤 전이는 끊고 어떤 전이는 안 끊는다」는 표를 만드는 순간 그 표가 **두 번째 규칙**이
  * 되고, 새 전이를 추가한 사람이 표를 빠뜨립니다 (`DEC-036`).
  */
+
+/**
+ * 이름 마스킹 (`DEC-021` 「탈퇴 즉시」).
+ *
+ * 성 한 글자만 남기고 가립니다(`홍길동` → `홍**`). 한 글자 이름은 그대로
+ * 두면 가려지지 않으므로 `*` 를 붙입니다.
+ *
+ * **완전히 지우지 않는 이유**는 1년 뒤 익명화가 따로 있기 때문입니다 —
+ * 그때까지 관리자가 감사 로그와 이어 볼 수 있어야 합니다.
+ */
+function maskName(name: string): string {
+  const trimmed = name.trim();
+  if (trimmed.length <= 1) return `${trimmed}*`;
+  return trimmed[0] + "*".repeat(trimmed.length - 1);
+}
 
 /** 이 전이가 «활성 관리자» 집합에서 대상을 빼는가 — 일반식으로 판정한다 */
 function removesActiveAdmin(
@@ -316,10 +337,58 @@ export async function transition(
       statusReason: "reason" in t ? t.reason : null,
     };
 
+    /*
+     * **탈퇴는 «즉시» 개인정보를 지웁니다** (`DEC-021`, `REQ-02 · 2.3`).
+     *
+     * 상태만 바꾸면 이름·소속·자기소개가 그대로 남고, 그 사람의 비공개
+     * 컬렉션과 북마크도 남습니다 — 「탈퇴했는데 내 것이 그대로 있다」입니다.
+     * 1년 뒤 배치는 **아이디까지 익명화**하는 별개의 단계이고, 즉시 처리는
+     * 여기입니다.
+     *
+     * 이름은 **마스킹**만 합니다(`홍**`) — 관리자가 감사 로그와 이어 볼 수
+     * 있어야 하고, 완전 익명화는 1년 뒤입니다.
+     */
+    if (t.kind === "WITHDRAW") {
+      Object.assign(data, {
+        name: maskName(target.name),
+        department: null,
+        bio: null,
+        avatarUrl: null,
+      });
+    }
+
     await tx.user.update({ where: { id: targetId }, data });
 
     // 세션 «행» 은 같은 트랜잭션에서. 캐시는 커밋 후 (DEC-035 순서)
     const { count } = await deleteSessionsFor(tx, targetId);
+
+    let withdrawn: { keys: number; collections: number; bookmarks: number } | null =
+      null;
+    if (t.kind === "WITHDRAW") {
+      /*
+       * **API 키는 «폐기»합니다.** `DEC-037` 이 「정지·거부는 폐기하지 않고 매
+       * 요청 판정」으로 정한 것은 **되돌아올 수 있는 상태**이기 때문입니다 —
+       * `SUSPENDED → ACTIVE` 면 키가 그대로 살아나야 합니다. 탈퇴는 돌아오는
+       * 전이가 없으므로 그 근거가 성립하지 않고, `REQ-02 · 2.3` 이 「전 API 키
+       * 폐기」를 명시합니다.
+       */
+      const keys = await apiKeyService.revokeAllInTx(tx, targetId, actor.id);
+
+      // 개인 컬렉션만 — **팀 공개는 남깁니다.** 온보딩 묶음이 사라지면 안 됩니다
+      const collections = await tx.collection.updateMany({
+        where: { ownerId: targetId, visibility: "PRIVATE", deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+      const bookmarks = await tx.bookmark.deleteMany({
+        where: { userId: targetId },
+      });
+
+      withdrawn = {
+        keys,
+        collections: collections.count,
+        bookmarks: bookmarks.count,
+      };
+    }
 
     /*
      * **감사 로그도 같은 트랜잭션 안입니다** (`DEC-043`).
@@ -342,6 +411,17 @@ export async function transition(
           status: { before: before.status, after: after.status },
           role: { before: before.role, after: after.role },
           sessions: { deleted: count },
+          ...(withdrawn
+            ? {
+                // 무엇이 사라졌는지 남깁니다 — 나중에 「내 북마크가 왜 없냐」의 답입니다
+                apiKeys: { before: String(withdrawn.keys), after: "0" },
+                collections: {
+                  before: String(withdrawn.collections),
+                  after: "비공개 삭제 · 팀 공개 유지",
+                },
+                bookmarks: { before: String(withdrawn.bookmarks), after: "0" },
+              }
+            : {}),
           ...(batchId ? { batchId } : {}),
         },
       },
@@ -574,4 +654,85 @@ export async function resetPassword(
     username,
     sessions: { deleted: count, cacheInvalidated },
   };
+}
+
+/**
+ * 1년 지난 탈퇴 계정 익명화 (`DEC-021`, `REQ-02 · 2.3`).
+ *
+ * ## 왜 «여기»인가
+ *
+ * `users` 쓰기는 이 파일과 `user.repository`·`auth.service` 만 합니다
+ * (`DEC-036`·`DEC-044`). 보존 배치(`maintenance.service`)에서 직접 쓰다가
+ * `check-deps` 에 막혔고, 그 규칙이 옳습니다 — **계정의 생애를 아는 파일이
+ * 하나**여야 상태 전이와 익명화가 서로 모르는 일이 안 생깁니다.
+ * 배치는 **언제 돌릴지**를 알고, 이 함수는 **무엇을 할지**를 압니다.
+ *
+ * ## 계정 행을 **지우지 않습니다**
+ *
+ * 지우면 그 사람이 등록한 자료와 감사 로그의 참조가 끊깁니다. 개인정보를
+ * 없애는 목적은 익명화로 똑같이 달성되고, 기록은 남습니다.
+ *
+ * ## 아이디는 `reserved_usernames` 로 옮깁니다
+ *
+ * 남이 같은 아이디로 가입해 **옛 감사 로그를 물려받는 일**이 없어야 합니다.
+ * 가입 검사가 이미 `users` 와 `reserved_usernames` 양쪽을 봅니다.
+ *
+ * ## 비밀번호 해시를 무효화합니다
+ *
+ * 새 난수로 덮습니다. 빈 문자열로 두면 「해시가 빈 계정」이라는 특수 상태가
+ * 생기고, 그걸 아는 코드가 필요해집니다.
+ *
+ * @param retainMs 이만큼 지난 탈퇴 계정이 대상. 기간은 **배치가** 정합니다
+ */
+export async function anonymizeWithdrawn(
+  actor: Actor,
+  retainMs: number
+): Promise<number> {
+  const cutoff = new Date(Date.now() - retainMs);
+
+  const targets = await db.user.findMany({
+    where: {
+      status: "WITHDRAWN",
+      statusChangedAt: { lt: cutoff },
+      // 이미 익명화된 계정은 다시 잡지 않는다
+      username: { not: { startsWith: ANON_PREFIX } },
+    },
+    select: { id: true, username: true },
+  });
+  if (targets.length === 0) return 0;
+
+  for (const t of targets) {
+    await db.$transaction(async (tx) => {
+      await tx.reservedUsername.upsert({
+        where: { username: t.username },
+        create: { username: t.username, reason: "탈퇴 계정 익명화 (DEC-021)" },
+        update: {},
+      });
+      await tx.user.update({
+        where: { id: t.id },
+        data: {
+          username: `${ANON_PREFIX}${randomUUID().replace(/-/g, "").slice(0, 8)}`,
+          name: "탈퇴한 사용자",
+          passwordHash: `!anonymized:${randomUUID()}`,
+          department: null,
+          bio: null,
+          avatarUrl: null,
+          signupReason: null,
+          statusReason: null,
+        },
+      });
+      await audit.log(
+        actor,
+        {
+          action: "USER_WITHDRAW",
+          targetType: "user",
+          targetId: t.id,
+          // **옛 아이디를 남깁니다** — 그것이 「누구였는가」의 마지막 흔적입니다
+          summary: `탈퇴 계정 익명화 — ${t.username} (1년 경과)`,
+        },
+        tx
+      );
+    });
+  }
+  return targets.length;
 }
