@@ -147,4 +147,9 @@ export async function cleanup() {
   await db.reservedUsername.deleteMany({
     where: { username: { startsWith: E2E_PREFIX } },
   });
+  /*
+   * 태그는 자료를 지워도 남습니다 (`resource_tags` 만 정리됩니다). 안 지우면
+   * 실행할 때마다 `e2e끝태그…` 가 인기 태그 목록에 쌓입니다.
+   */
+  await db.tag.deleteMany({ where: { slug: { startsWith: "e2e" } } });
 }

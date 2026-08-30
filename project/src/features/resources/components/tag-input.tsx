@@ -153,6 +153,25 @@ export function TagInput({
           setDraft(v);
         }}
         onFocus={() => setOpen(options.length > 0)}
+        /*
+         * **칸을 떠날 때 확정합니다.**
+         *
+         * 확정 계기가 쉼표·Enter·후보 클릭 셋뿐이었습니다. 그래서 마지막
+         * 태그를 치고 곧바로 「등록」을 누르면 **그 태그가 조용히 사라졌습니다** —
+         * 화면에는 글자가 남아 있는데 저장된 자료에는 없습니다.
+         * 화면 폼으로 6종을 등록해 보다가 여섯 개 전부 마지막 태그를 잃었습니다.
+         *
+         * 이 파일이 바로 위에서 「`name` 이 없으면 오류 없이 사라집니다」라고
+         * 적어 둔 그 자리입니다 — 사라지는 길이 하나 더 있었습니다.
+         *
+         * **후보를 누르러 간 것이면 확정하지 않습니다.** 그 클릭은
+         * `mousedown → blur → click` 순서라, 여기서 초안을 확정하면
+         * 「파이」와 「파이프라인」이 **둘 다** 들어갑니다.
+         */
+        onBlur={(e) => {
+          if (boxRef.current?.contains(e.relatedTarget as Node | null)) return;
+          add(draft);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             // **폼을 제출하지 않습니다** — 태그를 확정하려던 것뿐입니다

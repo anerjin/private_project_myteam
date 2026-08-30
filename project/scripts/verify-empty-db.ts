@@ -104,6 +104,23 @@ async function run() {
     where: { isActive: true },
     select: { id: true },
   });
+
+  /*
+   * **끄기 «전»의 기준선을 먼저 잡습니다.**
+   *
+   * 이 절은 두 번 틀렸습니다. 처음에는 「끈 뒤 화면에 그 말이 아예 없다」로
+   * 봤는데, ① 자료가 44건이 되자 **그 분류를 쓰는 카드**에 라벨이 찍혀서,
+   * ② 그 다음에는 **카테고리와 같은 이름의 태그**(`포인트클라우드`)가 생겨서
+   * 실패했습니다. 두 번 다 화면은 멀쩡했고 검사가 틀렸습니다.
+   *
+   * 물어야 할 것은 「어디에도 없는가」가 아니라 **「필터에서 하나 줄었는가」**
+   * 입니다. 같은 낱말이 자료 제목·태그로 몇 번 더 나오든 상관없어집니다.
+   */
+  const NOTHING = `?q=${encodeURIComponent("vempty없는말zzq")}`;
+  const countOf = (body: string, label: string) => body.split(label).length - 1;
+  const baseBrowse = await get(`/resources${NOTHING}`, cookie);
+  const baseForm = await get("/resources/new?type=AI_MATERIAL", cookie);
+
   try {
     await db.category.updateMany({ data: { isActive: false } });
 
@@ -147,14 +164,17 @@ async function run() {
      * 아무것도 안 걸리는 검색어를 주면 카드가 0장이므로, 라벨이 남아 있다면
      * **필터에서 온 것**입니다. 묻고 싶었던 질문이 그것입니다.
      */
-    const NOTHING = `?q=${encodeURIComponent("vempty없는말zzq")}`;
     const browse = await get(`/resources${NOTHING}`, cookie);
     check("자료 목록이 열린다", browse.status === 200, `HTTP ${browse.status}`);
     for (const label of [...HARDCODED_LABELS, ...DB_ONLY_LABELS]) {
+      const was = countOf(baseBrowse.body, label);
+      const now = countOf(browse.body, label);
       check(
-        `목록 필터에서 «${label}» 이 사라졌다`,
-        !browse.body.includes(label),
-        "남아 있으면 그 값은 DB 가 아니라 코드에서 온다"
+        `목록 필터에서 «${label}» 이 줄었다`,
+        was > 0 && now < was,
+        was === 0
+          ? "끄기 전에도 화면에 없었다 — 필터가 이 분류를 안 싣는다"
+          : `${was} → ${now} · 안 줄면 그 값은 DB 가 아니라 코드에서 온다`
       );
     }
 
@@ -166,10 +186,14 @@ async function run() {
     const form = await get("/resources/new?type=AI_MATERIAL", cookie);
     check("등록 폼이 열린다", form.status === 200, `HTTP ${form.status}`);
     for (const label of HARDCODED_LABELS) {
+      const was = countOf(baseForm.body, label);
+      const now = countOf(form.body, label);
       check(
-        `폼의 «${label}» 선택지도 사라졌다`,
-        !form.body.includes(label),
-        "폼이 코드에서 카테고리를 읽고 있다"
+        `폼의 «${label}» 선택지도 줄었다`,
+        was > 0 && now < was,
+        was === 0
+          ? "끄기 전에도 폼에 없었다 — 선택지가 이 분류를 안 싣는다"
+          : `${was} → ${now} · 안 줄면 폼이 코드에서 카테고리를 읽고 있다`
       );
     }
   } finally {

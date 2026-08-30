@@ -199,6 +199,20 @@ test("③ GitHub 자료를 등록하면 수집 작업이 걸린다", async ({ pa
     .getByLabel("URL", { exact: false })
     .first()
     .fill("https://github.com/octocat/Spoon-Knife");
+
+  /*
+   * **마지막 태그는 쉼표로 끝내지 «않습니다».**
+   *
+   * 태그 칸은 쉼표·Enter·후보 클릭에서만 확정했고, 칸에 남은 글자는 어디에도
+   * 실리지 않았습니다. 그래서 마지막 태그를 치고 곧바로 「등록」을 누르면
+   * **조용히 사라졌습니다** — 화면 폼으로 6종을 등록해 보다가 여섯 개 전부
+   * 마지막 태그를 잃고서야 알았습니다.
+   *
+   * 사람이 실제로 하는 동작이 이것입니다. 그러니 검사도 이렇게 칩니다.
+   */
+  const tagKept = `e2e끝태그${Date.now().toString(36)}`;
+  await page.getByLabel("태그").fill(`e2e첫태그, ${tagKept}`);
+
   /*
    * **`exact: true` 입니다.** `/등록/` 로 잡으면 같은 화면 위쪽의 「URL 빠른
    * 등록」(`FR-RES-005`)이 가진 **「등록 폼 열기」**가 먼저 걸립니다 — 그건
@@ -213,8 +227,12 @@ test("③ GitHub 자료를 등록하면 수집 작업이 걸린다", async ({ pa
 
   const created = await db.resource.findFirstOrThrow({
     where: { title },
-    select: { id: true },
+    select: { id: true, tags: { select: { tag: { select: { label: true } } } } },
   });
+
+  // 쉼표로 끝내지 않은 태그도 저장돼 있어야 한다
+  const labels = created.tags.map((t) => t.tag.label);
+  expect(labels, `저장된 태그: ${labels.join(", ")}`).toContain(tagKept);
 
   /*
    * **메타 수집 작업이 «걸리는» 것까지 봅니다.** 실제 GitHub 응답은
