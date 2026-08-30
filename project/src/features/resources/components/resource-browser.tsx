@@ -141,7 +141,15 @@ export function ResourceBrowser({
                 go({ category: v === "all" ? undefined : v })
               }
             >
-              <SelectTrigger className="w-36">
+              {/*
+                **`aria-label` 이 필요합니다** (`NFR-A11Y-005`).
+
+                이 필터들은 보이는 `<label>` 이 없고, 고른 값이 「전체」일 때는
+                트리거가 비어 보입니다 — axe 가 `button-name` (critical) 로
+                잡았습니다. `placeholder` 는 «비었을 때만» 나오는 글씨라
+                접근 이름이 되지 못합니다.
+              */}
+              <SelectTrigger className="w-36" aria-label="카테고리 필터">
                 <SelectValue placeholder="카테고리" />
               </SelectTrigger>
               <SelectContent>
@@ -158,7 +166,7 @@ export function ResourceBrowser({
               value={query.author ?? "all"}
               onValueChange={(v) => go({ author: v === "all" ? undefined : v })}
             >
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-32" aria-label="등록자 필터">
                 <SelectValue placeholder="등록자" />
               </SelectTrigger>
               <SelectContent>
@@ -175,7 +183,7 @@ export function ResourceBrowser({
               value={query.sort}
               onValueChange={(v) => go({ sort: v as SortKey })}
             >
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-32" aria-label="정렬 기준">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

@@ -63,7 +63,13 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  /*
+   * shadcn 기본값은 `0.556` 인데, `--muted`(0.97) 위에서 대비가 **4.07:1** 로
+   * `NFR-A11Y-003`(본문 4.5:1)에 못 미칩니다. 흰 배경 위에서도 4.48 이라
+   * 아슬아슬했습니다. axe 가 대시보드의 태그 칩(`#mcp`)과 `Ctrl K` 힌트에서
+   * 잡았습니다 — 태그 이름은 장식이 아니라 **읽어야 하는 내용**입니다.
+   */
+  --muted-foreground: oklch(0.52 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);

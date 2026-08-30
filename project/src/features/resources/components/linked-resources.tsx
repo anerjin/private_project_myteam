@@ -148,7 +148,7 @@ export function LinkedResources({
                 value={kind}
                 onValueChange={(v) => setKind(v as RelationType)}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-32" aria-label="연결 종류">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

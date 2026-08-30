@@ -518,7 +518,8 @@ export function MemberTable({ members }: { members: MemberRow[] }) {
           className="w-full sm:w-56"
         />
         <Select value={role} onValueChange={setRole}>
-          <SelectTrigger className="w-32">
+          {/* 보이는 라벨이 없는 필터라 이름을 직접 답니다 (`NFR-A11Y-005`) */}
+          <SelectTrigger className="w-32" aria-label="역할 필터">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

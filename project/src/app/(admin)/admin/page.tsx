@@ -175,7 +175,16 @@ export default async function AdminDashboardPage() {
               **차단과 같은 숫자를 봅니다.** 게이지가 다른 값을 그리면
               「아직 여유 있는데 거부당했다」가 됩니다.
             */}
-            <Progress value={Math.min(100, storage.archive.ratio * 100)} />
+            {/*
+              **게이지에도 이름이 필요합니다** (`NFR-A11Y-005`). 옆의 숫자는
+              화면으로 «보는» 사람에게만 이 막대와 이어집니다 — 스크린리더는
+              「진행률 표시줄」이라고만 읽습니다. axe 가
+              `aria-progressbar-name` (serious) 으로 잡았습니다.
+            */}
+            <Progress
+              aria-label="GitHub 아카이브 사용량"
+              value={Math.min(100, storage.archive.ratio * 100)}
+            />
             {storage.archive.full ? (
               <p className="text-destructive text-xs">
                 상한에 닿았습니다. 새 아카이브가 거부됩니다.

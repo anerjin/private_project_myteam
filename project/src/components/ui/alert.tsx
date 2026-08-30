@@ -9,8 +9,16 @@ const alertVariants = cva(
     variants: {
       variant: {
         default: "bg-card text-card-foreground",
+        /*
+         * **`/90` 을 뺐습니다** (`NFR-A11Y-003`).
+         *
+         * shadcn 기본값은 설명글을 `text-destructive/90` 으로 흐리는데,
+         * 흰 `bg-card` 위에서 그 10%가 대비를 4.5:1 아래로 끌어내립니다 —
+         * axe 가 관리자 홈의 「실패한 작업」 알림에서 잡았습니다.
+         * 경고문이 흐릿한 것은 «스타일»이 아니라 «못 읽는 것»입니다.
+         */
         destructive:
-          "bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+          "bg-card text-destructive *:data-[slot=alert-description]:text-destructive *:[svg]:text-current",
       },
     },
     defaultVariants: {
