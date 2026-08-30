@@ -42,10 +42,24 @@ const providedToolSchema = z.object({
 /**
  * 폼이 보내는 JSON 문자열을 배열로 만듭니다. **빈 칸은 «없음»**이고,
  * 형식이 틀리면 오류입니다 — 조용히 버리면 사용자가 적은 것이 사라집니다.
+ *
+ * ## 배열 갈래에 **`item` 을 그대로 씁니다** — `z.unknown()` 이 아니라
+ *
+ * 처음에는 `z.array(z.unknown())` 이었고 검사는 아래 `transform` 안에서만
+ * 했습니다. 동작은 같았지만 **`API-100` 이 내보내는 JSON Schema 가
+ * `items: {}`(무엇이든)** 이 됐습니다 — `z.toJSONSchema` 는 선언된 입력
+ * 타입만 볼 수 있고 `transform` 안은 못 봅니다.
+ *
+ * 그래서 에이전트가 스키마를 «믿고» `["QUEENBEE_URL", …]` 처럼 보내면
+ * 서버가 422 로 거절합니다. 실제로 이 저장소에 자료를 채우면서 그렇게
+ * 걸렸습니다. 자기 계약을 스스로 어기는 선언이고, 이 저장소가 반복해서
+ * 지워 온 형태입니다 — 이제 **선언이 계약을 담습니다.**
  */
 function jsonArray<T extends z.ZodTypeAny>(item: T, label: string) {
   return z
-    .union([z.string(), z.array(z.unknown())])
+    .union([z.string(), z.array(item)], {
+      error: `${label} 형식이 맞지 않습니다.`,
+    })
     .optional()
     .transform((v, ctx) => {
       if (v === undefined || v === "") return undefined;

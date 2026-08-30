@@ -136,7 +136,19 @@ async function run() {
      * **사용자 화면에서는 사라져야 합니다.** 여기가 「DB 에서 오는가」의
      * 진짜 증거입니다 — 하드코딩이었다면 DB 를 어떻게 만져도 안 사라집니다.
      */
-    const browse = await get("/resources", cookie);
+    /*
+     * **결과가 «0건»인 목록으로 묻습니다.**
+     *
+     * 처음에는 그냥 `/resources` 를 받아 라벨이 본문에 없는지 봤습니다.
+     * 자료가 한 건뿐일 때는 통했지만, 실제 자료 44건을 채우자 «LLM»과
+     * «프론트엔드»에서 실패했습니다 — **그 분류를 쓰는 자료 카드**에도
+     * 라벨이 찍히기 때문입니다. 화면은 멀쩡했고 검사가 틀렸습니다.
+     *
+     * 아무것도 안 걸리는 검색어를 주면 카드가 0장이므로, 라벨이 남아 있다면
+     * **필터에서 온 것**입니다. 묻고 싶었던 질문이 그것입니다.
+     */
+    const NOTHING = `?q=${encodeURIComponent("vempty없는말zzq")}`;
+    const browse = await get(`/resources${NOTHING}`, cookie);
     check("자료 목록이 열린다", browse.status === 200, `HTTP ${browse.status}`);
     for (const label of [...HARDCODED_LABELS, ...DB_ONLY_LABELS]) {
       check(

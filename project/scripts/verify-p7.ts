@@ -143,6 +143,35 @@ async function run() {
       (skill.detailSchema.required ?? []).includes("skillName"),
       JSON.stringify(skill.detailSchema.required)
     );
+
+    /*
+     * **배열 항목의 «모양»까지 내려줘야 합니다.**
+     *
+     * `MCP_SERVER` 의 `envVars`·`providedTools` 는 한동안 `items: {}`
+     * (무엇이든)로 나갔습니다 — 입력 타입이 `z.array(z.unknown())` 이었고,
+     * 진짜 검사는 `transform` 안에 있어 `z.toJSONSchema` 가 못 봤기 때문입니다.
+     *
+     * 그러면 이 API 는 **자기 계약을 어깁니다**: 에이전트가 스키마를 믿고
+     * `["A","B"]` 를 보내면 서버가 422 로 거절합니다. 실제 자료를 채우다
+     * 그렇게 걸렸습니다. 「스키마를 보고 만들면 통과한다」가 이 API 의 존재
+     * 이유이므로, **그 약속이 지켜지는지**를 여기서 봅니다.
+     */
+    const mcp = types.find((t) => t.code === "MCP_SERVER")!;
+    for (const [field, key] of [
+      ["envVars", "key"],
+      ["providedTools", "name"],
+    ] as const) {
+      const prop = mcp.detailSchema.properties?.[field] as
+        | { anyOf?: { type?: string; items?: { properties?: Record<string, unknown> } }[] }
+        | undefined;
+      const arr = prop?.anyOf?.find((b) => b.type === "array");
+      const props = Object.keys(arr?.items?.properties ?? {});
+      check(
+        `${field} 배열 항목의 모양이 내려온다`,
+        props.includes(key),
+        props.length ? props.join(", ") : "items 가 비어 있음 — 무엇이든 받는다고 말한다"
+      );
+    }
   }
 
   console.log("\n★ API-106 분류 — 있는 것만 쓰게 한다 (FR-CLI-007)");
