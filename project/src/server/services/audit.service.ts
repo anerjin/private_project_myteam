@@ -192,6 +192,58 @@ export async function list(page: {
   };
 }
 
+/* ── 정리 (`SCR-251`, `DEC-021` 보존 1년) ─────────────────────────── */
+
+/** 이 시점 이전 기록이 몇 건인가 — 버튼이 «몇 건 지울지» 말하려면 필요합니다 */
+export async function countBefore(cutoff: Date): Promise<number> {
+  return db.auditLog.count({ where: { createdAt: { lt: cutoff } } });
+}
+
+/**
+ * 이 시점 이전 기록을 지우고, **지웠다는 사실을 다시 남깁니다.**
+ *
+ * ## 지운 사실은 지워지지 않습니다
+ *
+ * 감사 로그를 지우는 일은 흔적을 끊는 일입니다. 그래서 이 함수는 삭제와
+ * 기록을 **한 트랜잭션**에 둡니다 — 지우기는 커밋됐는데 기록이 실패하면
+ * 「왜 작년 기록이 없느냐」에 답이 없어집니다.
+ *
+ * 남는 줄이 그 답의 첫 줄입니다: 누가 · 언제 · 몇 건 · 어느 시점 이전인지.
+ *
+ * ## 「필터에 걸린 것만」은 **일부러 만들지 않았습니다**
+ *
+ * 조건은 **시점 하나**입니다. 「이 사람의 기록만 지우기」는 은폐에 딱 맞는
+ * 모양이고, 감사 로그가 존재하는 이유를 정면으로 거스릅니다.
+ * 시점 기준은 보존 정책(`DEC-021`)과 같은 축이라 설명할 수 있습니다.
+ *
+ * 보존 배치(`maintenance.service`)도 **이 함수를 씁니다** — 자동 정리와
+ * 관리자 정리가 다른 코드를 타면 한쪽만 기록을 남기는 날이 옵니다.
+ */
+export async function purgeBefore(
+  actor: Actor,
+  cutoff: Date,
+  /** 사람이 읽을 사유 — 배치인지 관리자가 누른 것인지 구별합니다 */
+  reason: string
+): Promise<number> {
+  return db.$transaction(async (tx) => {
+    const { count } = await tx.auditLog.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+    if (count === 0) return 0;
+    await log(
+      actor,
+      {
+        action: "AUDIT_PURGE",
+        targetType: "audit_log",
+        summary: `감사 로그 ${count}건을 지웠습니다 — ${reason}`,
+        diff: { cutoff: { before: "-", after: cutoff.toISOString() } },
+      },
+      tx
+    );
+    return count;
+  });
+}
+
 /**
  * 행위자 필터의 선택지 (`FR-AUDIT-002`).
  *

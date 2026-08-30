@@ -42,6 +42,15 @@ export const AUDIT_ACTIONS = [
   "FILE_DELETE",
   "ARCHIVE_RUN",
   "SETTING_UPDATE",
+  /*
+   * 관리자가 «기록 자체»를 지우는 행위 (`SCR-241`·`SCR-251`).
+   *
+   * **지운 사실은 지워지지 않아야 합니다.** 특히 `AUDIT_PURGE` 는 그 자신이
+   * 감사 로그에 남는 유일한 흔적입니다 — 「왜 작년 기록이 없느냐」의 답이
+   * 여기 있습니다. 보존 배치(`maintenance.service`)가 쓰던 방식과 같습니다.
+   */
+  "JOB_PURGE",
+  "AUDIT_PURGE",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -80,6 +89,8 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   FILE_DELETE: "파일 삭제",
   ARCHIVE_RUN: "아카이브 실행",
   SETTING_UPDATE: "설정 변경",
+  JOB_PURGE: "작업 기록 정리",
+  AUDIT_PURGE: "감사 로그 정리",
 };
 
 /**
@@ -88,11 +99,22 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
  * **행위를 추가하면 여기 빠뜨릴 수 있습니다.** 그래서 아래 `groupOf` 는
  * 접두사로 판정하고, 표를 따로 두지 않습니다.
  */
-export const AUDIT_GROUPS = ["계정", "API 키", "자료·파일", "설정"] as const;
+export const AUDIT_GROUPS = [
+  "계정",
+  "API 키",
+  "자료·파일",
+  "설정",
+  "운영",
+] as const;
 
 export function groupOf(action: AuditAction): (typeof AUDIT_GROUPS)[number] {
   if (action.startsWith("APIKEY_")) return "API 키";
   if (action.startsWith("USER_")) return "계정";
   if (action === "SETTING_UPDATE") return "설정";
+  /*
+   * **`RESOURCE_PURGE` 보다 먼저 걸러지면 안 됩니다.** 접두사로 봅니다 —
+   * `_PURGE` 로 끝나는 것을 뭉뚱그리면 자료 영구 삭제가 「운영」으로 갑니다.
+   */
+  if (action.startsWith("JOB_") || action.startsWith("AUDIT_")) return "운영";
   return "자료·파일";
 }

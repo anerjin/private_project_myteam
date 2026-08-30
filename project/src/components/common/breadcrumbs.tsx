@@ -16,6 +16,7 @@ import {
   PATH_LABEL,
   SEGMENT_LABEL,
 } from "@/config/navigation";
+import { decodeSegment } from "@/lib/path-segment";
 
 /**
  * 모든 화면 공통 브레드크럼 (DEV-03 · 3.4절).
@@ -49,15 +50,21 @@ export function Breadcrumbs({
   const crumbs: { href: string; label: string }[] = [];
   let href = "";
   for (const segment of segments) {
+    // 링크는 **인코딩된 채로** 만듭니다 — 주소는 주소여야 합니다
     href += `/${segment}`;
     if (href === root.href) continue;
+    /*
+     * **찾을 때도 그릴 때도 «푼» 값을 씁니다.**
+     *
+     * `usePathname()` 은 한글 slug 를 `%EB%9D%BC…` 로 줍니다. 그대로 두면
+     * 라벨 맵이 안 걸리고(서버는 푼 slug 로 담습니다) 못 걸린 자리에는
+     * **주소창 문자열이 제목처럼** 찍힙니다 — 실제로 그렇게 나왔습니다.
+     */
+    const key = decodeSegment(segment);
     crumbs.push({
       href,
       label:
-        PATH_LABEL[href] ??
-        labels?.[segment] ??
-        SEGMENT_LABEL[segment] ??
-        segment,
+        PATH_LABEL[href] ?? labels?.[key] ?? SEGMENT_LABEL[key] ?? key,
     });
   }
 

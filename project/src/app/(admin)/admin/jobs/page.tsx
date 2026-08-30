@@ -14,6 +14,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AutoRefresh } from "@/features/jobs/components/auto-refresh";
+import { DeleteJobButton } from "@/features/jobs/components/delete-job-button";
+import { PurgeJobsButton } from "@/features/jobs/components/purge-jobs-button";
 import { RetryJobButton } from "@/features/jobs/components/retry-job-button";
 import { EmptyState } from "@/components/common/empty-state";
 import type { JobStatus } from "@/types";
@@ -70,14 +72,25 @@ export default async function AdminJobsPage() {
    * 하드코딩한 안내문은 「작업이 있는가」에 대한 두 번째 출처이고,
    * 워커가 붙은 날 그 문장이 남아 있게 됩니다.
    */
-  const [{ counts, recent: jobs, requesterNames }, rate, schedules, retention] =
-    await Promise.all([
-      jobService.board(),
+  const [
+    { counts, recent: jobs, requesterNames },
+    rate,
+    schedules,
+    retention,
+    deletable,
+  ] = await Promise.all([
+    jobService.board(),
     // 못 읽어도 화면이 깨질 이유가 없다 — 카드만 빠진다
     githubRateLimit().catch(() => null),
     // **읽기만** 하는 것들입니다 — 렌더가 데이터를 바꾸면 안 됩니다
     maintenanceService.schedules(),
     maintenanceService.retentionStatus(),
+    /*
+     * 표는 최근 것만 보여 주지만(`RECENT_LIMIT`) 정리는 **전부**를 지웁니다.
+     * 그래서 건수는 화면에 보이는 행이 아니라 **DB 에서** 셉니다 — 안 그러면
+     * 버튼이 「20건」이라 하고 200건을 지웁니다.
+     */
+    jobService.countDeletable(),
   ]);
 
   return (
@@ -85,7 +98,12 @@ export default async function AdminJobsPage() {
       <PageHeader
         title="수집 작업 모니터"
         description="백그라운드 작업의 진행 상황과 실패를 확인합니다."
-        action={<AutoRefresh />}
+        action={
+          <div className="flex items-center gap-2">
+            <PurgeJobsButton count={deletable} />
+            <AutoRefresh />
+          </div>
+        }
       />
 
       <MaintenancePanel
@@ -213,12 +231,23 @@ export default async function AdminJobsPage() {
                       「재실행으로 받는다」고 한 **`RUNNING` 잔류에 버튼이
                       없었습니다.**
                     */}
-                    {jobService.isRetryable(j) && (
-                      <RetryJobButton
-                        jobId={j.id}
-                        stale={j.status === "RUNNING"}
-                      />
-                    )}
+                    {/*
+                      재실행과 삭제는 **겹치지 않습니다** — `FAILED` 는 둘 다
+                      되고(다시 돌리거나 치우거나), `QUEUED`·`RUNNING` 은
+                      재실행만, `DONE` 은 삭제만 됩니다. 판정은 양쪽 다
+                      `job.service` 가 합니다.
+                    */}
+                    <div className="flex items-center justify-end gap-1">
+                      {jobService.isRetryable(j) && (
+                        <RetryJobButton
+                          jobId={j.id}
+                          stale={j.status === "RUNNING"}
+                        />
+                      )}
+                      {jobService.isDeletable(j) && (
+                        <DeleteJobButton jobId={j.id} />
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

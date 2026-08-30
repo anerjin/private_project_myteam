@@ -175,29 +175,14 @@ export interface RetentionResult {
 /**
  * 1년 지난 감사 로그 정리 (`DEC-021` — 보존 1년).
  *
- * **삭제한 건수를 다시 감사 로그에 남깁니다.** 「왜 작년 기록이 없느냐」의
- * 답이 있어야 하고, 그 답 자체가 첫 줄이 됩니다.
+ * **`audit.purgeBefore` 를 씁니다.** 관리자가 화면에서 누르는 정리(`SCR-251`)와
+ * 같은 함수입니다 — 전에는 여기서 직접 지우고 직접 기록했는데, 그러면 자동
+ * 정리와 수동 정리가 다른 코드를 타고 **한쪽만 기록을 남기는 날**이 옵니다.
+ * 이 파일은 **언제 돌릴지**를 알고, 그쪽은 **무엇을 할지**를 압니다.
  */
 async function pruneAuditLogs(actor: Actor): Promise<number> {
   const cutoff = new Date(Date.now() - RETAIN_MS);
-  const { count } = await db.auditLog.deleteMany({
-    where: { createdAt: { lt: cutoff } },
-  });
-  if (count > 0) {
-    await db.$transaction(async (tx) => {
-      await audit.log(
-        actor,
-        {
-          action: "SETTING_UPDATE",
-          targetType: "audit_log",
-          summary: `감사 로그 정리 — ${count}건 (보존 1년 경과)`,
-          diff: { cutoff: { before: "-", after: cutoff.toISOString() } },
-        },
-        tx
-      );
-    });
-  }
-  return count;
+  return audit.purgeBefore(actor, cutoff, "보존 1년 경과 (자동 정리)");
 }
 
 /**

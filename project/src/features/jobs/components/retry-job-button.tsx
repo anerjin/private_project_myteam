@@ -6,7 +6,7 @@ import { useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { retryJobAction } from "@/server/actions/github.actions";
+import { retryJobAction } from "@/server/actions/job.actions";
 
 /**
  * 작업 재실행 (`SCR-241`, `DEC-053`).

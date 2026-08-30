@@ -22,6 +22,7 @@ import type { Actor } from "@/server/auth/actor";
 import { hashPassword } from "@/server/auth/password";
 import { issue as issueSession } from "@/server/auth/session";
 import * as audit from "@/server/services/audit.service";
+import * as jobService from "@/server/services/job.service";
 import * as categoryService from "@/server/services/category.service";
 import * as collectionService from "@/server/services/collection.service";
 import * as contentTypeService from "@/server/services/content-type.service";
@@ -1218,6 +1219,107 @@ async function run() {
       categoryService.create(editorActor, { name: "안 됨", slug: "vp8-editor" })
     );
     check("EDITOR 는 분류를 못 고친다", cantEdit.includes("권한이 없습니다"), cantEdit);
+  }
+
+  console.log("\n★ 기록 정리 — 지울 수 있는 것과 없는 것 (SCR-241 · SCR-251)");
+  {
+    /*
+     * **일괄 정리(`purgeFinished`)는 여기서 부르지 않습니다.**
+     * 그건 «끝난 작업 전부»를 지우므로, 검증을 돌릴 때마다 운영자의 실제
+     * 실행 이력이 사라집니다. 검증이 데이터를 지우면 그건 검증이 아닙니다.
+     * 대신 **판정과 한 건 삭제**를 봅니다 — 일괄은 같은 `where` 를 씁니다.
+     */
+    check(
+      "끝난 것만 지울 수 있다",
+      jobService.isDeletable({ status: "DONE" }) &&
+        jobService.isDeletable({ status: "FAILED" }) &&
+        !jobService.isDeletable({ status: "QUEUED" }) &&
+        !jobService.isDeletable({ status: "RUNNING" })
+    );
+
+    const queued = await db.job.create({
+      data: { type: "CHECK_LINK", status: "QUEUED" },
+      select: { id: true },
+    });
+    const refused = await msg(() => jobService.remove(queued.id));
+    check(
+      "대기 중인 작업은 지워지지 않는다",
+      refused.includes("끝난 작업만"),
+      refused
+    );
+    /*
+     * **대기 중인 행을 지우면 그 일은 영영 안 돌고 아무도 모릅니다.**
+     * 「기록 삭제」와 「작업 취소」는 다른 일이고, 이 화면은 앞의 것만 합니다.
+     */
+    await db.job.update({ where: { id: queued.id }, data: { status: "DONE" } });
+    await jobService.remove(queued.id);
+    check(
+      "끝난 뒤에는 지워진다",
+      (await db.job.findUnique({ where: { id: queued.id } })) === null
+    );
+
+    /* ── 감사 로그 정리는 «지운 사실»을 남긴다 ─────────────────── */
+    const admin2 = await mkUser("purger", "ADMIN");
+    const old = new Date("2000-01-01T00:00:00Z");
+    await db.auditLog.create({
+      data: {
+        actorId: admin2.id,
+        actorUsername: admin2.username,
+        via: "WEB",
+        action: "USER_SIGNIN",
+        summary: "vp8 정리 대상 (아주 오래된 기록)",
+        createdAt: old,
+      },
+    });
+
+    /*
+     * **범위를 좁혀 부릅니다.** 2000년 이후만 남기는 컷오프라 방금 만든
+     * 그 한 줄만 걸립니다 — 검증이 진짜 감사 기록을 지우면 안 됩니다.
+     */
+    const cutoff = new Date("2001-01-01T00:00:00Z");
+    const before = await audit.countBefore(cutoff);
+    check("지울 건수를 미리 셀 수 있다", before >= 1, `${before}건`);
+
+    const removed = await audit.purgeBefore(
+      actorOf(admin2),
+      cutoff,
+      "vp8 검증"
+    );
+    check("지워진다", removed === before, `${removed}/${before}`);
+    check(
+      "지운 뒤에는 0건이다",
+      (await audit.countBefore(cutoff)) === 0
+    );
+
+    /*
+     * **핵심.** 감사 로그를 지우는 일은 흔적을 끊는 일이라, 그 사실 자체가
+     * 남지 않으면 「왜 작년 기록이 없느냐」에 답이 없습니다.
+     */
+    const trail = await db.auditLog.findFirst({
+      where: { action: "AUDIT_PURGE", actorId: admin2.id },
+      select: { summary: true },
+    });
+    check(
+      "지웠다는 사실이 새 기록으로 남는다",
+      Boolean(trail),
+      trail?.summary ?? "없음"
+    );
+    check(
+      "몇 건인지도 함께 남는다",
+      trail?.summary?.includes(String(removed)) === true,
+      trail?.summary ?? ""
+    );
+
+    // 지울 것이 없으면 기록도 남기지 않는다 — 빈 줄이 쌓이면 로그가 흐려진다
+    const again = await audit.purgeBefore(
+      actorOf(admin2),
+      cutoff,
+      "vp8 검증 (두 번째)"
+    );
+    const trails = await db.auditLog.count({
+      where: { action: "AUDIT_PURGE", actorId: admin2.id },
+    });
+    check("0건이면 기록도 안 남긴다", again === 0 && trails === 1, `${trails}줄`);
   }
 
   console.log(`\n합계: 통과 ${pass} · 실패 ${fail}`);

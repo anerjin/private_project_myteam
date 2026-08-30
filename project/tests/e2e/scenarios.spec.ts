@@ -121,7 +121,12 @@ test("② 검색해서 찾은 자료를 북마크한다", async ({ page }) => {
   const resource = await db.resource.create({
     data: {
       type: "DEV_NOTE",
-      slug: `e2e-search-${Date.now().toString(36)}`,
+      /*
+       * **slug 에 한글을 넣습니다.** 실제 자료의 slug 는 제목에서 만들어져
+       * 대부분 한글입니다. ASCII slug 로만 검사하면 경로 인코딩 문제가
+       * 영영 안 드러납니다 — 실제로 그래서 못 잡았습니다.
+       */
+      slug: `e2e-검색-대상-${Date.now().toString(36)}`,
       title,
       summary: "E2E 시나리오 ② 가 찾을 자료",
       status: "PUBLISHED",
@@ -163,6 +168,30 @@ test("② 검색해서 찾은 자료를 북마크한다", async ({ page }) => {
   // 상세로
   await page.goto(`/resources/dev-note/${resource.slug}`);
   await expect(page.getByText("E2E 시나리오 ② 가 찾을 자료")).toBeVisible();
+
+  /*
+   * **헤더의 빵부스러기가 «주소»가 아니라 «제목»을 그린다** (`DEV-03 · 3.4`).
+   *
+   * 한글 slug 는 경로에서 `%EB%9D%BC…` 로 실려 옵니다. 그걸 풀지 않으면
+   * ① 서버가 그 문자열로 제목을 찾다 언제나 실패하고
+   * ② 화면은 주소창 문자열을 **제목 자리에** 그대로 찍습니다.
+   * 마지막 조각은 이 문서의 유일한 `<h1>` 이라 더 그렇습니다.
+   */
+  const crumb = page.locator('[aria-current="page"]');
+  await expect(crumb).toHaveText(title);
+  expect(
+    await crumb.textContent(),
+    "빵부스러기에 퍼센트 인코딩이 남아 있습니다"
+  ).not.toMatch(/%[0-9A-Fa-f]{2}/);
+
+  // 수정 화면에서도 — 여기선 마지막 조각이 「수정」이라 slug 가 가운데로 온다
+  await page.goto(`/resources/dev-note/${resource.slug}/edit`);
+  await expect(page.getByRole("link", { name: title })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // **상세로 되돌아옵니다** — 아래 북마크는 상세 화면의 버튼입니다
+  await page.goto(`/resources/dev-note/${resource.slug}`);
 
   /*
    * **북마크는 낙관적 갱신입니다.** 눌렀을 때 화면이 먼저 바뀌고 서버가

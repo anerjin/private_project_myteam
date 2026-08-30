@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { Pagination } from "@/components/common/pagination";
 import { AuditFilters } from "@/features/audit/components/audit-filters";
 import { AuditTable } from "@/features/audit/components/audit-table";
+import { PurgeAuditButton } from "@/features/audit/components/purge-audit-button";
 import {
   auditFilterToQuery,
   hasAnyFilter,
@@ -62,6 +63,7 @@ export default async function AdminAuditLogsPage({
         title="감사 로그"
         description="권한·계정·자료 관련 행위를 모두 기록합니다. 행을 누르면 변경 전·후를 볼 수 있습니다."
         count={result.total}
+        action={<PurgeAuditButton />}
       />
 
       <AuditFilters current={filter} actors={actors} />

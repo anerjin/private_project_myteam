@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 
 import { OPERATIONAL } from "@/features/resources/content-types/operational";
 import { db } from "@/lib/db";
+import { AppError } from "@/lib/errors";
 import * as notify from "@/server/services/notification.service";
 import type { JobStatus, JobType } from "@/types";
 
@@ -198,6 +199,55 @@ export function isRetryable(job: {
     job.startedAt !== null &&
     Date.now() - job.startedAt.getTime() > STALE_AFTER_MS
   );
+}
+
+/* ── 기록 정리 (`SCR-241`) ────────────────────────────────────────── */
+
+/**
+ * 지울 수 있는 상태인가 — **끝난 것만** 지웁니다.
+ *
+ * `QUEUED`·`RUNNING` 을 지우는 것은 «취소»이지 «기록 삭제»가 아닙니다.
+ * 대기 중인 행을 지우면 그 일은 **영영 안 돌고 아무도 모릅니다** — 아카이브
+ * 요청이 조용히 사라지는 형태입니다. `isRetryable` 과 같은 이유로 판정을
+ * 여기 한 곳에 둡니다: 화면이 `status === "DONE"` 을 손으로 적으면
+ * 상태가 늘어난 날 한쪽만 고쳐집니다.
+ */
+export function isDeletable(job: { status: JobStatus }): boolean {
+  return job.status === "DONE" || job.status === "FAILED";
+}
+
+/** 기록 하나를 지운다. 끝나지 않은 작업이면 거절한다 */
+export async function remove(jobId: string): Promise<void> {
+  const job = await db.job.findUnique({
+    where: { id: jobId },
+    select: { id: true, status: true },
+  });
+  if (!job) throw new AppError("NOT_FOUND", "작업 기록을 찾을 수 없습니다.");
+  if (!isDeletable(job)) {
+    throw new AppError(
+      "INVALID_STATE",
+      "끝난 작업만 지울 수 있습니다. 대기·실행 중인 작업은 재실행으로 처리하십시오."
+    );
+  }
+  await db.job.delete({ where: { id: jobId } });
+}
+
+/** 지울 수 있는 기록이 몇 건인지 — 버튼이 «몇 건 지울지» 말하려면 필요합니다 */
+export async function countDeletable(): Promise<number> {
+  return db.job.count({ where: { status: { in: ["DONE", "FAILED"] } } });
+}
+
+/**
+ * 끝난 기록을 한 번에 지운다.
+ *
+ * **대기·실행 중인 것은 건드리지 않습니다** — `isDeletable` 과 같은 조건을
+ * `where` 에 둡니다. 코드로 거르고 지우면 그 사이에 상태가 바뀐 행이 섞입니다.
+ */
+export async function purgeFinished(): Promise<number> {
+  const { count } = await db.job.deleteMany({
+    where: { status: { in: ["DONE", "FAILED"] } },
+  });
+  return count;
 }
 
 /**

@@ -1,11 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-
 import { AppError } from "@/lib/errors";
 import { guard, ok, type ActionResult } from "@/lib/result";
 import { canEditResource } from "@/server/auth/actor";
-import { requireActor, requireRole } from "@/server/auth/guards";
+import { requireActor } from "@/server/auth/guards";
 import { db } from "@/lib/db";
 // **이 import 가 「워커를 켜는 것」입니다** (`DEC-053`) — 없으면 처리기가 등록되지 않는다
 import "@/server/jobs";
@@ -72,31 +70,8 @@ export async function startArchiveAction(
   });
 }
 
-/**
- * 작업 재실행 (`SCR-241`).
- *
- * **`DEC-053` 의 재시도가 이것입니다.** BullMQ 의 자동 백오프가 없으므로
- * 사람이 누릅니다 — `admin/jobs` 가 오류 문구를 함께 보여주므로 「눌러도
- * 소용없는 실패」(저장소 삭제)와 「기다리면 되는 실패」(rate limit)를 구별할 수
- * 있습니다.
+/*
+ * **`retryJobAction` 은 `job.actions.ts` 로 옮겼습니다.**
+ * 재실행은 GitHub 일이 아니라 «작업» 일이고, 삭제·정리가 생기면서 같은
+ * 대상을 만지는 액션이 두 파일에 흩어질 참이었습니다.
  */
-export async function retryJobAction(
-  jobId: unknown
-): Promise<ActionResult<void>> {
-  return guard(async () => {
-    await requireRole("ADMIN");
-    if (typeof jobId !== "string") {
-      throw new AppError("VALIDATION_ERROR", "잘못된 요청입니다.");
-    }
-    /*
-     * **기다리지 않습니다.** 500MB 아카이브 재실행이면 액션이 그동안 매달리고
-     * (`NFR-PERF-006`), 버튼의 토스트 문구(「결과는 잠시 뒤 이 표에 반영됩니다」)와도
-     * 어긋납니다. `enqueueAndRun` 과 같은 모양입니다.
-     */
-    void jobService.runNow(jobId).catch((e) => {
-      console.error("[job] 재실행을 시작하지 못했습니다", jobId, e);
-    });
-    revalidatePath("/admin/jobs");
-    return ok(undefined);
-  });
-}
