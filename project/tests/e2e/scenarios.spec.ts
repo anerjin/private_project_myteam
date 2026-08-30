@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  BASE_URL,
   TEST_PASSWORD,
   cleanup,
   db,
@@ -243,6 +244,27 @@ test("④ 일반 회원은 관리 영역에 못 들어간다", async ({ page }) 
   await signIn(page, member.username);
   await expect(page).toHaveURL(/\/dashboard/, { timeout: 20_000 });
 
+  /*
+   * **세션 쿠키 속성** (`NFR-SEC-005`) — 여기서만 볼 수 있습니다.
+   *
+   * 스크립트로는 `writeSessionCookie` 의 인자를 «읽는» 것밖에 못 하는데,
+   * 그건 코드로 코드를 확인하는 것이라 아무것도 증명하지 않습니다. 브라우저가
+   * 실제로 받아 저장한 쿠키만이 증거입니다. `verify:sec` 이 이 항목을
+   * 「e2e 가 증명한다」고 적어 두었으니, 그 말이 참이어야 합니다.
+   */
+  const cookieName = process.env.SESSION_COOKIE_NAME || "qb_session";
+  const jar = await page.context().cookies();
+  const session = jar.find((c) => c.name === cookieName);
+  expect(session, `${cookieName} 쿠키가 없습니다`).toBeDefined();
+  expect(session!.httpOnly).toBe(true);
+  expect(session!.sameSite).toBe("Lax");
+  /*
+   * 1단계는 `http` 라 `Secure` 가 꺼져 있어야 «맞습니다» — 켜져 있으면
+   * 브라우저가 쿠키를 아예 안 보내 로그인이 안 됩니다 (`DEC-013`·`017`).
+   * 2단계에서 `COOKIE_SECURE=true` 로 바꾸면 이 단언도 함께 뒤집힙니다.
+   */
+  expect(session!.secure).toBe(process.env.COOKIE_SECURE === "true");
+
   // 사이드바에 관리자 입구가 없다
   await expect(page.getByRole("link", { name: "관리자" })).toHaveCount(0);
 
@@ -288,7 +310,7 @@ test("⑤ 정지하면 그 사람의 세션과 API 키가 즉시 죽는다", asy
   expect(plainKey).toMatch(/^qb_/);
 
   // 그 키가 실제로 통한다
-  const before = await fetch("http://localhost:3100/api/ingest/whoami", {
+  const before = await fetch(`${BASE_URL}/api/ingest/whoami`, {
     headers: { authorization: `Bearer ${plainKey!.trim()}` },
   });
   expect(before.status).toBe(200);
@@ -327,7 +349,7 @@ test("⑤ 정지하면 그 사람의 세션과 API 키가 즉시 죽는다", asy
    * **API 키도 즉시 무효입니다** — 폐기한 것이 아니라 `verifyKey` 가 매 요청
    * 소유자 상태를 보기 때문입니다 (`DEC-037`). 정지를 풀면 그대로 살아납니다.
    */
-  const after = await fetch("http://localhost:3100/api/ingest/whoami", {
+  const after = await fetch(`${BASE_URL}/api/ingest/whoami`, {
     headers: { authorization: `Bearer ${plainKey!.trim()}` },
   });
   expect(after.status).toBe(401);
@@ -353,7 +375,7 @@ test("⑥ CLI 로 넣은 자료가 화면에 «CLI 수집»으로 뜬다", async
 
   // 그 키로 «HTTP 로» 등록합니다 — CLI 가 하는 그대로
   const title = `E2E CLI 등록 ${Date.now().toString(36)}`;
-  const res = await fetch("http://localhost:3100/api/ingest/resources", {
+  const res = await fetch(`${BASE_URL}/api/ingest/resources`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${key}`,

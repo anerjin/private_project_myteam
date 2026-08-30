@@ -1,6 +1,8 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { env } from "@/lib/env";
+import { safeFetch } from "@/lib/safe-fetch";
 import * as storage from "@/lib/storage";
 import { register } from "@/server/services/job.service";
 
@@ -58,6 +60,15 @@ register("REFRESH_GITHUB_META", async () => {
 const LINK_TIMEOUT_MS = 8000;
 
 /**
+ * **우리 자신은 SSRF 가드에서 예외입니다.**
+ *
+ * 1단계 주소가 `http://localhost:3100` 이라 가드에 그대로 걸립니다. 여는 것이
+ * 새 능력을 주지 않는 이유는 `lib/safe-fetch.ts` 의 `allowOrigins` 주석에
+ * 있습니다 — 한 줄로 줄이면 **쿠키 없이 나가므로 비로그인 요청과 같습니다.**
+ */
+const SELF = [new URL(env.APP_URL).origin];
+
+/**
  * 한 링크의 생존.
  *
  * **`HEAD` 를 먼저 씁니다.** 본문을 안 받으므로 빠르고, 200건을 순회할 때
@@ -68,9 +79,20 @@ const LINK_TIMEOUT_MS = 8000;
 async function probe(url: string): Promise<"OK" | "MOVED" | "GONE"> {
   const ctl = AbortSignal.timeout(LINK_TIMEOUT_MS);
   try {
-    let res = await fetch(url, { method: "HEAD", redirect: "follow", signal: ctl });
+    /*
+     * **`safeFetch` 입니다 — 맨 `fetch` 가 아닙니다** (`NFR-SEC-010`).
+     *
+     * 여기 들어오는 `url` 은 **자료를 등록한 사람이 적은 값**이고, 이 배치는
+     * 그것을 «서버에서» 가져옵니다. 맨 `fetch` 로 두면 등록자가
+     * `http://192.168.0.1/` 을 넣어 사내망을 훑을 수 있습니다 — 응답을 못 봐도
+     * 「닿았는가」가 `sourceStatus` 로 화면에 그대로 나옵니다.
+     *
+     * `redirect: "follow"` 도 함께 사라졌습니다. 바깥 주소가 사설 IP 로
+     * 튕기면 첫 검사를 통과한 뒤에 안쪽으로 들어갑니다.
+     */
+    let { res, finalUrl } = await safeFetch(url, { method: "HEAD", signal: ctl }, SELF);
     if (res.status === 405 || res.status === 501) {
-      res = await fetch(url, { method: "GET", redirect: "follow", signal: ctl });
+      ({ res, finalUrl } = await safeFetch(url, { method: "GET", signal: ctl }, SELF));
     }
     if (res.status === 404 || res.status === 410) return "GONE";
     if (!res.ok) {
@@ -85,9 +107,17 @@ async function probe(url: string): Promise<"OK" | "MOVED" | "GONE"> {
      * 최종 주소가 다르면 옮겨 간 것입니다. **자동으로 고치지 않습니다** —
      * 단축 URL·추적 리다이렉트도 여기 걸리므로, 사람이 보고 판단합니다.
      */
-    return res.url && res.url !== url ? "MOVED" : "OK";
+    return finalUrl !== url ? "MOVED" : "OK";
   } catch {
-    // 타임아웃·DNS 실패 — 지금은 못 닿는다는 사실만 압니다
+    /*
+     * 타임아웃 · DNS 실패 · **SSRF 가드가 거부한 내부 주소**(`UnsafeUrlError`).
+     *
+     * 셋 다 「지금은 확인하지 못했다」이고 `GONE` 이 아닙니다. 거부된 주소를
+     * `GONE` 으로 뒀다가 되돌렸습니다 — `GONE` 은 「원본이 없어졌다」는 뜻인데
+     * 우리는 그 주소를 **확인하지 않은** 것뿐입니다. 바로 위에서 「확인할 수
+     * 없는 것을 죽었다고 표시하면 멀쩡한 자료에 『원본 없음』이 붙고 되돌리는
+     * 사람이 아무도 없다」고 적어 둔 그 원칙입니다.
+     */
     return "MOVED";
   }
 }

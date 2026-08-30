@@ -32,6 +32,17 @@ export const db = new PrismaClient({
   adapter: new PrismaPg({ connectionString }),
 });
 
+/**
+ * 브라우저 밖에서 API 를 부를 때 쓰는 주소.
+ *
+ * **`playwright.config.ts` 의 `baseURL` 과 같은 값을 봐야 합니다.** 처음에는
+ * `http://localhost:3100` 을 박아 뒀는데, 운영 빌드를 3101 에 띄우고 돌리니
+ * 시나리오 ⑤⑥이 **`fetch failed`** 로 죽었습니다 — 화면은 3101 을 보고
+ * API 만 3100 을 보고 있었던 것입니다. dev 가 켜져 있는 동안에는 그 어긋남이
+ * 보이지 않았습니다.
+ */
+export const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3100";
+
 /** 이 접두사를 가진 것은 전부 E2E 가 만든 것 — 정리가 이 하나를 봅니다 */
 export const E2E_PREFIX = "e2e_";
 
