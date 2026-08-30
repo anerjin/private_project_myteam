@@ -236,7 +236,26 @@ async function seed(authorId: string) {
     data: all.slice(0, 500).map((r) => ({ userId: authorId, resourceId: r.id })),
   });
 
-  console.log(`  생성 ${((Date.now() - started) / 1000).toFixed(1)}초`);
+  /*
+   * **`ANALYZE` 로 끝냅니다 — 이게 없으면 측정이 거짓말을 합니다.**
+   *
+   * 부하 시험을 처음 돌렸을 때 동시 20명에서 처리량이 **4.3 req/s**, 상세
+   * P95 가 **15초**로 나왔습니다. 그런데 잠시 뒤 같은 데이터로 다시 돌리니
+   * **58 req/s · 433ms** 였습니다. 차이는 하나뿐이었습니다 — 첫 실행은
+   * **1만 행을 막 밀어 넣은 직후**였고, Postgres 의 플래너 통계가 「이 표는
+   * 비어 있다」인 상태였습니다. 그 통계로 세운 계획은 실제 데이터에서
+   * 최악으로 어긋납니다.
+   *
+   * 운영에서는 자료가 조금씩 쌓이고 autovacuum 이 통계를 따라갑니다. 즉
+   * 첫 숫자는 **운영에서 일어나지 않는 상태**를 잰 것이고, 그대로 두면
+   * 「상세가 15초 걸린다」를 믿고 엉뚱한 곳을 고치게 됩니다.
+   *
+   * 시더 «안»에 둡니다 — `bench-list` 와 `loadtest` 가 같은 함정을 밟지
+   * 않으려면 한 곳이어야 합니다.
+   */
+  await db.$executeRawUnsafe("ANALYZE");
+
+  console.log(`  생성 ${((Date.now() - started) / 1000).toFixed(1)}초 (ANALYZE 포함)`);
 }
 
 /**
@@ -351,17 +370,7 @@ async function run() {
     return;
   }
 
-  const author = await db.user.upsert({
-    where: { username: "bench_author" },
-    create: {
-      username: "bench_author",
-      passwordHash: await hashPassword("Bench!12345"),
-      name: "벤치마크",
-      status: "ACTIVE",
-    },
-    update: {},
-    select: { id: true },
-  });
+  const author = await ensureAuthor();
 
   const existing = await db.resource.count({ where: { summary: MARK } });
   if (existing < N) await seed(author.id);
@@ -626,7 +635,35 @@ async function run() {
   await db.$disconnect();
 }
 
-run().catch(async (e) => {
-  console.error(e);
-  process.exit(1);
-});
+/**
+ * **더미 시더를 `loadtest.ts` 와 나눠 씁니다.**
+ *
+ * 부하 시험(`NFR-PERF-005`)도 1만 건이 필요한데, 시더를 한 벌 더 만들면
+ * 「6종을 고루 심는다」·「초안과 삭제를 섞는다」 같은 **판단이 두 곳**에
+ * 놓입니다. 한쪽만 고치면 두 측정이 서로 다른 세계를 재게 됩니다.
+ *
+ * 그래서 `seed`·`clean`·`MARK` 를 내보내고, **직접 실행됐을 때만** 측정합니다.
+ */
+export { MARK, N, clean, seed };
+
+export async function ensureAuthor(): Promise<{ id: string }> {
+  return db.user.upsert({
+    where: { username: "bench_author" },
+    create: {
+      username: "bench_author",
+      passwordHash: await hashPassword("Bench!12345"),
+      name: "벤치마크",
+      status: "ACTIVE",
+    },
+    update: {},
+    select: { id: true },
+  });
+}
+
+const isEntry = process.argv[1]?.replaceAll("\\", "/").endsWith("bench-list.ts");
+if (isEntry) {
+  run().catch(async (e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

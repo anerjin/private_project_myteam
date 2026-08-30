@@ -34,6 +34,7 @@
     "verify:p6": "tsx --conditions=react-server --env-file=.env scripts/verify-p6.ts",
     "verify:empty-db": "tsx --conditions=react-server --env-file=.env scripts/verify-empty-db.ts",
     "verify:sec": "tsx --conditions=react-server --env-file=.env scripts/verify-security.ts",
+    "loadtest": "tsx --conditions=react-server --env-file=.env scripts/loadtest.ts",
     "bench:list": "tsx --conditions=react-server --env-file=.env scripts/bench-list.ts",
     "db:up": "docker compose -f ../docker/docker-compose.dev.yml up -d",
     "db:down": "docker compose -f ../docker/docker-compose.dev.yml down"
