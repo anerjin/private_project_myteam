@@ -46,6 +46,22 @@ function CommandDialog({
   className?: string
   showCloseButton?: boolean
 }) {
+  /*
+   * **`Command` 루트가 빠져 있었습니다.**
+   *
+   * `CommandInput`·`CommandList`·`CommandItem` 은 전부 cmdk 의 스토어를
+   * 컨텍스트에서 읽습니다. 루트 없이 그리면 그 스토어가 `undefined` 라
+   * 브라우저에서 **`Cannot read properties of undefined (reading
+   * 'subscribe')`** 로 터집니다 — 다이얼로그는 «열리는데» 안이 비어 있어서,
+   * 서버 렌더 HTML 만 보는 검증으로는 보이지 않았습니다.
+   *
+   * `Ctrl+K` 검색(`FR-SRCH-002`)이 그동안 **한 번도 동작한 적이 없습니다.**
+   * E2E 가 브라우저를 띄우자마자 나왔습니다.
+   *
+   * **`DialogContent` 의 자식은 하나여야 합니다** — Radix 가 `Slot` 으로
+   * 넘기기 때문입니다. 여기 주석을 JSX 안에 뒀다가
+   * `Primitive.div failed to slot onto its children` 을 만났습니다.
+   */
   return (
     <Dialog {...props}>
       <DialogHeader className="sr-only">
@@ -59,7 +75,10 @@ function CommandDialog({
         )}
         showCloseButton={showCloseButton}
       >
-        {children}
+
+        <Command className="[&_[cmdk-group-heading]]:text-muted-foreground **:data-[slot=command-input-wrapper]:h-12 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
+          {children}
+        </Command>
       </DialogContent>
     </Dialog>
   )

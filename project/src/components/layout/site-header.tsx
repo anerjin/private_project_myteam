@@ -1,7 +1,7 @@
 "use client";
 
 import { Bell, Search } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ThemeToggle } from "@/components/layout/theme-toggle";
@@ -64,6 +64,25 @@ export function SiteHeader({
   const [open, setOpen] = useState(false);
   /** 팔레트에 친 말 — 「전체 검색」이 이 값을 `/search` 로 넘긴다 (`FR-SRCH-002`) */
   const [query, setQuery] = useState("");
+  const router = useRouter();
+
+  /*
+   * **`CommandItem asChild` 를 쓰지 않습니다.**
+   *
+   * 안에 `<Link>` 를 넣고 `asChild` 를 주면 cmdk 가 Radix `Slot` 으로 넘기다
+   * **`Primitive.div failed to slot onto its children`** 로 터지고, 그 오류가
+   * `Command` 서브트리 전체를 무너뜨립니다 — 다이얼로그는 열리는데 **안이
+   * 통째로 비어** 있게 됩니다. 서버 HTML 만 보는 검증으로는 안 보이고,
+   * E2E 가 브라우저를 띄우자마자 나왔습니다.
+   *
+   * `onSelect` 로 옮기면 **키보드 Enter 도 같은 길**을 탑니다 — `asChild` +
+   * `<Link>` 는 마우스 클릭만 동작했습니다.
+   */
+  function go(href: string) {
+    setOpen(false);
+    setQuery("");
+    router.push(href);
+  }
   const unread = notifications.filter((n) => !n.read).length;
 
   useEffect(() => {
@@ -164,38 +183,41 @@ export function SiteHeader({
           onValueChange={setQuery}
         />
         <CommandList>
+          {/*
+            **`forceMount` 는 그룹에도 걸어야 합니다.**
+
+            처음에는 항목에만 걸어 두고 「항상 보입니다」라고 적었는데, E2E 로
+            팔레트를 열어 보니 본문이 「최근 자료 중에는 없습니다.」 **한 줄뿐**
+            이었습니다. cmdk 는 필터에 걸린 항목이 없는 그룹을 통째로 `hidden`
+            으로 만들고, 항목의 `forceMount` 는 그 계산에 들어가지 않습니다 —
+            마운트는 되는데 **부모가 숨습니다.**
+          */}
           {query.trim() && (
-            <CommandGroup heading="전체 검색">
-              {/*
-                `forceMount` — cmdk 의 필터에 안 걸리고 **항상** 보입니다.
-                이 항목이 사라지면 「결과가 없습니다」만 남습니다.
-              */}
-              <CommandItem forceMount value={`__search__${query}`} asChild>
-                <Link
-                  href={`/search?q=${encodeURIComponent(query.trim())}`}
-                  onClick={() => {
-                    setOpen(false);
-                    setQuery("");
-                  }}
-                >
-                  <Search className="size-4" />
-                  <span className="truncate">
-                    «{query.trim()}» 를 전체 자료에서 찾기
-                  </span>
-                </Link>
+            <CommandGroup forceMount heading="전체 검색">
+              <CommandItem
+                forceMount
+                value={`__search__${query}`}
+                onSelect={() => go(`/search?q=${encodeURIComponent(query.trim())}`)}
+              >
+                <Search className="size-4" />
+                <span className="truncate">
+                  «{query.trim()}» 를 전체 자료에서 찾기
+                </span>
               </CommandItem>
             </CommandGroup>
           )}
           <CommandEmpty>최근 자료 중에는 없습니다.</CommandEmpty>
           <CommandGroup heading="최근 자료">
             {searchItems.map((item) => (
-              <CommandItem key={item.id} value={item.keywords} asChild>
-                <Link href={item.href} onClick={() => setOpen(false)}>
-                  <span className="truncate">{item.title}</span>
-                  <span className="text-muted-foreground ml-auto shrink-0 text-xs">
-                    {item.typeLabel}
-                  </span>
-                </Link>
+              <CommandItem
+                key={item.id}
+                value={item.keywords}
+                onSelect={() => go(item.href)}
+              >
+                <span className="truncate">{item.title}</span>
+                <span className="text-muted-foreground ml-auto shrink-0 text-xs">
+                  {item.typeLabel}
+                </span>
               </CommandItem>
             ))}
           </CommandGroup>

@@ -43,3 +43,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# playwright (E2E 산출물 — 실패한 것의 스크린샷·트레이스)
+test-results/
+playwright-report/
+.playwright/

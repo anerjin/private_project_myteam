@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,7 +24,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { checkUsernameAction } from "@/server/actions/auth.actions";
+import {
+  checkUsernameAction,
+  signUpAction,
+} from "@/server/actions/auth.actions";
 
 const USERNAME_RE = /^[a-z][a-z0-9_.]{3,19}$/;
 
@@ -56,6 +60,8 @@ export function SignupForm() {
 
   const valid = USERNAME_RE.test(username);
   const [availability, setAvailability] = useState<Availability>("unknown");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   /*
    * **입력이 멈추면 묻습니다.** 글자마다 부르면 열 글자에 열 번 갑니다 —
@@ -101,9 +107,44 @@ export function SignupForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {/*
+          **여기가 `router.push("/signup/complete")` 한 줄이었습니다.**
+
+          서버를 부르지 않고 완료 화면으로 갔습니다 — 신청자는 「접수되었습니다」를
+          보고 **오지 않을 승인을 기다렸고**, 관리자 목록에는 아무것도 없었습니다.
+          `M0.5` UI 프로토타입의 잔재이고, 목이 화면에 숨은 **네 번째** 사례이며
+          그중 가장 해롭습니다 — `FR-AUTH-001` 은 `P0` 입니다.
+
+          `signUpAction`(`API-002`)은 처음부터 있었습니다. 서버 HTML 만 보는
+          검증으로는 «폼이 그려진다»까지만 보였고, E2E 가 브라우저에서 눌러
+          보자마자 드러났습니다.
+        */}
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
+            if (pending) return;
+            setPending(true);
+            setError(null);
+
+            const fd = new FormData(e.currentTarget);
+            const r = await signUpAction({
+              username,
+              password,
+              name: String(fd.get("name") ?? ""),
+              department: String(fd.get("department") ?? "") || undefined,
+              signupReason: String(fd.get("reason") ?? ""),
+              agreed: fd.get("agree") === "on",
+            });
+            setPending(false);
+
+            if (!r.ok) {
+              /*
+               * **완료 화면으로 보내지 않습니다.** 실패했는데 「접수되었습니다」를
+               * 보여 주는 것이 바로 이 자리의 원래 문제였습니다.
+               */
+              setError(r.message ?? "신청하지 못했습니다.");
+              return;
+            }
             router.push("/signup/complete");
           }}
         >
@@ -185,18 +226,19 @@ export function SignupForm() {
 
             <Field>
               <FieldLabel htmlFor="name">이름 *</FieldLabel>
-              <Input id="name" placeholder="김재현" required />
+              <Input id="name" name="name" placeholder="김재현" required />
             </Field>
 
             <Field>
               <FieldLabel htmlFor="department">소속 팀 *</FieldLabel>
-              <Input id="department" placeholder="개발팀" required />
+              <Input id="department" name="department" placeholder="개발팀" required />
             </Field>
 
             <Field>
               <FieldLabel htmlFor="reason">가입 사유</FieldLabel>
               <Textarea
                 id="reason"
+                name="reason"
                 rows={3}
                 maxLength={200}
                 placeholder="관리자가 승인 여부를 판단하는 데 참고합니다. (200자)"
@@ -204,14 +246,23 @@ export function SignupForm() {
             </Field>
 
             <Field orientation="horizontal">
-              <Checkbox id="agree" required />
+              <Checkbox id="agree" name="agree" required />
               <FieldLabel htmlFor="agree" className="font-normal">
                 개인정보 수집·이용에 동의합니다 *
               </FieldLabel>
             </Field>
 
             <Field>
-              <Button type="submit">가입 신청</Button>
+              {/* 실패를 «말합니다» — 조용히 아무 일도 안 일어나는 것이 원래 문제였습니다 */}
+              {error && (
+                <Alert variant="destructive">
+                  <AlertTitle>신청하지 못했습니다</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              <Button type="submit" disabled={pending}>
+                {pending ? "신청 중…" : "가입 신청"}
+              </Button>
               <FieldDescription className="text-center">
                 이미 계정이 있으신가요? <Link href="/login">로그인</Link>
               </FieldDescription>
