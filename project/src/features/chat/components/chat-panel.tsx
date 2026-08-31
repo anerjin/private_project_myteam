@@ -89,6 +89,23 @@ export function ChatPanel() {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [turns, pending]);
 
+  /*
+   * **열림 여부를 `<html>` 에 답니다.**
+   *
+   * 패널은 고정 위치라 본문 위에 뜹니다. 본문 열을 그만큼 밀어야 가려지지
+   * 않는데, 그 폭을 아는 것은 패널 자신입니다 — 상태를 서버 레이아웃으로
+   * 끌어올리면 그 레이아웃이 통째로 클라이언트 컴포넌트가 되고, 화면마다
+   * 서버에서 하던 조회가 전부 클라이언트로 밀립니다.
+   *
+   * 규칙은 `globals.css` 의 `html[data-chat="open"]` 한 곳에 있습니다.
+   */
+  useEffect(() => {
+    document.documentElement.dataset.chat = open ? "open" : "closed";
+    return () => {
+      delete document.documentElement.dataset.chat;
+    };
+  }, [open]);
+
   function toggle(next: boolean) {
     setOpen(next);
     try {
@@ -143,9 +160,23 @@ export function ChatPanel() {
   return (
     <aside
       aria-label="도우미"
-      className="bg-sidebar flex w-full shrink-0 flex-col border-l lg:w-96"
+      className={cn(
+        "bg-sidebar z-40 flex flex-col border-l",
+        /*
+         * **뷰포트에 고정입니다.** 헤더·사이드바·본문 «전체» 오른쪽에 서고,
+         * 본문 열은 `globals.css` 가 `--chat-width` 만큼 밀어 줍니다.
+         *
+         * 본문 흐름 안에 두면 문서 높이만큼 늘어나 입력창이 화면 밖으로
+         * 밀립니다 — 처음에 그렇게 붙였다가 자료 목록에서 `top=2722px` 가
+         * 됐고, 한 화면에 들어오는 짧은 페이지에서만 보였습니다.
+         */
+        "fixed inset-y-0 right-0",
+        // 좁은 화면에서는 옆에 둘 자리가 없어 통째로 덮습니다
+        "left-0 md:left-auto md:w-[var(--chat-width)]"
+      )}
     >
-      <header className="flex h-14 items-center gap-2 border-b px-3">
+      {/* 머리·맥락·입력은 `shrink-0` — **스크롤은 말풍선 영역만** 합니다 */}
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3">
         <Sparkles className="text-muted-foreground size-4" />
         <span className="text-sm font-medium">도우미</span>
         <Button
@@ -160,14 +191,14 @@ export function ChatPanel() {
       </header>
 
       {/* **지금 어느 화면인지** — 답이 이 맥락 위에서 나옵니다 */}
-      <div className="border-b px-3 py-2">
+      <div className="shrink-0 border-b px-3 py-2">
         <span className="text-muted-foreground text-xs">보고 있는 화면</span>
         <p className="truncate text-sm font-medium" title={page.detail}>
           {page.label}
         </p>
       </div>
 
-      <div className="flex-1 space-y-3 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         {status && !status.available && (
           <Notice>
             Claude Code CLI 를 찾지 못했습니다. 이 PC 에 설치돼 있어야 도우미가
@@ -229,7 +260,7 @@ export function ChatPanel() {
         <div ref={endRef} />
       </div>
 
-      <div className="border-t p-3">
+      <div className="shrink-0 border-t p-3">
         <Textarea
           rows={2}
           value={draft}

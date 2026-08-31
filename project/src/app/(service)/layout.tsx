@@ -77,19 +77,26 @@ export default async function ServiceLayout({ children }: LayoutProps<"/">) {
           **본문과 도우미를 나란히 둡니다.** 도우미를 `main` 안에 넣으면
           화면마다 있는 `space-y-6` 를 타고 내려가 본문 흐름에 섞입니다.
         */}
-        <div className="flex flex-1 overflow-hidden">
-          <main className="flex-1 space-y-6 overflow-y-auto p-4 md:p-6 lg:p-8">
-            {children}
-          </main>
-          <Suspense fallback={null}>
-            {/*
-              `useSearchParams` 를 쓰므로 경계가 필요합니다 — 없으면 이
-              레이아웃 아래 모든 화면이 통째로 클라이언트 렌더로 밀립니다.
-            */}
-            <ChatPanel />
-          </Suspense>
-        </div>
+        <main className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">{children}</main>
       </SidebarInset>
+
+      {/*
+        **도우미는 본문 «바깥»입니다.**
+
+        처음에는 `main` 옆에 넣었습니다. 그러면 본문과 같은 흐름에 있어
+        **문서 전체 높이로 늘어나고**, 바닥에 붙은 입력창이 화면 밖으로
+        밀립니다 — 자료 목록에서 `top=2722px` 였고, 한 화면에 들어오는 짧은
+        페이지에서만 보였습니다.
+
+        지금은 뷰포트 오른쪽에 고정되어 헤더·사이드바·본문 **전체 옆**에 섭니다.
+        본문 열은 패널이 열린 만큼 좁아집니다(`globals.css` 의 `[data-chat]`).
+
+        `useSearchParams` 를 쓰므로 `Suspense` 경계가 필요합니다 — 없으면 이
+        레이아웃 아래 모든 화면이 통째로 클라이언트 렌더로 밀립니다.
+      */}
+      <Suspense fallback={null}>
+        <ChatPanel />
+      </Suspense>
     </SidebarProvider>
   );
 }
