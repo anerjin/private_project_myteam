@@ -127,10 +127,10 @@ export async function askChatAction(
 
     const made = await resourceWrite.create(actor, checked.data);
 
-    // GitHub 저장소는 메타를 받아 옵니다 — Ingest 라우트와 같은 처리입니다
-    if (made.type === "GITHUB_REPO") {
+    // 메타를 받아 옵니다 — 웹 폼(`resource.actions`)·Ingest 와 같은 처리입니다
+    if (checked.data.url) {
       await jobService.enqueueAndRun({
-        type: "FETCH_GITHUB_META",
+        type: made.type === "GITHUB_REPO" ? "FETCH_GITHUB_META" : "FETCH_URL_META",
         resourceId: made.id,
         requestedById: actor.id,
       });

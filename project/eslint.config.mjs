@@ -1,6 +1,7 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import tseslint from "typescript-eslint";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -13,6 +14,49 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+
+  /**
+   * **타입을 봐야만 잡히는 규칙 둘.**
+   *
+   * ## 왜 켰는가 — 안 기다린 promise 가 보안 가드를 «없앴습니다»
+   *
+   * `FETCH_URL_META` 처리기가 SSRF 가드를 이렇게 불렀습니다:
+   *
+   * ```ts
+   * assertPublicUrl(resource.url);   // ← async 인데 await 이 없습니다
+   * ```
+   *
+   * 그러면 세 가지가 한꺼번에 일어납니다:
+   *
+   * 1. **가드가 아무것도 안 막습니다** — 거부가 결정되기 전에 다음 줄이 돌아
+   *    사내 주소로 브라우저를 엽니다
+   * 2. 거부는 **처리되지 않은 rejection** 이 되어 **프로세스를 죽입니다**
+   * 3. 작업의 `try/catch` 도 못 잡습니다 — 그 promise 를 아무도 안 기다립니다
+   *
+   * 눈으로는 멀쩡해 보입니다. 함수 이름이 `assert…` 라 동기처럼 읽히고,
+   * 타입을 안 보는 린트는 «호출했다»까지만 압니다. **타입을 봐야 잡힙니다.**
+   *
+   * ## 값이 싼가
+   *
+   * 켜 보니 저장소 전체에서 위반이 **2건**이었습니다(둘 다 화면의
+   * `.then` 에 `.catch` 가 없던 자리). 타입 정보를 읽느라 lint 가 느려지지만,
+   * 이 한 종류의 결함이 조용히 **보안 검사를 무력화**한다는 것을 보고 켭니다.
+   */
+  {
+    files: ["src/**/*.{ts,tsx}", "scripts/**/*.ts"],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    plugins: { "@typescript-eslint": tseslint.plugin },
+    rules: {
+      "@typescript-eslint/no-floating-promises": "error",
+      // `await` 을 붙였는데 promise 가 아닌 것 — 반대 방향의 같은 착각입니다
+      "@typescript-eslint/await-thenable": "error",
+    },
+  },
 ]);
 
 export default eslintConfig;

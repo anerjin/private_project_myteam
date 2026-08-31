@@ -78,9 +78,14 @@ export function PurgeAuditButton() {
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    countAuditBeforeAction(days).then((r) => {
-      if (alive) setCount(r.ok ? r.data.n : 0);
-    });
+    // 거부도 받습니다 — 안 받으면 「몇 건」이 옛 숫자에 멈춰 있습니다
+    countAuditBeforeAction(days)
+      .then((r) => {
+        if (alive) setCount(r.ok ? r.data.n : 0);
+      })
+      .catch(() => {
+        if (alive) setCount(0);
+      });
     return () => {
       alive = false;
     };

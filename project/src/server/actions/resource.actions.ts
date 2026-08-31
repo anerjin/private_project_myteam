@@ -56,9 +56,14 @@ export async function createResourceAction(
      * **아카이브는 여기서 하지 않습니다** — `DEC-022` 가 「선택 실행」으로
      * 정했습니다. 등록마다 받으면 개발 PC 디스크가 며칠 만에 찹니다.
      */
-    if (result.type === "GITHUB_REPO") {
+    /*
+     * **GitHub 이 아닌 자료도 채웁니다.** `FETCH_URL_META` 는 스키마와 라벨에만
+     * 있고 처리기가 없어서, arXiv·문서 사이트·블로그는 등록해도 제목·요약을
+     * 아무도 안 채웠습니다 — `REQ-01 · 1.2` 가 GitHub 에만 해당됐습니다.
+     */
+    if (parsed.data.url) {
       await jobService.enqueueAndRun({
-        type: "FETCH_GITHUB_META",
+        type: result.type === "GITHUB_REPO" ? "FETCH_GITHUB_META" : "FETCH_URL_META",
         resourceId: result.id,
         requestedById: actor.id,
       });

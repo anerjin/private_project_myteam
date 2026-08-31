@@ -11,5 +11,6 @@ import "server-only";
  * 각 모듈이 import 시점에 자기 자신을 `register()` 합니다.
  */
 import "@/server/jobs/github-meta";
+import "@/server/jobs/url-meta";
 import "@/server/jobs/archive";
 import "@/server/jobs/scheduled";

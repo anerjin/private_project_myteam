@@ -191,10 +191,14 @@ export function ChatPanel({ userId }: { userId: string }) {
 
   useEffect(() => {
     if (!open || status) return;
-    chatStatusAction().then((r) => {
-      if (r.ok) setStatus(r.data);
-      else setStatus({ available: false, tools: false });
-    });
+    /*
+     * **거부도 받습니다.** `.then` 만 달면 액션이 던졌을 때 아무 일도 안 일어나고
+     * 패널은 「확인 중」에 영원히 멈춥니다 — 못 쓰는 이유를 말해야 할 자리에서
+     * 아무 말도 안 하는 셈입니다.
+     */
+    chatStatusAction()
+      .then((r) => setStatus(r.ok ? r.data : { available: false, tools: false }))
+      .catch(() => setStatus({ available: false, tools: false }));
   }, [open, status]);
 
   useEffect(() => {

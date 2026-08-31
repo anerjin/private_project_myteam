@@ -342,10 +342,100 @@ async function run() {
       where: { resourceId: created.id },
       select: { isGone: true, stars: true },
     });
-    check("못 읽으면 isGone 이 선다", row.isGone === true);
-    check("한 번도 못 읽었으므로 stars 가 비어 있다", row.stars === null);
-    // 화면이 그 둘을 구별해 말하는지는 `checkScreens` 가 봅니다
-    goneSlug = created.slug;
+    /*
+     * **한도에 걸리면 「없는 저장소」인지 알 수 없습니다.**
+     *
+     * `isGone` 은 GitHub 이 **404 를 줬을 때** 섭니다. 한도 초과(`RATE_LIMITED`)
+     * 는 「못 물어봤다」이지 「없다」가 아니므로 그때 `isGone` 이 안 서는 것이
+     * **맞습니다.** 그런데 검사는 그걸 실패로 셌습니다 — 바로 위 두 블록이
+     * 「한도로 건너뜀」을 찍고 넘어가는 동안 여기만 빨개졌습니다.
+     * **검사가 틀린 것**이고, 한 시간 동안 계속 빨간 채로 남습니다.
+     */
+    const rateLimited = (again.errorMessage ?? "").includes("한도");
+    if (rateLimited) {
+      console.log("       (GitHub 한도로 건너뜀 — 404 를 받아야 판정되는 검사입니다)");
+    } else {
+      check("못 읽으면 isGone 이 선다", row.isGone === true);
+      check("한 번도 못 읽었으므로 stars 가 비어 있다", row.stars === null);
+      // 화면이 그 둘을 구별해 말하는지는 `checkScreens` 가 봅니다
+      goneSlug = created.slug;
+    }
+  }
+
+  /*
+   * `REQ-01 · 1.2` 의 「URL 하나로 등록하면 메타데이터가 자동으로 채워진다」가
+   * **GitHub 에만** 해당됐습니다. `FETCH_URL_META` 는 스키마와 라벨에만 있고
+   * `register` 된 처리기가 없어서, 논문·문서 사이트·블로그는 사람이 손으로
+   * 요약을 적었습니다.
+   */
+  console.log("\n★ GitHub 이 아닌 자료 — 메타도 자동으로 (FR-RES-005)");
+  {
+    const mk = async (title: string, url: string) => {
+      const p = parseResourceInput({
+        type: "AI_MATERIAL",
+        title,
+        summary: "",
+        url,
+        materialKind: "ARTICLE",
+        body: "",
+        category: "",
+        tags: "",
+      });
+      if (!p.ok) throw new Error(JSON.stringify(p.fieldErrors));
+      const r = await resourceWrite.create(actorOfId(user.id), p.data);
+      madeResources.push(r.id);
+      const j = await jobService.enqueue({
+        type: "FETCH_URL_META",
+        resourceId: r.id,
+      });
+      await jobService.runNow(j.id);
+      return { resource: r, job: await jobOf(j.id) };
+    };
+
+    const paper = await mk(
+      "메타 수집 검증 — 논문",
+      "https://arxiv.org/abs/1706.03762"
+    );
+    check("처리기가 등록돼 있다", paper.job.status !== "FAILED", paper.job.errorMessage ?? "");
+
+    if (paper.job.status === "DONE") {
+      const row = await db.resource.findUniqueOrThrow({
+        where: { id: paper.resource.id },
+        select: {
+          summary: true,
+          aiMaterial: { select: { sourceName: true, authors: true } },
+        },
+      });
+      check("빈 요약이 채워진다", (row.summary?.length ?? 0) > 20);
+      check("출처를 알아낸다", row.aiMaterial?.sourceName === "arXiv.org");
+      check("저자를 알아낸다", (row.aiMaterial?.authors.length ?? 0) > 0);
+    } else {
+      console.log(`       (바깥이 안 열려 건너뜀 — ${paper.job.errorMessage})`);
+    }
+
+    /*
+     * ★ **SSRF — 여기서 «가드를 안 기다린» 적이 있습니다.**
+     *
+     * `assertPublicUrl` 은 이름을 DNS 로 풀어 보므로 async 인데 `await` 없이
+     * 불렀습니다. 그러면 **가드가 아무것도 막지 않고** 다음 줄이 사내 주소로
+     * 브라우저를 엽니다. 게다가 거부는 처리되지 않은 rejection 이 되어
+     * **프로세스를 죽입니다** — 작업의 try/catch 도 못 잡습니다.
+     *
+     * 사내망 주소로 시험해서 잡았습니다. 이제 `no-floating-promises` 가
+     * 같은 실수를 컴파일 전에 잡지만, **실제로 막히는가**는 여기서 봅니다.
+     */
+    for (const [label, url] of [
+      ["사내망 IP", "http://192.168.0.1/"],
+      ["이 PC 의 DB 포트", "http://localhost:5432/"],
+    ] as const) {
+      const bad = await mk(`메타 수집 검증 — ${label}`, url);
+      check(
+        `${label} 는 열지 않는다`,
+        bad.job.status === "FAILED" &&
+          (bad.job.errorMessage ?? "").includes("내부 주소"),
+        bad.job.errorMessage ?? `${bad.job.status}`
+      );
+    }
   }
 
   console.log("\n★ 첨부 — 3중 검증 (NFR-SEC-009 · FR-FILE-004)");
