@@ -1,6 +1,11 @@
 import "server-only";
 
-import { fetchReadme, fetchRepoMeta, RepoGoneError } from "@/lib/github";
+import {
+  fetchReadme,
+  fetchRepoMeta,
+  fetchRootFiles,
+  RepoGoneError,
+} from "@/lib/github";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { register } from "@/server/services/job.service";
@@ -59,6 +64,12 @@ async function run(job: { resourceId: string | null }) {
   }
 
   const readme = await fetchReadme(meta.owner, meta.repo);
+  /*
+   * 최상위 파일 목록. **못 받아도 그냥 갑니다** — `fetchRootFiles` 가 `null` 을
+   * 주고, 그러면 예전 값을 그대로 둡니다. 파일 목록 하나 때문에 스타·라이선스·
+   * README 까지 통째로 못 받으면 손해가 큽니다.
+   */
+  const files = await fetchRootFiles(meta.owner, meta.repo);
 
   await db.$transaction(async (tx) => {
     await tx.githubRepo.update({
@@ -77,6 +88,22 @@ async function run(job: { resourceId: string | null }) {
         latestRelease: meta.latestRelease,
         readmeContent: readme,
         readmeFetchedAt: readme ? new Date() : null,
+        /*
+         * `null` 이면 «못 받았다»입니다 — 있던 목록을 지우지 않습니다.
+         *
+         * **`size` 를 `null` 로 폅니다.** JSON 컬럼에는 `undefined` 를 넣을 수
+         * 없고(Prisma 가 타입으로 막습니다), 넣을 수 있다 해도 키가 사라져
+         * 읽는 쪽이 두 모양을 다루게 됩니다. 되돌리는 것은 `repoView` 입니다.
+         */
+        ...(files
+          ? {
+              fileTree: files.map((f) => ({
+                name: f.name,
+                type: f.type,
+                size: f.size ?? null,
+              })),
+            }
+          : {}),
         // 읽혔다는 것은 살아 있다는 뜻 (`FR-GH-007`)
         isGone: false,
       },
@@ -98,6 +125,7 @@ async function run(job: { resourceId: string | null }) {
   return {
     stars: meta.stars,
     readme: readme ? readme.length : 0,
+    files: files ? files.length : 0,
     license: meta.license,
   };
 }

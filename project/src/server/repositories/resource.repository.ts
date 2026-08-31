@@ -49,7 +49,30 @@ export const RESOURCE_CARD_SELECT = {
    * 여기서 빼면 카드마다 추가 질의가 생겨 N+1 이 됩니다.
    */
   aiMaterial: true,
-  githubRepo: true,
+  /*
+   * **GitHub 만 컬럼을 고릅니다.** `true` 로 두면 `readme_content`(최대 200KB)
+   * 와 `file_tree` 까지 딸려 옵니다 — 카드는 둘 다 안 그리는데 **목록 한 쪽에
+   * 24행**이 그것을 끌고 왔습니다. 상세 화면만 쓰는 값이라 거기서 따로 읽습니다
+   * (`github.service.repoView`).
+   */
+  githubRepo: {
+    select: {
+      owner: true,
+      repo: true,
+      defaultBranch: true,
+      stars: true,
+      forks: true,
+      primaryLanguage: true,
+      license: true,
+      topics: true,
+      pushedAt: true,
+      latestRelease: true,
+      archiveStatus: true,
+      archiveSizeBytes: true,
+      archivedSha: true,
+      isGone: true,
+    },
+  },
   mcpServer: true,
   skill: true,
   devNote: true,

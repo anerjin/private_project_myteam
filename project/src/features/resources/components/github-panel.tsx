@@ -7,6 +7,13 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
   refreshGithubMetaAction,
   startArchiveAction,
 } from "@/server/actions/github.actions";
@@ -28,11 +35,16 @@ import {
 export function GithubPanel({
   resourceId,
   archiveStatus,
+  archiveSizeBytes,
+  archivedSha,
   isGone,
   canEdit,
 }: {
   resourceId: string;
   archiveStatus: string;
+  /** 표시용. 정본은 `files.size_bytes` (`DEV-02 · 2.7`) */
+  archiveSizeBytes?: number;
+  archivedSha?: string;
   /** 원본이 삭제·비공개로 바뀌었는가 (`FR-GH-007`) */
   isGone: boolean;
   canEdit: boolean;
@@ -61,13 +73,7 @@ export function GithubPanel({
     });
 
   return (
-    <div className="space-y-3">
-      {/*
-        **원본 소실** (`FR-GH-007`). 이게 이 시스템의 존재 이유 중 하나입니다 —
-        `REQ-01 · 1.1` 이 「참고하던 GitHub 저장소가 삭제·비공개 전환되면 복구
-        불가」를 문제로 적어 뒀습니다. 그러니 사라졌을 때 **아카이브를 강조**해야
-        하고, 아카이브가 없으면 그 사실도 말해야 합니다.
-      */}
+    <Card>
       {/*
         **같은 말을 두 번 하지 않습니다.**
 
@@ -77,26 +83,58 @@ export function GithubPanel({
         **한 화면이 서로 반대되는 말을 했습니다.**
 
         저장소 상태 안내는 `content-types/github-repo/detail.tsx` 한 곳으로
-        모았습니다. 이 패널은 **아카이브** 이야기만 합니다.
-      */}
+        모았습니다. 이 카드는 **아카이브** 이야기만 합니다.
 
-      <div className="flex flex-wrap gap-2">
+        > 그 타입 폴더에는 「소스 아카이브」라는 **또 다른 카드**도 있었습니다.
+        > 버튼이 셋 달렸는데 셋 다 `onClick` 이 없었습니다 — 서버 컴포넌트라
+        > 있을 수도 없었고, 누르면 아무 일도 안 났습니다. 진짜 도는 버튼은
+        > 여기였고, 같은 화면에 **둘이 나란히** 있었습니다. 지웠습니다.
+      */}
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Archive className="size-4" />
+          소스 아카이브
+        </CardTitle>
+        <CardDescription>
+          {done
+            ? "원본이 사라져도 남도록 사내 디스크에 보관해 두었습니다."
+            : "원본이 사라져도 남도록 사내 디스크에 보관합니다. 총량 상한 100GB."}
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-3">
         {done && (
-          <Button variant="outline" size="sm" asChild>
-            {/*
-            `Link` 가 아니라 `a` 입니다 — 라우터가 가로채면 스트림 응답이
-            페이지 전환으로 읽힙니다. 다운로드는 브라우저에 맡깁니다.
-          */}
-            <a href={`/api/resources/${resourceId}/archive`}>
-              <Download className="size-4" />
-              아카이브 내려받기
-            </a>
-          </Button>
+          <div className="text-sm">
+            <p className="font-medium">
+              보관됨
+              {archiveSizeBytes !== undefined &&
+                ` · ${(archiveSizeBytes / 1024 / 1024).toFixed(1)} MB`}
+            </p>
+            {archivedSha && (
+              <p className="text-muted-foreground text-xs">
+                커밋 <code>{archivedSha.slice(0, 10)}</code> 기준
+              </p>
+            )}
+          </div>
         )}
 
-        {canEdit && (
-          <>
-            <Button
+        <div className="flex flex-wrap gap-2">
+          {done && (
+            <Button variant="outline" size="sm" asChild>
+              {/*
+              `Link` 가 아니라 `a` 입니다 — 라우터가 가로채면 스트림 응답이
+              페이지 전환으로 읽힙니다. 다운로드는 브라우저에 맡깁니다.
+            */}
+              <a href={`/api/resources/${resourceId}/archive`}>
+                <Download className="size-4" />
+                내려받기
+              </a>
+            </Button>
+          )}
+
+          {canEdit && (
+            <>
+              <Button
               variant="outline"
               size="sm"
               disabled={pending}
@@ -159,9 +197,16 @@ export function GithubPanel({
                 진행 중입니다. 멈춰 있으면 다시 시도해 주세요.
               </span>
             )}
-          </>
+            </>
+          )}
+        </div>
+
+        {!done && !canEdit && (
+          <p className="text-muted-foreground text-xs">
+            아직 아카이브하지 않았습니다.
+          </p>
         )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

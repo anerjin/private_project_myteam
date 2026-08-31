@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import type { Actor } from "@/server/auth/actor";
 import { draftScope } from "@/server/services/file.service";
+import type { RepoFile } from "@/types";
 
 /**
  * GitHub 자료의 아카이브 상태 (`FR-GH-003`·`004`).
@@ -16,6 +17,60 @@ export interface ArchiveDownload {
   storageKey: string;
   filename: string;
   sizeBytes: number;
+}
+
+/** 상세 화면의 왼쪽 — GitHub 첫 화면처럼 파일 목록과 README */
+export interface RepoView {
+  files: RepoFile[];
+  readme: string | null;
+}
+
+/**
+ * 상세 화면 «전용» 읽기.
+ *
+ * **목록 select 에 넣지 않았습니다.** `readme_content` 는 최대 200KB 이고
+ * `file_tree` 도 수십 줄인데, 카드는 둘 다 안 그립니다 — `githubRepo: true`
+ * 로 두면 목록 한 쪽(24행)이 그걸 전부 끌고 옵니다.
+ *
+ * 초안 범위는 `file.service` 와 **같은 규칙**을 씁니다. README 도 자료의
+ * 일부라, 초안이 남에게 보이면 안 되는 것은 첨부와 같습니다.
+ */
+export async function repoView(
+  resourceId: string,
+  viewer: Actor
+): Promise<RepoView> {
+  const row = await db.githubRepo.findFirst({
+    where: {
+      resourceId,
+      resource: { deletedAt: null, ...draftScope(viewer) },
+    },
+    select: { fileTree: true, readmeContent: true },
+  });
+  if (!row) return { files: [], readme: null };
+
+  /*
+   * **`as` 로 뭉개지 않습니다.** `json` 컬럼에는 런타임에 무엇이든 들어올 수
+   * 있고(예전 형태, 손으로 넣은 값), 형태가 어긋나면 화면에서 터집니다 —
+   * `resource.mapper` 의 `json()` 이 같은 이유로 배열 검사를 합니다.
+   */
+  const files: RepoFile[] = Array.isArray(row.fileTree)
+    ? (row.fileTree as unknown[]).flatMap((raw) => {
+        if (typeof raw !== "object" || raw === null) return [];
+        const f = raw as Record<string, unknown>;
+        if (typeof f.name !== "string") return [];
+        if (f.type !== "file" && f.type !== "dir") return [];
+        // 저장할 때 `null` 로 폈던 것을 되돌립니다
+        return [
+          {
+            name: f.name,
+            type: f.type,
+            size: typeof f.size === "number" ? f.size : undefined,
+          },
+        ];
+      })
+    : [];
+
+  return { files, readme: row.readmeContent };
 }
 
 /**

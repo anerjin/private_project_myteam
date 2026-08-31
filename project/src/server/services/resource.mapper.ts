@@ -70,6 +70,8 @@ function toDetail(type: Resource["type"], rows: DetailRows): ResourceDetail {
         type: "GITHUB_REPO",
         owner: d?.owner ?? "",
         repo: d?.repo ?? "",
+        // 파일 목록의 링크가 `tree/<branch>` 를 만들 때 씁니다
+        defaultBranch: u(d?.defaultBranch),
         stars: u(d?.stars),
         forks: u(d?.forks),
         primaryLanguage: u(d?.primaryLanguage),

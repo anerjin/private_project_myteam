@@ -740,7 +740,7 @@ async function checkScreens(userId: string) {
   if (meta.status === "DONE") {
     const row = await db.githubRepo.findUniqueOrThrow({
       where: { resourceId: res.id },
-      select: { stars: true },
+      select: { stars: true, readmeContent: true, fileTree: true },
     });
     /*
      * 화면은 `toLocaleString()` 으로 그립니다 — `13997` 이 아니라 `13,997`.
@@ -750,6 +750,36 @@ async function checkScreens(userId: string) {
       "수집한 스타 수가 화면에 나온다",
       html.includes(row.stars!.toLocaleString()),
       `${row.stars?.toLocaleString()}`
+    );
+
+    /*
+     * ★ **받아 두고 안 그리면 안 받은 것과 같습니다.**
+     *
+     * `readme_content` 는 `P6` 부터 채워지고 있었는데 **화면에 한 번도
+     * 그려진 적이 없었습니다.** DB 에는 있고 사람은 못 보는 상태가 여러
+     * 페이즈를 지나 살아 있었습니다 — 「수집했다」는 작업 로그만 보고
+     * 화면을 안 봤기 때문입니다(`P6` DoD 가 화면을 보게 만든 이유).
+     *
+     * 파일 목록도 같은 자리에 새로 생겼으므로 함께 봅니다.
+     */
+    check("README 를 받아 왔다", (row.readmeContent?.length ?? 0) > 0);
+    check(
+      "README 가 화면에 그려진다",
+      html.includes("README"),
+      "DB 에만 있고 화면에 없으면 안 받은 것과 같다"
+    );
+
+    const files = Array.isArray(row.fileTree) ? row.fileTree : [];
+    check("최상위 파일 목록을 받아 왔다", files.length > 0, `${files.length}개`);
+    check(
+      "파일 이름이 화면에 나온다",
+      html.includes("README.md"),
+      "Spoon-Knife 최상위에 있는 파일이다"
+    );
+    check(
+      "몇 개인지 말한다",
+      html.includes(`최상위 ${files.length}개`),
+      "목록이 잘렸는지 사람이 알 수 있어야 한다"
     );
   } else {
     console.log(`       (GitHub 한도로 건너뜀 — ${meta.errorMessage})`);

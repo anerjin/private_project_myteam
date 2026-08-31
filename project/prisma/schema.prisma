@@ -375,6 +375,11 @@ model GithubRepo {
   pushedAt         DateTime?     @map("pushed_at")
   readmeContent    String?       @map("readme_content")
   readmeFetchedAt  DateTime?     @map("readme_fetched_at")
+  /// 최상위 파일·폴더 목록 (`[{name,type,size}]`). 상세 화면이 GitHub 처럼
+  /// 그립니다. **원본이 사라져도 «무엇이 있었는지»는 남습니다** — REQ-01 · 1.1
+  /// 이 문제로 적어 둔 바로 그 상황입니다. 최상위만 둡니다: 전체 트리는
+  /// 저장소 하나가 1만 줄이 넘고, 그걸 매 상세마다 실어 보내게 됩니다.
+  fileTree         Json?         @map("file_tree")
   latestRelease    String?       @map("latest_release")
   archiveStatus    ArchiveStatus @default(NONE) @map("archive_status")
   archivedSha      String?       @map("archived_sha")

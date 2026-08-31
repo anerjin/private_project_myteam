@@ -50,9 +50,23 @@ export interface AiMaterialDetail {
   applicability?: string;
 }
 
+/**
+ * 저장소 최상위의 한 줄 (`github_repos.file_tree`).
+ *
+ * 최상위만입니다 — 전체 트리는 저장소 하나가 1만 줄이 넘습니다.
+ * 하위 폴더는 GitHub 에서 봅니다.
+ */
+export interface RepoFile {
+  name: string;
+  type: "file" | "dir";
+  /** 폴더에는 없습니다 */
+  size?: number;
+}
+
 export interface GithubRepoDetail {
   owner: string;
   repo: string;
+  defaultBranch?: string;
   stars?: number;
   forks?: number;
   primaryLanguage?: string;

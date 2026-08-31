@@ -42,6 +42,15 @@ export interface ContentTypeDefinition {
   Card: ComponentType<{ resource: Resource }>;
   /** 상세 화면의 타입 전용 블록 (`FR-TYPE-003`) */
   Detail: ComponentType<{ resource: Resource }>;
+  /**
+   * 상세 화면 **오른쪽 열**의 타입 전용 블록. 없으면 안 그립니다.
+   *
+   * GitHub 자료의 「저장소 정보」가 왼쪽 본문을 밀어내고 있었습니다 —
+   * 스타·언어·라이선스는 **곁다리 정보**이고, 본문 자리는 README 와 파일
+   * 목록의 것입니다. 여기 있으면 화면이 타입을 분기하지 않고도 자리를
+   * 나눠 줄 수 있습니다.
+   */
+  Aside?: ComponentType<{ resource: Resource }>;
   /** 등록·수정 폼의 타입 전용 필드 (`FR-TYPE-002`) */
   Form: ComponentType<{ detail?: ResourceDetail }>;
 }

@@ -21,7 +21,11 @@ import { ExternalLinkButton } from "@/features/resources/components/external-lin
 import { GithubPanel } from "@/features/resources/components/github-panel";
 import { LinkedResources } from "@/features/resources/components/linked-resources";
 import { ResourceHistory } from "@/features/resources/components/resource-history";
-import { TypeDetail } from "@/features/resources/components/type-detail";
+import { RepoBrowser } from "@/features/resources/components/repo-browser";
+import {
+  TypeAside,
+  TypeDetail,
+} from "@/features/resources/components/type-detail";
 import {
   getContentType,
   getContentTypeBySlug,
@@ -31,6 +35,7 @@ import { AppError } from "@/lib/errors";
 import * as audit from "@/server/services/audit.service";
 import * as collectionService from "@/server/services/collection.service";
 import * as fileService from "@/server/services/file.service";
+import * as githubService from "@/server/services/github.service";
 import * as relationService from "@/server/services/relation.service";
 import * as resourceService from "@/server/services/resource.service";
 import { decodeSegment } from "@/lib/route-params";
@@ -95,6 +100,16 @@ export default async function ResourceDetailPage({
   ]);
 
   /*
+   * 파일 목록·README 는 **GitHub 자료일 때만** 읽습니다. `readme_content` 는
+   * 최대 200KB 라 목록 select 에서 뺐고(`RESOURCE_CARD_SELECT`), 여기서
+   * 필요할 때만 한 번 더 읽습니다.
+   */
+  const repo =
+    resource.detail.type === "GITHUB_REPO"
+      ? await githubService.repoView(resource.id, actor)
+      : null;
+
+  /*
    * 변경 이력 (`FR-RES-013`) — **고칠 수 있는 사람에게만.**
    * 「누가 언제 뭘 고쳤나」는 그 자료를 고칠 수 있는 사람이 알아야 하는
    * 것이고, 아무나 보면 «누가 무엇을 하는지»가 새어 나갑니다.
@@ -154,19 +169,7 @@ export default async function ResourceDetailPage({
             )}
           </div>
 
-          {/*
-            GitHub 자료만의 조작 — 메타 갱신·아카이브·내려받기 (`FR-GH-003`~`005`).
-            타입 폴더가 아니라 여기 있는 이유: **서버 작업을 부르는 버튼**이라
-            `Detail` 컴포넌트(`Resource` 하나만 받는 순수 표현)의 계약을 벗어납니다.
-          */}
-          {resource.detail.type === "GITHUB_REPO" && (
-            <GithubPanel
-              resourceId={resource.id}
-              archiveStatus={resource.detail.archiveStatus}
-              isGone={resource.detail.isGone}
-              canEdit={canEdit}
-            />
-          )}
+          <TypeDetail resource={resource} />
 
           {resource.body && (
             <Card>
@@ -176,7 +179,24 @@ export default async function ResourceDetailPage({
             </Card>
           )}
 
-          <TypeDetail resource={resource} />
+          {/*
+            **저장소 첫 화면** — 파일 목록과 README (`FR-GH-002`).
+
+            타입 폴더가 아니라 여기 있는 이유: 이 둘은 **DB 를 한 번 더 읽어야**
+            하고(`repoView`), 타입 폴더는 화면 컴포넌트와 같은 자리라 서비스를
+            부르지 않습니다. `Detail` 의 계약(`Resource` 하나만 받는 순수 표현)도
+            벗어납니다 — `GithubPanel` 이 여기 있는 것과 같은 이유입니다.
+          */}
+          {repo && resource.detail.type === "GITHUB_REPO" && (
+            <RepoBrowser
+              owner={resource.detail.owner}
+              repo={resource.detail.repo}
+              defaultBranch={resource.detail.defaultBranch}
+              files={repo.files}
+              readme={repo.readme}
+              isGone={resource.detail.isGone}
+            />
+          )}
 
           <LinkedResources
             resourceId={resource.id}
@@ -211,6 +231,27 @@ export default async function ResourceDetailPage({
 
         <aside className="space-y-4">
           {toc.length >= 2 && <TableOfContents items={toc} />}
+
+          {/*
+            **타입 전용 곁다리** — GitHub 이면 「저장소 정보」입니다.
+            레지스트리에 `Aside` 가 있는 타입만 붙습니다(`TypeAside`).
+          */}
+          <TypeAside resource={resource} />
+
+          {/*
+            GitHub 자료만의 조작 — 메타 갱신·아카이브·내려받기 (`FR-GH-003`~`005`).
+            **서버 작업을 부르는 버튼**이라 `Aside` 컴포넌트의 계약을 벗어납니다.
+          */}
+          {resource.detail.type === "GITHUB_REPO" && (
+            <GithubPanel
+              resourceId={resource.id}
+              archiveStatus={resource.detail.archiveStatus}
+              archiveSizeBytes={resource.detail.archiveSizeBytes}
+              archivedSha={resource.detail.archivedSha}
+              isGone={resource.detail.isGone}
+              canEdit={canEdit}
+            />
+          )}
 
           <Card>
             <CardHeader>

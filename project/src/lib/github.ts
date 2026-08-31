@@ -2,6 +2,7 @@ import "server-only";
 
 import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
+import type { RepoFile } from "@/types";
 
 /**
  * GitHub REST 클라이언트 (`FR-GH-001`·`002`).
@@ -191,6 +192,66 @@ export async function fetchReadme(
   const text = await res.text();
   // 상세 화면이 렌더하므로 상한을 둡니다 — 거대한 README 가 페이로드를 먹습니다
   return text.length > 200_000 ? text.slice(0, 200_000) : text;
+}
+
+/**
+ * 최상위 파일·폴더 목록.
+ *
+ * 상세 화면이 **GitHub 첫 화면처럼** 그립니다. 그리고 원본이 사라진 뒤에도
+ * 「무엇이 들어 있던 저장소인가」가 남습니다(`REQ-01 · 1.1`) — 지금까지는
+ * 그때 요약·README 밖에 없었습니다.
+ *
+ * ## 전체 트리를 안 받는 이유
+ *
+ * `git/trees?recursive=1` 한 번이면 전부 오지만 저장소 하나가 **1만 줄**이
+ * 넘습니다(GDAL). 저장해 두면 상세 화면이 매번 그만큼을 실어 보냅니다 —
+ * 열어 보지도 않을 것을요. GitHub 도 첫 화면에는 최상위만 보여 줍니다.
+ *
+ * 없거나 못 읽으면 `null` 입니다. **메타 수집 전체를 실패시키지 않습니다** —
+ * 파일 목록은 있으면 좋은 것이지 `P0` 가 아닙니다.
+ */
+export async function fetchRootFiles(
+  owner: string,
+  repo: string
+): Promise<RepoFile[] | null> {
+  try {
+    const res = await fetch(`${API}/repos/${owner}/${repo}/contents/`, {
+      headers: authHeaders(),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const rows = (await res.json()) as unknown;
+    // 빈 저장소는 배열이 아니라 오류 객체를 줍니다
+    if (!Array.isArray(rows)) return null;
+
+    const files = rows
+      .filter(
+        (r): r is { name: string; type: string; size?: number } =>
+          typeof (r as { name?: unknown }).name === "string"
+      )
+      .map((r) => ({
+        name: r.name,
+        // `submodule`·`symlink` 도 옵니다 — 파일로 봅니다
+        type: r.type === "dir" ? ("dir" as const) : ("file" as const),
+        size: r.type === "dir" ? undefined : (r.size ?? 0),
+      }));
+
+    /*
+     * **폴더 먼저, 그다음 이름순** — GitHub 과 같은 순서입니다. 화면에서
+     * 정렬하지 않고 여기서 굳혀 둡니다: 저장된 값이 이미 보여 줄 순서면
+     * 그리는 쪽이 그 규칙을 몰라도 됩니다.
+     */
+    files.sort((a, b) =>
+      a.type === b.type
+        ? a.name.localeCompare(b.name)
+        : a.type === "dir"
+          ? -1
+          : 1
+    );
+    return files;
+  } catch {
+    return null;
+  }
 }
 
 /** 아카이브 tarball 주소 — 워커가 스트리밍으로 받습니다 (`FR-GH-003`) */
