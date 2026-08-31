@@ -22,6 +22,7 @@ import { GithubPanel } from "@/features/resources/components/github-panel";
 import { LinkedResources } from "@/features/resources/components/linked-resources";
 import { ResourceHistory } from "@/features/resources/components/resource-history";
 import { RepoBrowser } from "@/features/resources/components/repo-browser";
+import { WebArchivePanel } from "@/features/resources/components/web-archive-panel";
 import {
   TypeAside,
   TypeDetail,
@@ -107,6 +108,16 @@ export default async function ResourceDetailPage({
   const repo =
     resource.detail.type === "GITHUB_REPO"
       ? await githubService.repoView(resource.id, actor)
+      : null;
+
+  /*
+   * **GitHub 이 아닌 자료도 보관합니다** (`REQ-01 · 1.1`). 문서 사이트·논문이
+   * 사라지면 남는 것이 요약 한 줄뿐이던 자리입니다. 저장소는 소스를 받고,
+   * 나머지는 **그 페이지 자체**(MHTML)를 받습니다.
+   */
+  const webArchive =
+    resource.detail.type !== "GITHUB_REPO" && resource.url
+      ? await githubService.archivedFile(resource.id)
       : null;
 
   /*
@@ -249,6 +260,15 @@ export default async function ResourceDetailPage({
               archiveSizeBytes={resource.detail.archiveSizeBytes}
               archivedSha={resource.detail.archivedSha}
               isGone={resource.detail.isGone}
+              canEdit={canEdit}
+            />
+          )}
+
+          {/* 저장소가 아닌 자료 — 페이지 자체를 보관합니다 */}
+          {resource.detail.type !== "GITHUB_REPO" && resource.url && (
+            <WebArchivePanel
+              resourceId={resource.id}
+              archived={webArchive}
               canEdit={canEdit}
             />
           )}

@@ -13,4 +13,5 @@ import "server-only";
 import "@/server/jobs/github-meta";
 import "@/server/jobs/url-meta";
 import "@/server/jobs/archive";
+import "@/server/jobs/url-archive";
 import "@/server/jobs/scheduled";

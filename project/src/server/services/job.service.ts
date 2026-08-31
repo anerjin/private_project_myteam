@@ -404,6 +404,7 @@ const JOB_LABEL: Partial<Record<JobType, string>> = {
   FETCH_URL_META: "URL 정보 수집",
   FETCH_GITHUB_META: "GitHub 메타 수집",
   ARCHIVE_GITHUB: "소스 아카이브",
+  ARCHIVE_URL: "웹 페이지 보관",
   REFRESH_GITHUB_META: "저장소 메타 갱신",
   CHECK_LINK: "원본 링크 확인",
   GENERATE_THUMBNAIL: "썸네일 생성",

@@ -21,10 +21,18 @@ export async function GET(
     const actor = await requireActor();
     const { id } = await ctx.params;
     const archive = await githubService.archiveForDownload(id, actor);
+    /*
+     * **형식을 여기서 정하지 않습니다.**
+     *
+     * `application/gzip` 이 박혀 있었습니다 — 아카이브가 GitHub tarball 뿐이던
+     * 시절의 값입니다. 이제 웹 페이지 보관본(`.mhtml`)도 같은 문으로 나가는데,
+     * 그것을 gzip 이라고 말하면 **브라우저가 압축 파일로 취급**합니다.
+     * 정본은 `files.mime_type` 이고, 쓴 쪽이 그때 정한 값입니다.
+     */
     return streamFile(req, {
       storageKey: archive.storageKey,
       filename: archive.filename,
-      mimeType: "application/gzip",
+      mimeType: archive.mimeType,
       sizeBytes: archive.sizeBytes,
     });
   } catch (e) {

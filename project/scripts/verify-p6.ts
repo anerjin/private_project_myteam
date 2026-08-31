@@ -8,6 +8,7 @@
  * 보는 것으로 값이 있습니다(문구에 「몇 분 뒤」가 들어갑니다).
  */
 import { randomBytes } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 
 import { parseResourceInput } from "@/features/resources/form.schema";
@@ -18,6 +19,7 @@ import type { Actor } from "@/server/auth/actor";
 import { hashPassword } from "@/server/auth/password";
 import "@/server/jobs";
 import * as fileService from "@/server/services/file.service";
+import * as githubService from "@/server/services/github.service";
 import * as jobService from "@/server/services/job.service";
 import * as relationService from "@/server/services/relation.service";
 import * as resourceWrite from "@/server/services/resource.write";
@@ -43,6 +45,9 @@ function check(label: string, ok: boolean, detail = "") {
  * `verify-p8` 과 같은 방식으로 **시각으로 자릅니다.**
  */
 const startedAt = new Date();
+
+/** dev 서버 주소. **바깥 인터넷 대신 우리 서버**를 쓰는 검사들이 함께 씁니다 */
+const BASE = "http://localhost:3100";
 
 const madeUsers: string[] = [];
 const madeResources: string[] = [];
@@ -438,6 +443,105 @@ async function run() {
     }
   }
 
+  /*
+   * `REQ-01 · 1.1` 의 **나머지 절반.** 저장소는 tarball 로 지켜 왔는데, 이 팀
+   * 자료의 절반은 문서 사이트·논문이고 **그것들이 사라지면 요약 한 줄만**
+   * 남았습니다.
+   */
+  console.log("\n★ 웹 페이지 보관 — 저장소가 아닌 자료도 (REQ-01 · 1.1)");
+  {
+    const p = parseResourceInput({
+      type: "AI_MATERIAL",
+      title: "웹 보관 검증",
+      summary: "",
+      // **우리 서버를 씁니다** — 바깥 사정에 흔들리면 검증이 아닙니다
+      url: `${BASE}/login`,
+      materialKind: "ARTICLE",
+      body: "",
+      category: "",
+      tags: "",
+    });
+    if (!p.ok) throw new Error(JSON.stringify(p.fieldErrors));
+    const r = await resourceWrite.create(actorOfId(user.id), p.data);
+    madeResources.push(r.id);
+
+    const j = await jobService.enqueue({ type: "ARCHIVE_URL", resourceId: r.id });
+    await jobService.runNow(j.id);
+    const done = await jobOf(j.id);
+    check("보관 작업이 끝난다", done.status === "DONE", done.errorMessage ?? "");
+
+    const file = await githubService.archivedFile(r.id);
+    check("보관본이 생긴다", file !== null, file?.name ?? "");
+
+    if (file) {
+      const link = await db.resourceFile.findFirstOrThrow({
+        where: { resourceId: r.id, role: "ARCHIVE" },
+        select: { file: { select: { storageKey: true } } },
+      });
+      const buf = await readFile(storage.resolve(link.file.storageKey));
+      const head = buf.subarray(0, 400).toString("utf8");
+      /*
+       * **한 파일에 다 들었는지**가 이 기능의 전부입니다. HTML 만 저장하면
+       * CSS·이미지가 바깥을 가리켜 **원본이 죽는 날 같이 죽습니다.**
+       */
+      check(
+        "MHTML 이다 — 한 파일에 다 들었다",
+        head.includes("MIME-Version") && head.includes("multipart/related")
+      );
+      check(
+        "본문 글자가 담겼다",
+        buf.toString("utf8").includes("QueenBee"),
+        "빈 껍데기를 저장하면 보관이 아니다"
+      );
+
+      /*
+       * **내려받기가 GitHub 자료만 열어 줬습니다.** `github_repos` 행이 없으면
+       * 「자료를 찾을 수 없습니다」였는데, 문서 사이트에는 그 행이 없습니다.
+       */
+      const dl = await githubService.archiveForDownload(r.id, actorOfId(user.id));
+      check("저장소가 아닌 자료도 내려받을 수 있다", dl.sizeBytes > 0, dl.filename);
+      /*
+       * **형식을 라우트가 정하고 있었습니다** — `application/gzip` 이 박혀
+       * 있었고, tarball 뿐이던 시절의 값입니다. `.mhtml` 을 gzip 이라고 말하면
+       * 브라우저가 압축 파일로 취급합니다.
+       */
+      check(
+        "형식은 파일이 말한다",
+        dl.mimeType === "message/rfc822",
+        dl.mimeType
+      );
+    }
+  }
+
+  console.log("\n★ 웹 보관 — 사내 주소는 담지 않는다 (NFR-SEC-010)");
+  {
+    const p = parseResourceInput({
+      type: "AI_MATERIAL",
+      title: "웹 보관 검증 — 사내망",
+      summary: "",
+      url: "http://192.168.0.1/",
+      materialKind: "ARTICLE",
+      body: "",
+      category: "",
+      tags: "",
+    });
+    if (!p.ok) throw new Error(JSON.stringify(p.fieldErrors));
+    const r = await resourceWrite.create(actorOfId(user.id), p.data);
+    madeResources.push(r.id);
+    const j = await jobService.enqueue({ type: "ARCHIVE_URL", resourceId: r.id });
+    await jobService.runNow(j.id);
+    const done = await jobOf(j.id);
+    check(
+      "사내 주소는 보관하지 않는다",
+      done.status === "FAILED" && (done.errorMessage ?? "").includes("내부 주소"),
+      done.errorMessage ?? done.status
+    );
+    check(
+      "실패하면 보관본도 안 남는다",
+      (await githubService.archivedFile(r.id)) === null
+    );
+  }
+
   console.log("\n★ 첨부 — 3중 검증 (NFR-SEC-009 · FR-FILE-004)");
   {
     const parsed = parseResourceInput({
@@ -722,8 +826,7 @@ async function checkScreens(userId: string) {
   const { issue } = await import("@/server/auth/session");
   const { token } = await issue(userId, { userAgent: "verify-p6" });
   const cookie = `${process.env.SESSION_COOKIE_NAME || "qb_session"}=${token}`;
-  const BASE = "http://localhost:3100";
-  const NOT_FOUND = "NEXT_HTTP_ERROR_FALLBACK;404";
+    const NOT_FOUND = "NEXT_HTTP_ERROR_FALLBACK;404";
 
   /**
    * dev 서버는 **첫 컴파일에서 간헐적으로 500** 을 냅니다(Turbopack 이 청크를

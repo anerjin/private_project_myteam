@@ -16,6 +16,8 @@ import type { RepoFile } from "@/types";
 export interface ArchiveDownload {
   storageKey: string;
   filename: string;
+  /** `files.mime_type` — tarball 도 있고 `.mhtml` 도 있습니다 */
+  mimeType: string;
   sizeBytes: number;
 }
 
@@ -74,6 +76,27 @@ export async function repoView(
 }
 
 /**
+ * 보관본이 있는가 — 상세 화면이 「보관됨 · N MB」를 그릴 때 씁니다.
+ *
+ * `file.service.listFor` 는 **`ATTACHMENT` 만** 봅니다(첨부 목록이니까).
+ * 보관본은 `role=ARCHIVE` 라 거기 안 잡힙니다.
+ */
+export async function archivedFile(
+  resourceId: string
+): Promise<{ name: string; sizeBytes: number } | null> {
+  const link = await db.resourceFile.findFirst({
+    where: { resourceId, role: "ARCHIVE" },
+    select: { file: { select: { originalName: true, sizeBytes: true } } },
+  });
+  return link
+    ? {
+        name: link.file.originalName,
+        sizeBytes: Number(link.file.sizeBytes),
+      }
+    : null;
+}
+
+/**
  * 내려받을 수 있는 아카이브. 아니면 **왜 안 되는지**를 담아 던집니다.
  *
  * 「아직 없다」와 「없다」를 구별합니다 — 실행 중이면 기다리면 되고,
@@ -84,15 +107,21 @@ export async function archiveForDownload(
   resourceId: string,
   viewer: Actor
 ): Promise<ArchiveDownload> {
-  // 초안의 아카이브도 새면 안 된다 — `file.service` 와 같은 규칙
-  const row = await db.githubRepo.findFirst({
-    where: {
-      resourceId,
-      resource: { deletedAt: null, ...draftScope(viewer) },
-    },
-    select: { archiveStatus: true },
+  /*
+   * **GitHub 자료만 받을 수 있었습니다.**
+   *
+   * `github_repos` 행이 없으면 그냥 「자료를 찾을 수 없습니다」였습니다. 그런데
+   * 이제 문서 사이트·논문도 보관합니다(`ARCHIVE_URL`) — 그것들에는 그 행이
+   * 없습니다. **보관본은 `files(role=ARCHIVE)` 에 있고**, 그건 타입과 무관합니다.
+   *
+   * 초안의 보관본도 새면 안 됩니다 — `file.service` 와 같은 규칙입니다.
+   */
+  const resource = await db.resource.findFirst({
+    where: { id: resourceId, deletedAt: null, ...draftScope(viewer) },
+    select: { githubRepo: { select: { archiveStatus: true } } },
   });
-  if (!row) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
+  if (!resource) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
+  const repo = resource.githubRepo;
 
   /*
    * **저장 키를 여기서 조립하지 않습니다.**
@@ -109,7 +138,12 @@ export async function archiveForDownload(
     where: { resourceId, role: "ARCHIVE" },
     select: {
       file: {
-        select: { storageKey: true, originalName: true, sizeBytes: true },
+        select: {
+          storageKey: true,
+          originalName: true,
+          mimeType: true,
+          sizeBytes: true,
+        },
       },
     },
   });
@@ -117,9 +151,9 @@ export async function archiveForDownload(
   if (!link) {
     throw new AppError(
       "INVALID_STATE",
-      row.archiveStatus === "RUNNING" || row.archiveStatus === "QUEUED"
+      repo?.archiveStatus === "RUNNING" || repo?.archiveStatus === "QUEUED"
         ? "아카이브를 만드는 중입니다. 잠시 뒤에 다시 시도해 주세요."
-        : "이 저장소는 아직 아카이브하지 않았습니다. 자료 상세에서 실행할 수 있습니다."
+        : "아직 보관하지 않았습니다. 자료 상세에서 실행할 수 있습니다."
     );
   }
 
@@ -127,6 +161,7 @@ export async function archiveForDownload(
     storageKey: link.file.storageKey,
     // 받은 사람이 **무엇을 받았는지** 알아야 한다 (`DEV-05 · 5.5`)
     filename: link.file.originalName,
+    mimeType: link.file.mimeType,
     sizeBytes: Number(link.file.sizeBytes),
   };
 }
