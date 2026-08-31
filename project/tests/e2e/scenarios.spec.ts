@@ -71,6 +71,64 @@ test("⓪ JS 없이 제출해도 비밀번호가 주소에 남지 않는다", as
 });
 
 /* ────────────────────────────────────────────────────────────────────────
+ * ⓪-2 가입이 실패하면 «어느 칸»인지 말한다 (`FR-AUTH-001`)
+ * ──────────────────────────────────────────────────────────────────────── */
+test("⓪ 가입 실패는 어느 칸이 문제인지 말한다", async ({ page }) => {
+  /*
+   * 「신청하지 못했습니다 / 입력값을 확인해 주세요.」만 뜨던 자리입니다.
+   * 여섯 칸짜리 폼에서 그 문장은 아무것도 알려 주지 않습니다 — 서버는
+   * 처음부터 칸마다 문구를 보내고 있었는데(`fieldErrors`) 화면이 버렸습니다.
+   *
+   * 그때 스키마도 요구사항과 **뒤집혀** 있었습니다: 소속이 선택, 가입 사유가
+   * 필수. `FR-AUTH-001` 은 그 반대입니다. 그래서 사유를 비운 사람이
+   * 「어디가 문제인지 모르겠다」에 걸렸습니다.
+   */
+  await page.goto("/signup");
+  await page.waitForLoadState("networkidle");
+
+  await page.getByLabel(/아이디/).fill(uniq("fielderr"));
+  await page.getByLabel(/^비밀번호 \*/).fill("short1");
+  await page.getByLabel(/비밀번호 확인/).fill("short1");
+  await page.getByLabel(/^이름/).fill("검사 사용자");
+  await page.getByLabel(/소속 팀/).fill("검증팀");
+  await page.getByRole("checkbox").first().check();
+
+  // 브라우저 기본 검증이 아니라 **서버 판정**을 보고 싶습니다
+  await page.evaluate(() => {
+    document
+      .querySelectorAll("[required]")
+      .forEach((el) => el.removeAttribute("required"));
+  });
+  await page.getByRole("button", { name: "가입 신청" }).click();
+
+  // 문제가 된 칸의 문구가 화면에 뜬다
+  await expect(page.getByText("비밀번호는 10자 이상이어야 합니다.")).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page).not.toHaveURL(/\/signup\/complete/);
+
+  /*
+   * **가입 사유는 «선택»입니다** (`FR-AUTH-001`). 비워 둔 채로 통과해야 합니다 —
+   * 스키마가 `min(5)` 로 필수처럼 굴던 것이 이 화면의 실제 증상이었습니다.
+   */
+  const username = uniq("noreason");
+  await page.goto("/signup");
+  await page.waitForLoadState("networkidle");
+  await page.getByLabel(/아이디/).fill(username);
+  await page.getByLabel(/^비밀번호 \*/).fill(TEST_PASSWORD);
+  await page.getByLabel(/비밀번호 확인/).fill(TEST_PASSWORD);
+  await page.getByLabel(/^이름/).fill("사유 없는 신청자");
+  await page.getByLabel(/소속 팀/).fill("검증팀");
+  await page.getByRole("checkbox").first().check();
+  await page.getByRole("button", { name: "가입 신청" }).click();
+
+  await expect(page).toHaveURL(/\/signup\/complete/, { timeout: 20_000 });
+  await expect
+    .poll(async () => db.user.count({ where: { username } }), { timeout: 15_000 })
+    .toBe(1);
+});
+
+/* ────────────────────────────────────────────────────────────────────────
  * ① 회원가입 → 승인 대기 → 관리자 승인 → 로그인 → 대시보드
  * ──────────────────────────────────────────────────────────────────────── */
 test("① 가입 신청이 승인을 거쳐 대시보드까지 간다", async ({ page }) => {

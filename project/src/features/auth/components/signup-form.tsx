@@ -18,6 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
@@ -62,6 +63,9 @@ export function SignupForm() {
   const [availability, setAvailability] = useState<Availability>("unknown");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 칸 이름 → 문구. 서버가 보내 준 것을 그 칸 아래에 그립니다 (`FR-AUTH-001`) */
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const err = (k: string) => fieldErrors[k]?.[0];
 
   /*
    * **입력이 멈추면 묻습니다.** 글자마다 부르면 열 글자에 열 번 갑니다 —
@@ -128,12 +132,15 @@ export function SignupForm() {
             setPending(true);
             setError(null);
 
+            setFieldErrors({});
+
             const fd = new FormData(e.currentTarget);
             const r = await signUpAction({
               username,
               password,
+              passwordConfirm: String(fd.get("passwordConfirm") ?? ""),
               name: String(fd.get("name") ?? ""),
-              department: String(fd.get("department") ?? "") || undefined,
+              department: String(fd.get("department") ?? ""),
               signupReason: String(fd.get("reason") ?? ""),
               agreed: fd.get("agree") === "on",
             });
@@ -143,8 +150,28 @@ export function SignupForm() {
               /*
                * **완료 화면으로 보내지 않습니다.** 실패했는데 「접수되었습니다」를
                * 보여 주는 것이 바로 이 자리의 원래 문제였습니다.
+               *
+               * **그리고 «어느 칸»인지 말합니다.** 전에는 `r.message` 만 썼고,
+               * 그게 「입력값을 확인해 주세요.」였습니다 — 여섯 칸짜리 폼에서
+               * 그 문장은 아무것도 알려 주지 않습니다. 서버는 처음부터 칸마다
+               * 문구를 보내고 있었는데(`fieldErrors`) 화면이 버렸습니다.
+               * `FR-AUTH-001` 도 「실패 시 **필드별 오류 메시지**」라고 적어
+               * 두었습니다.
                */
-              setError(r.message ?? "신청하지 못했습니다.");
+              const fe = r.fieldErrors ?? {};
+              setFieldErrors(fe);
+              /*
+               * **칸마다 문구가 붙었으면 배너는 그쪽을 가리킵니다.**
+               * 「입력값을 확인해 주세요.」를 위에도 또 쓰면 같은 말이 두 번
+               * 나오면서 정작 어느 칸인지는 여전히 안 알려 줍니다.
+               * 배너의 원래 몫은 **칸에 못 붙는 실패**입니다 — 가입이 닫혔거나,
+               * 서버가 죽었거나.
+               */
+              setError(
+                Object.keys(fe).length > 0
+                  ? "아래 표시된 칸을 확인해 주세요."
+                  : (r.message ?? "신청하지 못했습니다.")
+              );
               return;
             }
             router.push("/signup/complete");
@@ -180,6 +207,7 @@ export function SignupForm() {
                   글자는 영문
                 </FieldDescription>
               )}
+              {err("username") && <FieldError>{err("username")}</FieldError>}
             </Field>
 
             <Field>
@@ -209,35 +237,60 @@ export function SignupForm() {
                   />
                 ))}
               </div>
-              <FieldDescription>
-                {password
-                  ? bars[s]
-                  : "최소 10자, 영문·숫자·특수문자 중 2종 이상"}
-              </FieldDescription>
+              {err("password") ? (
+                <FieldError>{err("password")}</FieldError>
+              ) : (
+                <FieldDescription>
+                  {password
+                    ? bars[s]
+                    : "최소 10자, 영문·숫자·특수문자 중 2종 이상"}
+                </FieldDescription>
+              )}
             </Field>
 
             <Field>
-              <FieldLabel htmlFor="password2">비밀번호 확인 *</FieldLabel>
+              <FieldLabel htmlFor="passwordConfirm">비밀번호 확인 *</FieldLabel>
+              {/*
+                **`name` 이 없었습니다.** 칸은 있는데 어디에도 실리지 않아,
+                서로 다른 값을 넣어도 그대로 가입됐습니다 — 신청자는 자기가
+                무엇을 비밀번호로 정했는지 모른 채 승인을 기다리게 됩니다.
+              */}
               <Input
-                id="password2"
+                id="passwordConfirm"
+                name="passwordConfirm"
                 type="password"
                 autoComplete="new-password"
                 required
               />
+              {err("passwordConfirm") && (
+                <FieldError>{err("passwordConfirm")}</FieldError>
+              )}
             </Field>
 
             <Field>
               <FieldLabel htmlFor="name">이름 *</FieldLabel>
               <Input id="name" name="name" placeholder="김재현" required />
+              {err("name") && <FieldError>{err("name")}</FieldError>}
             </Field>
 
             <Field>
               <FieldLabel htmlFor="department">소속 팀 *</FieldLabel>
-              <Input id="department" name="department" placeholder="개발팀" required />
+              <Input
+                id="department"
+                name="department"
+                placeholder="개발팀"
+                required
+              />
+              {err("department") && <FieldError>{err("department")}</FieldError>}
             </Field>
 
             <Field>
-              <FieldLabel htmlFor="reason">가입 사유</FieldLabel>
+              {/*
+                **`*` 가 없는 것이 맞습니다** — `FR-AUTH-001` 의 「선택」입니다.
+                스키마가 `min(5)` 로 필수처럼 굴고 있어서, 비워 둔 사람이
+                「입력값을 확인해 주세요」에 막혔습니다. 스키마를 고쳤습니다.
+              */}
+              <FieldLabel htmlFor="reason">가입 사유 (선택)</FieldLabel>
               <Textarea
                 id="reason"
                 name="reason"
@@ -245,6 +298,9 @@ export function SignupForm() {
                 maxLength={200}
                 placeholder="관리자가 승인 여부를 판단하는 데 참고합니다. (200자)"
               />
+              {err("signupReason") && (
+                <FieldError>{err("signupReason")}</FieldError>
+              )}
             </Field>
 
             <Field orientation="horizontal">
@@ -253,6 +309,7 @@ export function SignupForm() {
                 개인정보 수집·이용에 동의합니다 *
               </FieldLabel>
             </Field>
+            {err("agreed") && <FieldError>{err("agreed")}</FieldError>}
 
             <Field>
               {/* 실패를 «말합니다» — 조용히 아무 일도 안 일어나는 것이 원래 문제였습니다 */}

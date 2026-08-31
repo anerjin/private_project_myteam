@@ -52,21 +52,48 @@ export const signInSchema = z.object({
   remember: z.boolean().default(false),
 });
 
-export const signUpSchema = z.object({
-  username: usernameSchema,
-  password: passwordSchema,
-  name: z.string().trim().min(2, "이름을 입력해 주세요.").max(50),
-  department: z.string().trim().max(50).optional(),
-  signupReason: z
-    .string()
-    .trim()
-    .min(5, "가입 사유를 한 줄 이상 적어 주세요.")
-    .max(500),
-  /** 개인정보 수집·이용 동의 (NFR-PRIV-002) */
-  agreed: z.literal(true, {
-    message: "개인정보 수집·이용에 동의해야 가입할 수 있습니다.",
-  }),
-});
+/**
+ * 가입 신청 (`FR-AUTH-001`).
+ *
+ * ## 필수·선택이 **요구사항과 뒤집혀** 있었습니다
+ *
+ * `FR-AUTH-001` 은 「필수: 아이디, 비밀번호, **비밀번호 확인**, 이름,
+ * **소속(팀)**, 동의 / 선택: **가입 사유**(200자)」입니다. 그런데 이 스키마는
+ * 소속을 `optional()`, 가입 사유를 `min(5)` 필수로 두고 있었습니다 —
+ * **정확히 반대**였습니다.
+ *
+ * 그래서 화면 라벨(소속 `*`, 사유 `*` 없음)은 요구사항대로였는데 서버가
+ * 다르게 판정했고, 사유를 비운 사람은 **「입력값을 확인해 주세요」만 보고
+ * 어디가 문제인지 알 수 없었습니다.** 실제로 그렇게 막혔습니다.
+ *
+ * `비밀번호 확인` 은 **아예 없었습니다.** 화면에 칸은 있는데 어디에도 실리지
+ * 않아, 서로 다른 값을 넣어도 그대로 가입됐습니다 — 사용자는 자기가 무엇을
+ * 비밀번호로 정했는지 모른 채 승인을 기다리게 됩니다.
+ */
+export const signUpSchema = z
+  .object({
+    username: usernameSchema,
+    password: passwordSchema,
+    passwordConfirm: z.string().min(1, "비밀번호를 한 번 더 입력해 주세요."),
+    name: z.string().trim().min(2, "이름을 입력해 주세요.").max(50),
+    department: z.string().trim().min(1, "소속 팀을 입력해 주세요.").max(50),
+    /** 선택 — 관리자가 승인 여부를 판단하는 데 참고합니다 (`FR-AUTH-001`, 200자) */
+    signupReason: z
+      .string()
+      .trim()
+      .max(200, "가입 사유는 200자까지입니다.")
+      .optional()
+      // 빈 칸은 «안 적은 것»이지 «빈 문자열»이 아닙니다
+      .transform((v) => (v ? v : undefined)),
+    /** 개인정보 수집·이용 동의 (NFR-PRIV-002) */
+    agreed: z.literal(true, {
+      message: "개인정보 수집·이용에 동의해야 가입할 수 있습니다.",
+    }),
+  })
+  .refine((v) => v.password === v.passwordConfirm, {
+    message: "비밀번호가 서로 다릅니다.",
+    path: ["passwordConfirm"],
+  });
 
 export const changePasswordSchema = z
   .object({

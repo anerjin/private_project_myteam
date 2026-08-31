@@ -200,12 +200,19 @@ export async function signIn(
   };
 }
 
+/**
+ * 가입 신청 (`FR-AUTH-001`).
+ *
+ * **필수·선택이 요구사항과 뒤집혀 있었습니다** — 소속이 선택, 가입 사유가
+ * 필수였습니다. 요구사항은 그 반대입니다(`features/auth/schema.ts` 주석).
+ * 여기 타입도 그에 맞춰 뒤집습니다 — 한쪽만 고치면 컴파일이 잡아 줍니다.
+ */
 export async function signUp(input: {
   username: string;
   password: string;
   name: string;
-  department?: string;
-  signupReason: string;
+  department: string;
+  signupReason?: string;
 }): Promise<{ id: string }> {
   // 관리자가 가입을 닫아 두면 받지 않는다 (FR-ADM-015, system_settings)
   if (!(await settingsService.isSignupEnabled())) {
