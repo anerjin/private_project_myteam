@@ -149,6 +149,11 @@ async function main() {
     prompt.includes("하나도 빠짐없이 링크로"),
     "제목만 늘어놓으면 그 자료로 갈 수가 없다"
   );
+  check(
+    "제목 모양을 정해 준다",
+    prompt.includes("「이름 — 무엇인지 한 줄」"),
+    "이름만 적으면 목록에서 무엇인지 모른다"
+  );
 
   /*
    * MCP 검색이 `APP_URL` 로 주소를 만듭니다. 그게 `localhost` 라서 사내망으로
