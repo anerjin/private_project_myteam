@@ -16,7 +16,7 @@
     "check:fr": "node scripts/check-fr-coverage.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "npm run typecheck && npm run lint && npm run check:deps && npm run check:guards && npm run check:fr && npm run build",
+    "verify": "npm run typecheck && npm run lint && npm run check:deps && npm run check:guards && npm run check:delete && npm run check:fr && npm run build",
     "verify:p3": "tsx --conditions=react-server --env-file=.env scripts/verify-p3.ts",
     "verify:p3-keys": "tsx --conditions=react-server --env-file=.env scripts/verify-p3-keys.ts",
     "verify:p4": "tsx --conditions=react-server --env-file=.env scripts/verify-p4.ts",
@@ -39,7 +39,8 @@
     "db:up": "docker compose -f ../docker/docker-compose.dev.yml up -d",
     "db:down": "docker compose -f ../docker/docker-compose.dev.yml down",
     "verify:chat": "tsx --conditions=react-server --env-file=.env scripts/verify-chat.ts",
-    "verify:notes": "tsx --conditions=react-server --env-file=.env scripts/verify-notes.ts"
+    "verify:notes": "tsx --conditions=react-server --env-file=.env scripts/verify-notes.ts",
+    "check:delete": "node scripts/check-unscoped-delete.mjs"
   },
   "overrides": {
     "deepmerge-ts": "^8.0.2"
