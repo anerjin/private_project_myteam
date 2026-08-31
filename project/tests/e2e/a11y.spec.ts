@@ -117,6 +117,15 @@ async function runLoggedInScan(page: Page, scheme: string) {
     },
   });
 
+  /*
+   * **도우미 패널을 열어 둔 채로 훑습니다.**
+   *
+   * 패널은 앱 테마와 무관하게 **언제나 어둡습니다**(`chat-panel` 의 `.dark`).
+   * 손으로 정한 색 조합이라 대비가 어긋나기 쉬운 자리이고, 닫힌 채로 훑으면
+   * 그 조합을 **한 번도 안 보게** 됩니다 — `DEC-044` 「0건은 증거가 아니다」.
+   */
+  await page.evaluate(() => window.localStorage.setItem("qb.chat.open", "1"));
+
   for (const [label, path] of [
     ["대시보드", "/dashboard"],
     ["자료 목록", "/resources"],

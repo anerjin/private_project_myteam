@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronsUpDown, KeyRound, LogOut, UserCog } from "lucide-react";
+import { ChevronsUpDown, LogOut, UserCog } from "lucide-react";
 import Link from "next/link";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -69,11 +69,17 @@ export function NavUser({ user }: { user: NavUserData }) {
                 <UserCog className="size-4" /> 마이페이지
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/me">
-                <KeyRound className="size-4" /> API 키 관리
-              </Link>
-            </DropdownMenuItem>
+            {/*
+              **「API 키 관리」를 뺐습니다.**
+
+              바로 위 「마이페이지」와 **같은 `/me` 로 가고 있었습니다** —
+              보안 탭으로도 안 갔습니다. 이름이 약속한 곳에 데려다주지 않는
+              문이라, 「있는데 안 된다」의 약한 형태였습니다.
+
+              키 발급은 마이페이지 > 보안에 그대로 있습니다(`FR-USER-008`).
+              팀 스무 명 중 자기 PC 에 MCP 를 붙일 사람은 소수인데, 상시
+              메뉴에 둘 이유가 없습니다.
+            */}
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/login">

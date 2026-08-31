@@ -148,7 +148,8 @@ export function ChatPanel() {
     return (
       <Button
         size="icon"
-        className="fixed right-4 bottom-4 z-30 size-11 rounded-full shadow-lg"
+        // 닫혀 있을 때의 단추도 같은 색 계열로 — 도우미는 언제나 어둡습니다
+        className="dark bg-sidebar text-foreground hover:bg-sidebar-accent fixed right-4 bottom-4 z-30 size-11 rounded-full border shadow-lg"
         aria-label="도우미 열기"
         onClick={() => toggle(true)}
       >
@@ -161,7 +162,19 @@ export function ChatPanel() {
     <aside
       aria-label="도우미"
       className={cn(
-        "bg-sidebar z-40 flex flex-col border-l",
+        /*
+         * **언제나 어두운 색입니다.**
+         *
+         * `.dark` 를 여기 걸면 `globals.css` 의 다크 토큰이 이 상자와 그
+         * 자손에게 적용됩니다 — 앱 테마가 밝든 어둡든 도우미만 어둡습니다.
+         *
+         * **`text-foreground` 를 다시 거는 이유**: `body` 가 이미
+         * `color: var(--foreground)` 를 «밝은 값으로 계산해» 상속시킵니다.
+         * 커스텀 속성은 쓰이는 그 자리에서 치환되므로, 여기서 한 번 더
+         * 써 줘야 다크 값으로 다시 계산됩니다. 안 그러면 어두운 바탕에
+         * 밝은 테마의 검은 글씨가 얹힙니다.
+         */
+        "dark bg-sidebar text-foreground z-40 flex flex-col border-l",
         /*
          * **뷰포트에 고정입니다.** 헤더·사이드바·본문 «전체» 오른쪽에 서고,
          * 본문 열은 `globals.css` 가 `--chat-width` 만큼 밀어 줍니다.
