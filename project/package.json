@@ -37,7 +37,8 @@
     "loadtest": "tsx --conditions=react-server --env-file=.env scripts/loadtest.ts",
     "bench:list": "tsx --conditions=react-server --env-file=.env scripts/bench-list.ts",
     "db:up": "docker compose -f ../docker/docker-compose.dev.yml up -d",
-    "db:down": "docker compose -f ../docker/docker-compose.dev.yml down"
+    "db:down": "docker compose -f ../docker/docker-compose.dev.yml down",
+    "verify:chat": "tsx --conditions=react-server --env-file=.env scripts/verify-chat.ts"
   },
   "overrides": {
     "deepmerge-ts": "^8.0.2"

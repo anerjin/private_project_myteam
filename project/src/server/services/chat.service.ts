@@ -1,4 +1,4 @@
-import "server-only";
+﻿import "server-only";
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -24,9 +24,10 @@ import { AppError } from "@/lib/errors";
  *
  * | 장치 | 막는 것 |
  * | --- | --- |
- * | `--restricted` | Bash·코드 실행 도구 자체가 사라집니다 |
+ * | `--restricted` | Bash·코드 실행 도구가 사라집니다 |
  * | `--strict-mcp-config` | 이 PC 사용자의 개인 MCP 설정을 무시합니다 |
- * | `--allowedTools` (읽기만) | 자료를 **고치거나 지우지 못합니다** |
+ * | `--disallowedTools` | 나머지 내장 도구를 **목록에서 지웁니다** |
+ * | 키 스코프 `resources:read` | 쓰기 도구를 불러도 API 가 403 을 줍니다 |
  * | 프롬프트를 stdin 으로 | 사용자가 친 말이 명령줄에 실리지 않습니다 |
  *
  * **쓰기는 여기서 하지 않습니다.** 등록은 화면이 확인을 받아 우리 액션이
@@ -42,6 +43,71 @@ const READ_TOOLS = [
   "mcp__queenbee__queenbee_list_content_types",
   "mcp__queenbee__queenbee_check_duplicate",
 ];
+
+/**
+ * **`--restricted` 만으로는 부족합니다.**
+ *
+ * `--restricted` 가 없애는 것은 「명령·코드를 **실행**하는」 도구뿐입니다.
+ * `WebSearch`·`Read`·`Write`·`Task` 는 그대로 남고, `--allowedTools` 는
+ * 「물어보지 않고 허용할 것」 목록이지 **「이것만 있다」가 아닙니다.**
+ *
+ * `--allowedTools` 만 주고 CLI 에게 물어봤더니(`listTools`) 모델이 이걸 쥐고
+ * 있었습니다:
+ *
+ * > `Task` `Edit` `Glob` `Grep` `Read` `Write` `WebSearch` `SendMessage`
+ * > `PushNotification` `Skill` … 그리고 `queenbee_create_resource` ·
+ * > `queenbee_update_resource` · `queenbee_archive_github`
+ *
+ * 그래서 운영자가 「공간정보 저장소를 찾아줘」라고 물었을 때 **사내 자료가
+ * 아니라 바깥 저장소 목록**이 나왔습니다. 이 채팅은 **사내 전용**입니다 —
+ * 바깥을 뒤질 수 있으면 언젠가 뒤집니다.
+ *
+ * `--disallowedTools` 는 목록에서 **아예 지웁니다**(측정으로 확인). 남는 것은
+ * `ToolSearch` 와 `READ_TOOLS` 다섯뿐입니다.
+ *
+ * > **이 목록은 낡습니다.** CLI 를 올리면 새 도구가 조용히 늘어납니다.
+ * > 그래서 `verify:chat` 이 «막았다»를 믿지 않고 `listTools()` 로 물어봅니다.
+ */
+const DENIED_TOOLS = [
+  // 바깥으로 나가는 것 — 이 채팅이 사내 전용인 이유
+  "WebSearch",
+  "WebFetch",
+  "SendMessage",
+  "SendUserFile",
+  "PushNotification",
+  "Artifact",
+  "RemoteTrigger",
+  // 이 PC 의 파일
+  "Read",
+  "Write",
+  "Edit",
+  "NotebookEdit",
+  "Glob",
+  "Grep",
+  "Bash",
+  // 다른 에이전트·작업을 만드는 것
+  "Task",
+  "Agent",
+  "Skill",
+  "ListAgents",
+  "TaskOutput",
+  "TaskStop",
+  "CronCreate",
+  "CronDelete",
+  "CronList",
+  "ScheduleWakeup",
+  "EnterWorktree",
+  "ExitWorktree",
+  "DesignSync",
+  "ReportFindings",
+  // 키 스코프가 이미 막지만, 부르지도 못하게 합니다 (`DEC-047`)
+  "mcp__queenbee__queenbee_create_resource",
+  "mcp__queenbee__queenbee_update_resource",
+  "mcp__queenbee__queenbee_archive_github",
+];
+
+/** 모델에게 남아 있어야 하는 것 — `verify:chat` 이 이 집합과 견줍니다 */
+export const EXPECTED_TOOLS = ["ToolSearch", ...READ_TOOLS];
 
 /** 한 번에 이만큼만 띄웁니다 — 20명이 동시에 물으면 프로세스가 20개 뜹니다 */
 const MAX_CONCURRENT = 2;
@@ -145,6 +211,9 @@ export async function ask(
     "--strict-mcp-config",
     "--append-system-prompt",
     systemPrompt(context, tools),
+    // 도구가 꺼져 있어도 막습니다 — 그때야말로 바깥으로 나가고 싶어집니다
+    "--disallowedTools",
+    ...DENIED_TOOLS,
   ];
 
   if (tools) {
@@ -176,7 +245,7 @@ export async function ask(
     }
 
     return {
-      reply: parsed.result,
+      reply: toRelativeLinks(parsed.result),
       sessionId: parsed.session_id ?? null,
       ms: Date.now() - startedAt,
       turns: parsed.num_turns ?? 0,
@@ -185,6 +254,110 @@ export async function ask(
   } finally {
     release();
   }
+}
+
+/**
+ * 우리 자료를 가리키는 절대 주소를 **상대 경로로** 바꾼다.
+ *
+ * MCP 검색이 `QUEENBEE_URL`(= `APP_URL`) 로 주소를 만듭니다. 그 값은
+ * `http://localhost:3100` 이라서, 사내망 `192.168.0.205` 로 들어온 팀원에게는
+ * **자기 PC 를 가리키는 죽은 링크**가 갑니다. 채팅은 언제나 같은 서버 안에서
+ * 열리므로 `/resources/…` 로 두면 어느 주소로 들어왔든 맞습니다.
+ *
+ * 프롬프트로 「상대 경로로 쓰라」고 시킬 수도 있지만, 그건 **부탁**입니다.
+ * 여기서 바꾸면 사실이 됩니다.
+ */
+function toRelativeLinks(text: string): string {
+  const origin = env.APP_URL.replace(/\/+$/, "");
+  if (!origin) return text;
+  return text.split(origin + "/").join("/");
+}
+
+/** 검증이 이 규칙을 볼 수 있게 — 링크가 죽는 것은 화면에서만 보입니다 */
+export const toRelativeLinksForTest = toRelativeLinks;
+
+/**
+ * 모델이 **실제로 쥐고 있는** 도구 목록.
+ *
+ * 「막았다」를 코드가 주장하지 않고 **CLI 에게 물어봅니다.** `--restricted` 도
+ * `--allowedTools` 도 내가 기대한 대로 동작하지 않았고, 그걸 알게 된 방법이
+ * 이것입니다.
+ *
+ * `init` 줄만 읽고 **바로 죽입니다** — 모델에게 아무것도 묻지 않으므로
+ * 사용량을 쓰지 않습니다(`-p` 인데 답을 기다리지 않습니다).
+ */
+export async function listTools(): Promise<string[]> {
+  const bin = findBinary();
+  if (!bin) throw new AppError("INTERNAL_ERROR", "Claude Code CLI 를 찾지 못했습니다.");
+
+  const tools = toolsConfigured();
+  const args = [
+    "-p",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--restricted",
+    "--strict-mcp-config",
+    "--disallowedTools",
+    ...DENIED_TOOLS,
+  ];
+  if (tools) {
+    args.push("--mcp-config", mcpConfig(), "--allowedTools", ...READ_TOOLS);
+  }
+
+  return new Promise<string[]>((resolve, reject) => {
+    const child = spawn(bin, args, {
+      cwd: process.cwd(),
+      windowsHide: true,
+      shell: false,
+    });
+    let buf = "";
+    let settled = false;
+    const done = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.kill();
+      fn();
+    };
+    const timer = setTimeout(
+      () => done(() => reject(new AppError("UPSTREAM_ERROR", "도구 목록을 받지 못했습니다."))),
+      30_000
+    );
+
+    child.stdout.on("data", (d: Buffer) => {
+      buf += d.toString("utf8");
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const m = JSON.parse(line) as {
+            type?: string;
+            subtype?: string;
+            tools?: string[];
+          };
+          if (m.type === "system" && m.subtype === "init") {
+            const list = m.tools ?? [];
+            done(() => resolve(list));
+            return;
+          }
+        } catch {
+          // 부분 줄입니다 — 다음 chunk 에서 이어집니다
+        }
+      }
+    });
+    child.on("error", (e) =>
+      done(() => reject(new AppError("UPSTREAM_ERROR", `CLI 를 띄우지 못했습니다: ${e.message}`)))
+    );
+    child.on("close", () =>
+      done(() => reject(new AppError("UPSTREAM_ERROR", "CLI 가 도구 목록 없이 끝났습니다.")))
+    );
+
+    // 답을 받을 생각이 없지만, stdin 을 닫아야 CLI 가 뜹니다
+    child.stdin.write("ping");
+    child.stdin.end();
+  });
 }
 
 /**
@@ -213,6 +386,17 @@ function mcpConfig(): string {
   });
 }
 
+/**
+ * 검증이 문구를 읽을 수 있게 열어 둡니다.
+ *
+ * 도구를 막아도 **모델이 아는 것을 늘어놓는 길**은 남아 있고, 그건 프롬프트
+ * 로만 막힙니다. 그러니 프롬프트도 검사 대상입니다 — 문구가 조용히 빠지면
+ * 채팅은 다시 바깥 이야기를 합니다.
+ */
+export function systemPromptFor(context: string): string {
+  return systemPrompt(context, toolsConfigured());
+}
+
 function systemPrompt(context: string, tools: boolean): string {
   return [
     "당신은 사내 자료 시스템 «QueenBee» 의 도우미입니다. DOI(드론 공간정보) 개발팀이 씁니다.",
@@ -222,13 +406,30 @@ function systemPrompt(context: string, tools: boolean): string {
     "",
     tools
       ? [
-          "queenbee 도구로 자료를 **찾아볼 수 있습니다**. 자료를 묻거든 먼저 검색하십시오.",
-          "자료를 가리킬 때는 제목을 그대로 쓰십시오. 링크 주소를 지어내지 마십시오.",
+          "## 이 시스템 «안에» 있는 것만 답합니다",
+          "",
+          "자료·저장소·문서를 **찾아 달라**는 말은 언제나 **QueenBee 에 등록된 자료**를",
+          "뜻합니다. 반드시 `queenbee_search` 로 찾고 **검색 결과에 있는 것만** 말하십시오.",
+          "",
+          "- 당신이 알고 있는 **바깥 저장소·라이브러리를 목록으로 내놓지 마십시오.**",
+          "  이 채팅은 사내 전용입니다. 바깥 정보는 사용자가 다른 데서 찾습니다.",
+          "- 찾은 것이 없으면 **「등록된 자료가 없습니다」**라고 그대로 말하고 다른",
+          "  검색어를 제안하십시오. **빈손을 바깥 지식으로 채우지 마십시오.**",
+          "- 한 번 찾아 안 나오면 다른 낱말로 두어 번 더 찾아보십시오",
+          "  (예: 「공간정보」·「GIS」·「좌표계」). 그래도 없으면 없다고 하십시오.",
+          "- 찾은 자료는 **하나도 빠짐없이 링크로** 주십시오 —",
+          "  `- [제목](검색 결과가 준 주소) — 한 줄 설명` 형태입니다.",
+          "  제목만 늘어놓으면 사용자가 그 자료로 갈 수가 없습니다.",
+          "- 주소는 **검색 결과가 준 것**을 그대로 쓰고, 지어내지 마십시오.",
           "",
           "## 자료를 등록해 달라고 하면",
           "",
           "**당신에게 등록 도구는 없습니다.** 대신 아래 블록을 답 끝에 붙이면",
           "**시스템이 사용자 본인 이름으로 등록합니다.** 블록은 하나만 씁니다.",
+          "",
+          "위의 「안에 있는 것만」은 **«찾기» 규칙**입니다. 등록은 바깥 자료를",
+          "들여오는 일이니 사용자가 말한 것으로 합니다 — 다만 **주소가 확실하지",
+          "않으면 지어내지 말고 물어보십시오.** 틀린 주소는 그대로 저장됩니다.",
           "",
           "붙이기 전에 반드시 이 순서를 밟으십시오:",
           "1. `queenbee_check_duplicate` — 이미 있으면 등록하지 말고 그 자료를 알려 주십시오",
@@ -246,7 +447,11 @@ function systemPrompt(context: string, tools: boolean): string {
           "- 본문에 블록을 붙였으면 「등록했습니다」라고 미리 말하지 마십시오 —",
           "  실제로 넣는 것은 시스템이고, 결과는 사용자 화면에 따로 표시됩니다",
         ].join("\n")
-      : "지금은 자료 검색 도구가 꺼져 있습니다. 자료를 묻거든 «검색 도구가 설정되지 않았다»고 말하십시오.",
+      : [
+          "지금은 자료 검색 도구가 꺼져 있습니다. 자료를 묻거든 «검색 도구가",
+          "설정되지 않았다»고 말하십시오. **바깥에서 찾아 대신 답하지 마십시오** —",
+          "이 채팅은 사내 전용이고, 바깥 목록은 사내 자료가 아닙니다.",
+        ].join("\n"),
   ].join("\n");
 }
 
