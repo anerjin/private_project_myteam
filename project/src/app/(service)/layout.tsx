@@ -1,4 +1,7 @@
+import { Suspense } from "react";
+
 import { Breadcrumbs } from "@/components/common/breadcrumbs";
+import { ChatPanel } from "@/features/chat/components/chat-panel";
 import { SiteHeader } from "@/components/layout/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ROLE_LABEL } from "@/config/site";
@@ -70,7 +73,22 @@ export default async function ServiceLayout({ children }: LayoutProps<"/">) {
           notifications={notifications}
           actions={<SignOutButton />}
         />
-        <main className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">{children}</main>
+        {/*
+          **본문과 도우미를 나란히 둡니다.** 도우미를 `main` 안에 넣으면
+          화면마다 있는 `space-y-6` 를 타고 내려가 본문 흐름에 섞입니다.
+        */}
+        <div className="flex flex-1 overflow-hidden">
+          <main className="flex-1 space-y-6 overflow-y-auto p-4 md:p-6 lg:p-8">
+            {children}
+          </main>
+          <Suspense fallback={null}>
+            {/*
+              `useSearchParams` 를 쓰므로 경계가 필요합니다 — 없으면 이
+              레이아웃 아래 모든 화면이 통째로 클라이언트 렌더로 밀립니다.
+            */}
+            <ChatPanel />
+          </Suspense>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

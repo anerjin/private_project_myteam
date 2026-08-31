@@ -68,6 +68,27 @@ const envSchema = z.object({
 
   ADMIN_SEED_ID: z.string().min(4).optional(),
   ADMIN_SEED_PASSWORD: z.string().min(10).optional(),
+
+  /*
+   * ── 도우미 채팅 (`SCR-0xx`) ────────────────────────────────────
+   *
+   * 채팅은 이 PC 에 설치된 **Claude Code CLI** 를 헤드리스로 부릅니다.
+   * 모델 호출 자격은 CLI 가 이미 갖고 있으므로(`claude auth`, Max 구독)
+   * **여기에 모델 API 키를 두지 않습니다.**
+   *
+   * `CHAT_API_KEY` 는 **QueenBee 자기 자신의** API 키입니다 — CLI 가 MCP
+   * 서버를 통해 우리 자료를 «읽을» 때 씁니다. 읽기 전용 키를 넣으십시오.
+   * 없으면 채팅은 뜨지만 **검색 도구 없이** 답합니다(그 사실을 화면이 말합니다).
+   */
+  CHAT_API_KEY: z
+    .string()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
+  /** CLI 실행 파일을 못 찾을 때만 지정합니다 (`chat.service` 가 흔한 자리를 먼저 찾습니다) */
+  CLAUDE_BIN: z
+    .string()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
 });
 
 export type Env = z.infer<typeof envSchema>;

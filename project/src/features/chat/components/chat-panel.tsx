@@ -1,0 +1,267 @@
+"use client";
+
+import { MessageSquare, PanelRightClose, Send, Sparkles } from "lucide-react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+
+import { MarkdownViewer } from "@/components/common/markdown-viewer";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { describePage } from "@/features/chat/page-context";
+import { cn } from "@/lib/utils";
+import { askChatAction, chatStatusAction } from "@/server/actions/chat.actions";
+
+/**
+ * 오른쪽 도우미 패널 — 서비스 화면 전체.
+ *
+ * ## 지금 어느 화면인지 **보여 줍니다**
+ *
+ * 칩에 그 이름이 뜨고, 같은 설명이 프롬프트에도 실립니다
+ * (`features/chat/page-context` 한 곳에서 만듭니다). 사용자가 「이거 뭐야」라고
+ * 물었을 때 무엇을 가리키는지 서로 같은 것을 봐야 합니다.
+ *
+ * ## 관리 영역에는 안 붙입니다
+ *
+ * 서비스 레이아웃에만 답니다. 관리 화면은 폭이 좁고, 거기서 필요한 것은
+ * 대화가 아니라 표입니다.
+ *
+ * ## 못 쓰는 상태를 «말합니다»
+ *
+ * CLI 가 없거나 검색 키가 없으면 조용히 안 되는 대신 그 이유를 적습니다 —
+ * 이 저장소가 반복해서 지워 온 「눌러도 아무 일이 없는」 자리입니다.
+ */
+
+interface Turn {
+  role: "me" | "bot";
+  text: string;
+  ms?: number;
+}
+
+const STORAGE_KEY = "qb.chat.open";
+
+export function ChatPanel() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const page = describePage(pathname, searchParams.get("q") ?? undefined);
+
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<{
+    available: boolean;
+    tools: boolean;
+  } | null>(null);
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [draft, setDraft] = useState("");
+  const [pending, setPending] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * 접었는지 폈는지는 **이 브라우저에만** 기억합니다.
+   *
+   * **`useState` 초기값으로 읽지 않습니다.** 서버 렌더에는 `localStorage` 가
+   * 없어 항상 «닫힘»이 나오고, 클라이언트 첫 렌더가 «열림»이면 하이드레이션이
+   * 어긋납니다.
+   *
+   * **타이머 안에서 `setState` 를 부릅니다.** 이펙트 본문에서 곧바로 부르면
+   * `react-hooks/set-state-in-effect` 가 잡습니다 — `tag-input` 이 같은 규칙에
+   * 걸렸던 자리이고, 해법도 같습니다.
+   */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        setOpen(window.localStorage.getItem(STORAGE_KEY) === "1");
+      } catch {
+        /* 저장소를 막아 둔 브라우저 — 닫힌 채로 시작합니다 */
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!open || status) return;
+    chatStatusAction().then((r) => {
+      if (r.ok) setStatus(r.data);
+      else setStatus({ available: false, tools: false });
+    });
+  }, [open, status]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [turns, pending]);
+
+  function toggle(next: boolean) {
+    setOpen(next);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+    } catch {
+      /* 못 저장해도 이번 세션에서는 그대로 동작합니다 */
+    }
+  }
+
+  async function send() {
+    const text = draft.trim();
+    if (!text || pending) return;
+    setDraft("");
+    setTurns((t) => [...t, { role: "me", text }]);
+    setPending(true);
+
+    const r = await askChatAction({
+      message: text,
+      pathname,
+      query: searchParams.get("q") ?? undefined,
+      sessionId: sessionId ?? undefined,
+    });
+    setPending(false);
+
+    if (!r.ok) {
+      setTurns((t) => [
+        ...t,
+        { role: "bot", text: r.message ?? "대답을 받지 못했습니다." },
+      ]);
+      return;
+    }
+    setSessionId(r.data.sessionId);
+    setTurns((t) => [
+      ...t,
+      { role: "bot", text: r.data.reply, ms: r.data.ms },
+    ]);
+  }
+
+  if (!open) {
+    return (
+      <Button
+        size="icon"
+        className="fixed right-4 bottom-4 z-30 size-11 rounded-full shadow-lg"
+        aria-label="도우미 열기"
+        onClick={() => toggle(true)}
+      >
+        <MessageSquare className="size-5" />
+      </Button>
+    );
+  }
+
+  return (
+    <aside
+      aria-label="도우미"
+      className="bg-sidebar flex w-full shrink-0 flex-col border-l lg:w-96"
+    >
+      <header className="flex h-14 items-center gap-2 border-b px-3">
+        <Sparkles className="text-muted-foreground size-4" />
+        <span className="text-sm font-medium">도우미</span>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="ml-auto"
+          aria-label="도우미 닫기"
+          onClick={() => toggle(false)}
+        >
+          <PanelRightClose className="size-4" />
+        </Button>
+      </header>
+
+      {/* **지금 어느 화면인지** — 답이 이 맥락 위에서 나옵니다 */}
+      <div className="border-b px-3 py-2">
+        <span className="text-muted-foreground text-xs">보고 있는 화면</span>
+        <p className="truncate text-sm font-medium" title={page.detail}>
+          {page.label}
+        </p>
+      </div>
+
+      <div className="flex-1 space-y-3 overflow-y-auto p-3">
+        {status && !status.available && (
+          <Notice>
+            Claude Code CLI 를 찾지 못했습니다. 이 PC 에 설치돼 있어야 도우미가
+            돕니다.
+          </Notice>
+        )}
+        {status?.available && !status.tools && (
+          <Notice>
+            자료 검색 도구가 꺼져 있습니다 (<code>CHAT_API_KEY</code>). 화면
+            안내는 되지만 자료를 찾아 주지는 못합니다.
+          </Notice>
+        )}
+
+        {turns.length === 0 && (
+          <div className="text-muted-foreground space-y-2 text-sm">
+            <p>이 화면에서 물어볼 만한 것:</p>
+            <ul className="list-disc space-y-1 pl-4">
+              <li>«드론 사진측량» 자료 찾아 줘</li>
+              <li>이 화면에서 뭘 할 수 있어?</li>
+              <li>이 저장소랑 비슷한 자료 있어?</li>
+            </ul>
+          </div>
+        )}
+
+        {turns.map((t, i) => (
+          <div
+            key={i}
+            className={cn(
+              "rounded-lg px-3 py-2 text-sm",
+              t.role === "me"
+                ? "bg-primary text-primary-foreground ml-6 whitespace-pre-wrap"
+                : "bg-background mr-6 border"
+            )}
+          >
+            {/*
+              **답은 마크다운입니다.** 그대로 그리면 `**굵게**` 가 별표째
+              보입니다. 자료 본문이 쓰는 뷰어를 그대로 씁니다 —
+              `rehype-sanitize` 를 지나므로 모델이 무엇을 뱉든 태그가 살아
+              나가지 않습니다 (`NFR-SEC-007`).
+            */}
+            {t.role === "bot" ? (
+              <MarkdownViewer content={t.text} className="prose-sm" />
+            ) : (
+              t.text
+            )}
+            {t.ms !== undefined && (
+              <span className="text-muted-foreground mt-1 block text-xs">
+                {(t.ms / 1000).toFixed(1)}초
+              </span>
+            )}
+          </div>
+        ))}
+
+        {pending && (
+          <div className="bg-background text-muted-foreground mr-6 rounded-lg border px-3 py-2 text-sm">
+            생각 중… (자료를 찾으면 10초쯤 걸립니다)
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+
+      <div className="border-t p-3">
+        <Textarea
+          rows={2}
+          value={draft}
+          placeholder="무엇을 도와드릴까요?"
+          aria-label="도우미에게 보낼 말"
+          disabled={pending || status?.available === false}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter 는 보내기, Shift+Enter 는 줄바꿈 — 채팅의 관습입니다
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void send();
+            }
+          }}
+        />
+        <Button
+          className="mt-2 w-full"
+          disabled={pending || !draft.trim() || status?.available === false}
+          onClick={() => void send()}
+        >
+          <Send className="size-4" />
+          {pending ? "기다리는 중…" : "보내기"}
+        </Button>
+      </div>
+    </aside>
+  );
+}
+
+function Notice({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="bg-muted text-muted-foreground rounded-lg px-3 py-2 text-xs leading-relaxed">
+      {children}
+    </div>
+  );
+}
