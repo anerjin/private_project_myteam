@@ -299,6 +299,30 @@ async function main() {
   );
 
   /*
+   * ★ **프롬프트가 설정과 «반대되는» 말을 하지 않는가.**
+   *
+   * `CHAT_BROWSER_HEADED=1` 을 켠 뒤에도 프롬프트는 「그 브라우저는 사용자
+   * 화면에 안 뜹니다」라고 못 박고 있었습니다. 그래서 디오가 운영자에게
+   * **「브라우저 창을 띄우는 방법이 없습니다」**라고 답했습니다 — 그때 창은
+   * 실제로 뜨고 있었습니다(창 목록으로 확인: `Example Domain - Chrome`).
+   *
+   * **제가 쓴 문장이 모델을 거짓말하게 만든 것입니다.** 설정이 바뀌면 문장도
+   * 함께 바뀌어야 합니다.
+   */
+  if (chat.browserEnabled()) {
+    const headed = env.CHAT_BROWSER_HEADED === true;
+    check(
+      headed
+        ? "창이 뜨는 설정이면 «뜬다»고 말한다"
+        : "창이 안 뜨는 설정이면 «안 뜬다»고 말한다",
+      headed
+        ? prompt.includes("«실제로» 뜹니다") && !prompt.includes("화면에 안 뜹니다")
+        : prompt.includes("화면에 안 뜹니다"),
+      headed ? "CHAT_BROWSER_HEADED=1" : "CHAT_BROWSER_HEADED 꺼짐"
+    );
+  }
+
+  /*
    * MCP 검색이 `APP_URL` 로 주소를 만듭니다. 그게 `localhost` 라서 사내망으로
    * 들어온 팀원에게는 **자기 PC 를 가리키는 죽은 링크**가 갔습니다.
    */
