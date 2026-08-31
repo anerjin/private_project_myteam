@@ -60,7 +60,9 @@ export function ProfileForm({
     values.bio !== (profile.bio ?? "");
 
   return (
+    // JS 가 안 뜨면 기본 GET 으로 제출됩니다 (`login-form` 주석)
     <form
+      method="post"
       onSubmit={(e) => {
         e.preventDefault();
         startTransition(async () => {

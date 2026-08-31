@@ -31,6 +31,46 @@ test.afterAll(async () => {
 });
 
 /* ────────────────────────────────────────────────────────────────────────
+ * ⓪ 자바스크립트가 안 떠도 «자격 증명이 새지 않는다»
+ * ──────────────────────────────────────────────────────────────────────── */
+test("⓪ JS 없이 제출해도 비밀번호가 주소에 남지 않는다", async ({ browser }) => {
+  /*
+   * **왜 이 검사가 있는가.**
+   *
+   * 사내망 IP 로 접속했을 때 dev 서버가 `/_next/static/*` 를 403 으로 막아
+   * 자바스크립트가 하나도 안 떴습니다. 그러자 로그인 폼이 **브라우저 기본값인
+   * GET 으로** 네이티브 제출을 했고, 주소가 이렇게 됐습니다:
+   *
+   *   /login?username=master&password=doi1234
+   *
+   * 비밀번호가 주소창 · 방문 기록 · 서버 접근 로그 · `Referer` 헤더에 그대로
+   * 남습니다. dev 서버 로그에 평문이 찍힌 것을 실제로 확인했습니다.
+   *
+   * 403 은 설정으로 고쳤지만, **JS 가 안 뜨는 이유는 그것 말고도 많습니다**
+   * (청크 로드 실패·확장 프로그램·네트워크). 그래서 고칠 곳은 폼입니다 —
+   * `method="post"` 면 어떤 이유로든 새지 않습니다.
+   *
+   * 하이드레이션 실패를 흉내 내지 않고 **자바스크립트를 꺼서** 봅니다.
+   */
+  const ctx = await browser.newContext({ javaScriptEnabled: false, locale: "ko-KR" });
+  const page = await ctx.newPage();
+  try {
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
+
+    const secret = "NeverInTheUrl!12345";
+    await page.getByLabel("아이디").fill("someone");
+    await page.getByLabel("비밀번호").fill(secret);
+    await page.getByRole("button", { name: "로그인" }).click();
+    await page.waitForTimeout(2000);
+
+    expect(page.url(), "비밀번호가 주소에 실렸습니다").not.toContain(secret);
+    expect(page.url()).not.toContain("password=");
+  } finally {
+    await ctx.close();
+  }
+});
+
+/* ────────────────────────────────────────────────────────────────────────
  * ① 회원가입 → 승인 대기 → 관리자 승인 → 로그인 → 대시보드
  * ──────────────────────────────────────────────────────────────────────── */
 test("① 가입 신청이 승인을 거쳐 대시보드까지 간다", async ({ page }) => {

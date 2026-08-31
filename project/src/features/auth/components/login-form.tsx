@@ -76,7 +76,19 @@ export function LoginForm({ next }: { next?: string }) {
           <CardDescription>{SITE.description}</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={onSubmit}>
+          {/*
+            **`method="post"` 이 필요합니다 — 자바스크립트가 안 뜬 경우 때문에.**
+
+            `onSubmit` 은 JS 가 살아 있을 때만 돕니다. 안 뜨면 브라우저가
+            **기본값인 GET 으로** 네이티브 제출을 하고, 그러면 주소가
+            `/login?username=…&password=…` 가 됩니다 — 비밀번호가 주소창·
+            방문 기록·서버 접근 로그·`Referer` 헤더에 그대로 남습니다.
+
+            사내망 IP 로 접속했을 때 실제로 그렇게 됐고, dev 서버 로그에
+            평문 비밀번호가 찍힌 것을 확인했습니다. `POST` 로 두면 그 경로가
+            막힙니다 — 로그인은 여전히 안 되지만 **적어도 새지 않습니다.**
+          */}
+          <form method="post" onSubmit={onSubmit}>
             <FieldGroup>
               {error && (
                 <Alert variant="destructive">

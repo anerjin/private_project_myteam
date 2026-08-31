@@ -91,7 +91,8 @@ export function ChangePasswordForm({
   }
 
   const body = (
-    <form onSubmit={onSubmit}>
+    // JS 가 안 뜨면 기본 GET 으로 제출돼 비밀번호가 주소에 남습니다 (`login-form` 주석)
+    <form method="post" onSubmit={onSubmit}>
       <FieldGroup>
         {forced && (
           <Alert>

@@ -119,7 +119,9 @@ export function SignupForm() {
           검증으로는 «폼이 그려진다»까지만 보였고, E2E 가 브라우저에서 눌러
           보자마자 드러났습니다.
         */}
+        {/* JS 가 안 뜨면 기본 GET 으로 제출돼 비밀번호가 주소에 남습니다 (`login-form` 주석) */}
         <form
+          method="post"
           onSubmit={async (e) => {
             e.preventDefault();
             if (pending) return;
