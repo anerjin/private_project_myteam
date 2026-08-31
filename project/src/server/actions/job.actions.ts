@@ -43,6 +43,8 @@ export async function retryJobAction(
       console.error("[job] 재실행을 시작하지 못했습니다", jobId, e);
     });
     revalidatePath("/admin/jobs");
+    // 성공하면 실패 건수가 줄어듭니다 — 홈의 배너도 그 숫자를 봅니다
+    revalidatePath("/admin");
     return ok(undefined);
   });
 }
@@ -68,6 +70,12 @@ export async function deleteJobAction(
     }
     await jobService.remove(jobId);
     revalidatePath("/admin/jobs");
+    /*
+     * **관리자 홈도 갱신합니다.** 「실패한 작업 N건」 배너가 거기 있습니다 —
+     * 목록에서 지웠는데 홈이 옛 숫자를 계속 말하면 「하드코딩된 것 아니냐」가
+     * 됩니다. 실제로 그런 질문을 받았습니다.
+     */
+    revalidatePath("/admin");
     return ok(undefined);
   });
 }
@@ -85,6 +93,8 @@ export async function purgeJobsAction(): Promise<ActionResult<{ n: number }>> {
       });
     }
     revalidatePath("/admin/jobs");
+    // 관리자 홈의 「실패한 작업 N건」 배너도 같은 숫자를 봅니다
+    revalidatePath("/admin");
     return ok({ n });
   });
 }

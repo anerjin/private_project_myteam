@@ -48,6 +48,25 @@ function check(label: string, ok: boolean, detail = "") {
   else fail++;
 }
 
+/**
+ * 이 시각 이후에 생긴 `jobs` 행은 **이 검증이 만든 것**입니다.
+ *
+ * `p8` 은 작업을 열 몇 개 만듭니다 — 링크 확인·휴지통 정리·알림 확인용
+ * 「처리기 없는 작업」, 그리고 스케줄 검증이 부르는 저장소 메타 갱신(저장소
+ * 수만큼 큐에 들어갑니다). 그런데 **하나도 치우지 않고 있었습니다.**
+ *
+ * 그 결과가 관리자 홈의 「실패한 작업 N건」 배너였습니다. 돌릴 때마다 하나씩
+ * 쌓여 열한 건이 됐고, 운영자가 「이거 하드코딩 아니냐」고 물었습니다 —
+ * 숫자는 진짜였고 **검증이 남긴 쓰레기**였습니다.
+ *
+ * `verify-p6` 은 자기 작업을 지웁니다. 여기만 빠져 있었습니다.
+ *
+ * > **시각으로 자릅니다.** 개별 id 를 모으면 스케줄 검증이 «간접적으로»
+ * > 만든 것(메타 갱신 21건)을 놓칩니다. 검증 도중에 운영자가 다른 작업을
+ * > 걸 일은 없다고 보고, 그 대신 **무엇을 지우는지 여기 적어 둡니다.**
+ */
+const startedAt = new Date();
+
 const madeUsers: string[] = [];
 const madeResources: string[] = [];
 const madeCategories: string[] = [];
@@ -1326,6 +1345,9 @@ async function run() {
 }
 
 async function cleanup() {
+  // **작업 행을 먼저 치웁니다** — 자료를 지우기 전에 (`resourceId` 참조가 있습니다)
+  await db.job.deleteMany({ where: { createdAt: { gte: startedAt } } });
+
   if (madeCollections.length) {
     await db.collectionItem.deleteMany({
       where: { collection: { slug: { in: madeCollections } } },

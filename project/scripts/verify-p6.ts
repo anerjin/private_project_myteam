@@ -32,6 +32,18 @@ function check(label: string, ok: boolean, detail = "") {
   else fail++;
 }
 
+/**
+ * 이 시각 이후에 생긴 `jobs` 행은 **이 검증이 만든 것**입니다.
+ *
+ * 여기도 작업을 여럿 만듭니다 — 썸네일(처리기 없음)·GitHub 메타·아카이브·
+ * 링크 확인. 그중 **일부만** 치우고 있었습니다(`CHECK_LINK` 와 한 묶음).
+ * 남은 것은 관리자 홈의 「실패한 작업 N건」 배너에 그대로 쌓입니다 —
+ * 운영자가 「하드코딩 아니냐」고 물은 그 숫자입니다.
+ *
+ * `verify-p8` 과 같은 방식으로 **시각으로 자릅니다.**
+ */
+const startedAt = new Date();
+
 const madeUsers: string[] = [];
 const madeResources: string[] = [];
 const madeKeys: string[] = [];
@@ -789,6 +801,9 @@ const actorOfId = (id: string): Actor => ({
 });
 
 async function cleanup() {
+  // **작업 행을 먼저** — `resourceId` 로 자료를 가리킵니다
+  await db.job.deleteMany({ where: { createdAt: { gte: startedAt } } });
+
   for (const k of madeKeys) await storage.remove(k).catch(() => {});
   if (madeResources.length) {
     await db.resource.deleteMany({ where: { id: { in: madeResources } } });
@@ -805,7 +820,6 @@ async function cleanup() {
     await db.file.deleteMany({ where: { uploadedById: { in: madeUsers } } });
     await db.user.deleteMany({ where: { id: { in: madeUsers } } });
   }
-  await db.job.deleteMany({ where: { resourceId: null, type: "CHECK_LINK" } });
 }
 
 run()

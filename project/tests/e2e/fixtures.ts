@@ -120,6 +120,31 @@ export async function cleanup() {
   });
   const ids = users.map((u) => u.id);
 
+  /*
+   * **작업 행을 먼저 치웁니다.**
+   *
+   * 시나리오 ③이 GitHub 자료를 등록하면 메타 수집 작업이 걸립니다. 자료만
+   * 지우면 그 작업 행이 «대상 없는 작업»으로 남고, 관리자 홈의 「실패한 작업
+   * N건」 배너에 쌓입니다 — 운영자가 「하드코딩 아니냐」고 물은 그 숫자입니다.
+   *
+   * `resourceId` 로 좁힙니다. 시각으로 자르는 `verify-p6`·`p8` 과 달리 여기는
+   * 지울 자료가 명확해서 그 편이 정확합니다.
+   */
+  const doomed = await db.resource.findMany({
+    where: {
+      OR: [
+        { title: { startsWith: "E2E " } },
+        ...(ids.length > 0 ? [{ authorId: { in: ids } }] : []),
+      ],
+    },
+    select: { id: true },
+  });
+  if (doomed.length > 0) {
+    await db.job.deleteMany({
+      where: { resourceId: { in: doomed.map((r) => r.id) } },
+    });
+  }
+
   await db.resource.deleteMany({
     where: { title: { startsWith: "E2E " } },
   });
