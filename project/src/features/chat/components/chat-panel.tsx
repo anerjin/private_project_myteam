@@ -1,8 +1,10 @@
 "use client";
 
-import { MessageSquare, PanelRightClose, Send, Sparkles } from "lucide-react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { MessageSquare, PanelRightClose, Send, Sparkles, Undo2 } from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { MarkdownViewer } from "@/components/common/markdown-viewer";
 import { Button } from "@/components/ui/button";
@@ -10,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { describePage } from "@/features/chat/page-context";
 import { cn } from "@/lib/utils";
 import { askChatAction, chatStatusAction } from "@/server/actions/chat.actions";
+import { deleteResourceAction } from "@/server/actions/resource.actions";
 
 /**
  * 오른쪽 도우미 패널 — 서비스 화면 전체.
@@ -35,11 +38,17 @@ interface Turn {
   role: "me" | "bot";
   text: string;
   ms?: number;
+  /** 자동 등록 결과 — 링크와 되돌리기를 답 밑에 답니다 */
+  created?: { id: string; title: string; href: string };
+  /** 등록을 시도했지만 못 한 이유 */
+  note?: string;
+  undone?: boolean;
 }
 
 const STORAGE_KEY = "qb.chat.open";
 
 export function ChatPanel() {
+  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const page = describePage(pathname, searchParams.get("q") ?? undefined);
@@ -140,8 +149,35 @@ export function ChatPanel() {
     setSessionId(r.data.sessionId);
     setTurns((t) => [
       ...t,
-      { role: "bot", text: r.data.reply, ms: r.data.ms },
+      {
+        role: "bot",
+        text: r.data.reply,
+        ms: r.data.ms,
+        created: r.data.created,
+        note: r.data.registerNote,
+      },
     ]);
+    if (r.data.created) router.refresh();
+  }
+
+  /**
+   * 되돌리기 — **휴지통으로** 보냅니다 (`FR-RES-008`, 30일 유예).
+   *
+   * 자동 등록은 한 마디로 자료가 생기는 일이라, 되돌릴 자리가 같은 화면에
+   * 있어야 합니다. 영구 삭제가 아니라 소프트 삭제라 관리자가 복구할 수도
+   * 있습니다.
+   */
+  async function undo(turnIndex: number, id: string) {
+    const r = await deleteResourceAction(id);
+    if (!r.ok) {
+      toast.error(r.message ?? "되돌리지 못했습니다.");
+      return;
+    }
+    setTurns((t) =>
+      t.map((x, i) => (i === turnIndex ? { ...x, undone: true } : x))
+    );
+    toast.success("휴지통으로 옮겼습니다.");
+    router.refresh();
   }
 
   if (!open) {
@@ -256,6 +292,34 @@ export function ChatPanel() {
               <MarkdownViewer content={t.text} className="prose-sm" />
             ) : (
               t.text
+            )}
+            {/* 등록됐으면 «무엇이 생겼는지»와 되돌릴 길을 같은 자리에 둡니다 */}
+            {t.created && (
+              <div className="bg-muted mt-2 rounded-md p-2">
+                <p className="text-xs">
+                  {t.undone ? "휴지통으로 옮겼습니다" : "등록했습니다"}
+                </p>
+                <Link
+                  href={t.created.href}
+                  className="mt-0.5 block truncate text-sm font-medium underline underline-offset-4"
+                >
+                  {t.created.title}
+                </Link>
+                {!t.undone && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="mt-1 h-7 px-2 text-xs"
+                    onClick={() => void undo(i, t.created!.id)}
+                  >
+                    <Undo2 className="size-3" />
+                    되돌리기
+                  </Button>
+                )}
+              </div>
+            )}
+            {t.note && (
+              <p className="text-muted-foreground mt-2 text-xs">{t.note}</p>
             )}
             {t.ms !== undefined && (
               <span className="text-muted-foreground mt-1 block text-xs">
