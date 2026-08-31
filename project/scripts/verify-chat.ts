@@ -29,6 +29,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 
+import { ASSISTANT } from "@/features/chat/assistant";
 import { env } from "@/lib/env";
 import { db } from "@/lib/db";
 import * as chat from "@/server/services/chat.service";
@@ -139,6 +140,15 @@ async function main() {
    * 남아 있고, 그건 프롬프트로만 막힙니다.
    */
   const prompt = chat.systemPromptFor("자료 목록");
+  /*
+   * 이름은 화면과 프롬프트가 **같은 값**을 써야 합니다. 패널이 「디오」라고
+   * 부르는데 본인이 「저는 도우미입니다」라고 하면 같은 것으로 안 보입니다.
+   */
+  check(
+    `프롬프트가 이름을 «${ASSISTANT}»로 준다`,
+    prompt.includes(`«${ASSISTANT}»`),
+    "화면과 같은 이름이어야 한다"
+  );
   check("프롬프트가 «등록된 자료»로 한정한다", prompt.includes("QueenBee 에 등록된 자료"));
   check(
     "빈손을 바깥 지식으로 채우지 말라고 한다",

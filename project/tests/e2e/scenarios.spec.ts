@@ -1,4 +1,6 @@
-import { expect, test } from "@playwright/test";
+﻿import { expect, test } from "@playwright/test";
+
+import { ASSISTANT } from "@/features/chat/assistant";
 
 import {
   BASE_URL,
@@ -556,9 +558,9 @@ test("⑥ CLI 로 넣은 자료가 화면에 «CLI 수집»으로 뜬다", async
 });
 
 /* ────────────────────────────────────────────────────────────────────────
- * ⑦ 도우미 대화가 새로고침을 넘어간다
+ * ⑦ 디오와 나눈 대화가 새로고침을 넘어간다
  * ──────────────────────────────────────────────────────────────────────── */
-test("⑦ 도우미 대화가 새로고침을 넘어가고, 사람마다 따로 남는다", async ({
+test("⑦ 디오와 나눈 대화가 새로고침을 넘어가고, 사람마다 따로 남는다", async ({
   page,
 }) => {
   /*
@@ -597,7 +599,7 @@ test("⑦ 도우미 대화가 새로고침을 넘어가고, 사람마다 따로 
   );
 
   await page.reload({ waitUntil: "networkidle" });
-  const panel = page.getByLabel("도우미");
+  const panel = page.getByLabel(`${ASSISTANT} 도우미`);
   await expect(panel.getByText(MARK)).toBeVisible({ timeout: 15_000 });
 
   // 다른 화면으로 옮겨도 남습니다 — 패널은 레이아웃에 있습니다

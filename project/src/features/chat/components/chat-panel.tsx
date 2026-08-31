@@ -16,13 +16,17 @@ import { toast } from "sonner";
 import { MarkdownViewer } from "@/components/common/markdown-viewer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { ASSISTANT } from "@/features/chat/assistant";
 import { describePage } from "@/features/chat/page-context";
 import { cn } from "@/lib/utils";
 import { askChatAction, chatStatusAction } from "@/server/actions/chat.actions";
 import { deleteResourceAction } from "@/server/actions/resource.actions";
 
 /**
- * 오른쪽 도우미 패널 — 서비스 화면 전체.
+ * 오른쪽 도우미 패널 — 서비스 화면 전체. 도우미의 이름은 **「디오」**입니다.
+ *
+ * 이름은 `features/chat/assistant` 한 곳에 있습니다 — 화면 문구·`aria-label` ·
+ * 프롬프트가 **같은 값**을 씁니다.
  *
  * ## 지금 어느 화면인지 **보여 줍니다**
  *
@@ -300,7 +304,7 @@ export function ChatPanel({ userId }: { userId: string }) {
         size="icon"
         // 닫혀 있을 때의 단추도 같은 색 계열로 — 도우미는 언제나 어둡습니다
         className="dark bg-sidebar text-foreground hover:bg-sidebar-accent fixed right-4 bottom-4 z-30 size-11 rounded-full border shadow-lg"
-        aria-label="도우미 열기"
+        aria-label={`${ASSISTANT} 열기`}
         onClick={() => toggle(true)}
       >
         <MessageSquare className="size-5" />
@@ -310,7 +314,8 @@ export function ChatPanel({ userId }: { userId: string }) {
 
   return (
     <aside
-      aria-label="도우미"
+      // 이름만으로는 «무엇인지» 모릅니다 — 랜드마크에는 역할을 함께 답니다
+      aria-label={`${ASSISTANT} 도우미`}
       className={cn(
         /*
          * **언제나 어두운 색입니다.**
@@ -341,7 +346,8 @@ export function ChatPanel({ userId }: { userId: string }) {
       {/* 머리·맥락·입력은 `shrink-0` — **스크롤은 말풍선 영역만** 합니다 */}
       <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3">
         <Sparkles className="text-muted-foreground size-4" />
-        <span className="text-sm font-medium">도우미</span>
+        <span className="text-sm font-medium">{ASSISTANT}</span>
+        <span className="text-muted-foreground text-xs">자료 도우미</span>
         {/*
           대화가 브라우저에 남으므로 **비울 자리**가 있어야 합니다.
           없으면 지난주 이야기를 계속 이고 다니게 됩니다.
@@ -362,7 +368,7 @@ export function ChatPanel({ userId }: { userId: string }) {
           size="icon"
           variant="ghost"
           className={turns.length > 0 ? undefined : "ml-auto"}
-          aria-label="도우미 닫기"
+          aria-label={`${ASSISTANT} 닫기`}
           onClick={() => toggle(false)}
         >
           <PanelRightClose className="size-4" />
@@ -380,8 +386,8 @@ export function ChatPanel({ userId }: { userId: string }) {
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         {status && !status.available && (
           <Notice>
-            Claude Code CLI 를 찾지 못했습니다. 이 PC 에 설치돼 있어야 도우미가
-            돕니다.
+            Claude Code CLI 를 찾지 못했습니다. 이 PC 에 설치돼 있어야{" "}
+            {ASSISTANT}가 돕니다.
           </Notice>
         )}
         {status?.available && !status.tools && (
@@ -393,6 +399,10 @@ export function ChatPanel({ userId }: { userId: string }) {
 
         {turns.length === 0 && (
           <div className="text-muted-foreground space-y-2 text-sm">
+            <p className="text-foreground">
+              안녕하세요, <b>{ASSISTANT}</b>입니다. 사내에 등록된 자료를 찾아
+              드리고, 새 자료 등록도 도와드립니다.
+            </p>
             <p>이 화면에서 물어볼 만한 것:</p>
             <ul className="list-disc space-y-1 pl-4">
               <li>«드론 사진측량» 자료 찾아 줘</li>
@@ -425,8 +435,8 @@ export function ChatPanel({ userId }: { userId: string }) {
             */}
             {t.lostThread && (
               <p className="text-muted-foreground mb-2 border-b pb-2 text-xs">
-                앞의 대화를 이어가지 못했습니다 — 위 내용은 남아 있지만 도우미는
-                여기서부터 다시 시작합니다.
+                앞의 대화를 이어가지 못했습니다 — 위 내용은 남아 있지만{" "}
+                {ASSISTANT}는 여기서부터 다시 시작합니다.
               </p>
             )}
             {t.role === "bot" ? (
@@ -483,7 +493,7 @@ export function ChatPanel({ userId }: { userId: string }) {
           rows={2}
           value={draft}
           placeholder="무엇을 도와드릴까요?"
-          aria-label="도우미에게 보낼 말"
+          aria-label={`${ASSISTANT}에게 보낼 말`}
           disabled={pending || status?.available === false}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {

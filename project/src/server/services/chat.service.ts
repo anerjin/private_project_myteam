@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
+import { ASSISTANT } from "@/features/chat/assistant";
 import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 
@@ -463,7 +464,8 @@ export function systemPromptFor(context: string): string {
 
 function systemPrompt(context: string, tools: boolean): string {
   return [
-    "당신은 사내 자료 시스템 «QueenBee» 의 도우미입니다. DOI(드론 공간정보) 개발팀이 씁니다.",
+    `당신의 이름은 «${ASSISTANT}» 입니다. 사내 자료 시스템 «QueenBee» 의 도우미이고,`,
+    "DOI(드론 공간정보) 개발팀이 씁니다. 이름을 물으면 그렇게 답하십시오.",
     "한국어로, 짧고 사실만 답하십시오. 모르면 모른다고 하십시오 — 지어내지 마십시오.",
     "",
     `사용자가 지금 보고 있는 화면: ${context}`,
