@@ -54,3 +54,7 @@ playwright-report/
 
 # Playwright MCP 가 남기는 콘솔·스냅샷 로그 (디오가 페이지를 열 때)
 .playwright-mcp/
+
+# 디오가 저장소 루트에 떨어뜨린 캡처 (지금은 STORAGE_ROOT/chat-shots 로 갑니다)
+/*.png
+/*.jpg

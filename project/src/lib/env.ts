@@ -124,6 +124,26 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
+
+  /**
+   * 브라우저 창을 **화면에 띄운다** (`1` 이면 켜짐). 기본은 안 띄웁니다.
+   *
+   * ## 누구 화면에 뜨는가
+   *
+   * **서버를 돌리는 그 PC 의 화면**입니다. 운영자가 그 PC 앞에 앉아 있으면
+   * 디오가 무엇을 하는지 눈으로 봅니다 — 「진짜 여는지」를 확인하거나, 막힌
+   * 곳에서 손으로 이어받을 때 씁니다.
+   *
+   * **사내망으로 들어온 팀원에게는 안 보입니다.** 그 사람 브라우저가 아니라
+   * 서버 PC 의 브라우저이기 때문입니다. 팀원에게 보여 주려면 캡처를 답에
+   * 실어야 합니다(`CHAT_BROWSER_SHOTS`).
+   *
+   * 창이 뜨면 운영자가 하던 일 위로 올라옵니다. 그래서 기본은 꺼짐입니다.
+   */
+  CHAT_BROWSER_HEADED: z
+    .string()
+    .optional()
+    .transform((v) => v === "1" || v?.toLowerCase() === "true"),
 });
 
 export type Env = z.infer<typeof envSchema>;

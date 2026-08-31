@@ -1,7 +1,13 @@
 ﻿import "server-only";
 
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import path from "node:path";
 
 import { ASSISTANT } from "@/features/chat/assistant";
@@ -371,7 +377,7 @@ export async function ask(
     }
 
     return {
-      reply: toRelativeLinks(parsed.result),
+      reply: withShots(toRelativeLinks(parsed.result), startedAt),
       sessionId: parsed.session_id ?? null,
       ms: Date.now() - startedAt,
       turns: parsed.num_turns ?? 0,
@@ -412,6 +418,8 @@ function toRelativeLinks(text: string): string {
 
 /** 검증이 이 규칙을 볼 수 있게 — 링크가 죽는 것은 화면에서만 보입니다 */
 export const toRelativeLinksForTest = toRelativeLinks;
+/** 캡처를 답에 싣는 규칙도 화면에서만 보입니다 */
+export const withShotsForTest = withShots;
 
 /**
  * 모델이 **실제로 쥐고 있는** 도구 목록.
@@ -496,6 +504,134 @@ export async function listTools(): Promise<string[]> {
  * 받으므로(`--mcp-config <configs...>`) 그냥 넘깁니다 — 셸을 안 거치니
  * 따옴표가 깨질 일도 없습니다.
  */
+/** 저장 키의 앞부분 — 라우트가 `chat-shots/<이름>` 으로 조립합니다 */
+export const SHOTS_PREFIX = "chat-shots";
+
+/**
+ * 캡처를 이만큼만 남깁니다.
+ *
+ * 대화는 브라우저에 남지만(`chat-panel`) **그림은 디스크에 남습니다.**
+ * 안 지우면 「보여 줘」를 할 때마다 200KB 씩 쌓입니다 — 아무도 안 보는
+ * 그림이 백업에까지 실려 갑니다.
+ *
+ * 옛 대화를 다시 열었을 때 그림이 사라져 있을 수 있습니다. 그건 **정직한
+ * 상태**입니다 — 말풍선은 남고 그림만 없습니다.
+ */
+const SHOT_KEEP_DAYS = 7;
+
+/** 디오의 브라우저가 남기는 것들 — 캡처·콘솔 로그 */
+export function shotsDir(): string {
+  return path.join(env.STORAGE_ROOT, SHOTS_PREFIX);
+}
+
+/**
+ * 캡처 파일 이름으로 받아 줄 모양.
+ *
+ * **경로가 될 수 있는 글자를 아예 안 받습니다** — `/`·`\`·`..` 가 들어올
+ * 자리를 남기지 않는 것이, 뒤에서 걸러 내는 것보다 낫습니다 (`NFR-SEC-019`).
+ */
+export function isShotName(name: string): boolean {
+  return /^[A-Za-z0-9._-]{1,120}\.(png|jpe?g)$/i.test(name) && !name.includes("..");
+}
+
+/**
+ * 답에 적힌 캡처 이름을 **그림으로** 바꾼다.
+ *
+ * ## 왜 필요한가
+ *
+ * 디오의 브라우저는 서버 PC 안에서 돕니다. 사내망으로 들어온 팀원은 그 창을
+ * 못 봅니다 — 운영자가 「브라우저를 못 띄우는데?」라고 물었고 디오는
+ * **「캡처해서 보여 드릴 수 있습니다」**라고 답했는데, 그럴 길이 없었습니다.
+ * 약속만 있고 코드가 없던 자리입니다.
+ *
+ * ## 실제로 있는 파일만 바꿉니다
+ *
+ * 답에 나온 이름을 그대로 링크로 만들면, 모델이 지어낸 이름이 **깨진 그림**이
+ * 됩니다. 캡처 폴더에 **정말 있는 것**만 바꾸고 나머지는 글자로 둡니다.
+ */
+/**
+ * 이번 대화에서 **새로 생긴** 캡처를 답 끝에 붙인다.
+ *
+ * ## 모델의 문장에 기대지 않습니다
+ *
+ * 프롬프트에 「찍었으면 파일 이름을 답에 적으라」고 써 두었지만, 실측에서
+ * **적지 않았습니다.** 캡처는 제자리에 잘 떨어졌는데 화면에는 아무것도 안
+ * 떴습니다 — 「보여 줘」라고 했는데 말로만 설명하는 상태입니다.
+ *
+ * 파일이 생긴 것은 **디스크가 아는 사실**입니다. 모델이 그 사실을 문장으로
+ * 옮겨 주기를 기다릴 이유가 없습니다.
+ */
+function newShots(sinceMs: number): string[] {
+  try {
+    return readdirSync(shotsDir())
+      .filter(isShotName)
+      .filter((n) => {
+        try {
+          return statSync(path.join(shotsDir(), n)).mtimeMs >= sinceMs;
+        } catch {
+          return false;
+        }
+      })
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+const shotImage = (n: string) =>
+  `![${n}](/api/chat/shot/${encodeURIComponent(n)})`;
+
+/**
+ * 오래된 캡처·로그를 지운다.
+ *
+ * **묻는 김에 치웁니다.** 스케줄 작업으로 만들면 그것대로 자리를 잡아야 하는데,
+ * 여기는 파일 수십 개짜리 폴더라 그럴 값이 아닙니다. 못 지워도 그냥 갑니다 —
+ * 정리가 안 됐다고 채팅이 멈추면 안 됩니다.
+ */
+function pruneShots(): void {
+  const cutoff = Date.now() - SHOT_KEEP_DAYS * 24 * 60 * 60 * 1000;
+  try {
+    for (const name of readdirSync(shotsDir())) {
+      const full = path.join(shotsDir(), name);
+      try {
+        if (statSync(full).mtimeMs < cutoff) rmSync(full, { force: true });
+      } catch {
+        /* 지금 쓰이는 중일 수 있습니다 — 다음에 지웁니다 */
+      }
+    }
+  } catch {
+    /* 폴더가 아직 없습니다 */
+  }
+}
+
+function linkShots(text: string): string {
+  const dir = shotsDir();
+  /*
+   * **경로째 적어도 받아 줍니다.** 프롬프트는 「이름만 적으라」고 하지만,
+   * 모델이 `E:\…\shot-x.png` 를 그대로 쓰는 날이 옵니다. 그때 화면에
+   * 파일 경로가 글자로 남는 것보다 그림이 뜨는 편이 낫습니다.
+   */
+  return text.replace(/[^\s()[\]]*[A-Za-z0-9._-]+\.(?:png|jpe?g)/gi, (token) => {
+    // 이미 마크다운 이미지/링크 안이면 앞에 `(` 가 있습니다 — 건드리지 않습니다
+    const name = token.split(/[\\/]/).pop() ?? "";
+    if (!isShotName(name)) return token;
+    try {
+      if (!statSync(path.join(dir, name)).isFile()) return token;
+    } catch {
+      return token;
+    }
+    return `\n\n${shotImage(name)}\n\n`;
+  });
+}
+
+/** 답에 캡처를 실어 준다 — 이름을 적었으면 그 자리에, 아니면 끝에 */
+function withShots(text: string, sinceMs: number): string {
+  const linked = linkShots(text);
+  const missing = newShots(sinceMs).filter((n) => !linked.includes(n));
+  if (missing.length === 0) return linked;
+  return `${linked}\n\n${missing.map(shotImage).join("\n\n")}`;
+}
+
 function mcpConfig(): string {
   const servers: Record<string, unknown> = {};
 
@@ -544,14 +680,57 @@ function mcpConfig(): string {
     const args = [
       path.join(process.cwd(), "node_modules/@playwright/mcp/cli.js"),
       "--isolated",
-      "--headless",
       "--blocked-origins",
       blocked,
     ];
+    /*
+     * **창을 띄울지는 운영자가 정합니다** (`CHAT_BROWSER_HEADED`).
+     *
+     * 기본은 안 띄웁니다 — 창이 뜨면 운영자가 하던 일 위로 올라옵니다.
+     * 다만 안 띄우면 「브라우저를 못 띄우는데?」가 됩니다: 디오는 열었는데
+     * 사람 눈에는 아무 일도 없습니다.
+     *
+     * **뜨는 것은 서버 PC 의 화면**입니다. 사내망으로 들어온 팀원 화면이
+     * 아닙니다 — 그쪽에 보여 주는 것은 캡처의 몫입니다.
+     */
+    if (!env.CHAT_BROWSER_HEADED) args.push("--headless");
+
+    /*
+     * **캡처가 떨어질 자리.**
+     *
+     * 안 정해 주면 작업 디렉터리에 `.playwright-mcp/` 를 만들고 거기에
+     * 콘솔 로그·스냅샷을 쌓습니다 — 실제로 그 파일들이 **커밋에 딸려
+     * 갔습니다**(열어 본 페이지 내용이 저장소에 남습니다).
+     *
+     * 저장 폴더 아래로 보내면 백업·정리 규칙이 이미 있는 자리에 들어갑니다.
+     */
+    const dir = shotsDir();
+    // 없으면 MCP 서버가 못 쓰고, 있으면 `newShots` 가 볼 자리가 생깁니다
+    mkdirSync(dir, { recursive: true });
+    pruneShots();
+    args.push("--output-dir", dir);
     if (env.CHAT_BROWSER_ALLOW) {
       args.push("--allowed-origins", env.CHAT_BROWSER_ALLOW);
     }
 
+    /*
+     * **캡처가 어디 떨어지는지는 «시켜 봐야» 알았습니다.**
+     *
+     * 세 번 재 봤습니다:
+     *
+     * | 시도 | 결과 |
+     * | --- | --- |
+     * | `--output-dir` 만 | 페이지 스냅샷·콘솔 로그만 거기로. **캡처는 안 감** |
+     * | MCP 설정에 `cwd` | **안 먹힘** — 여전히 저장소 루트 |
+     * | 프롬프트에 **절대 경로** | 됨 (`systemPrompt` 을 보십시오) |
+     *
+     * `browser_take_screenshot` 은 받은 이름을 **자기 작업 디렉터리 기준**으로
+     * 풉니다. 그래서 캡처가 `project/` 에 떨어졌고 실제로
+     * `drone-onestop-home.png` 가 **커밋될 뻔했습니다.**
+     *
+     * 「`--output-dir` 을 줬으니 거기 떨어지겠지」로 두었으면 그대로 지나갔을
+     * 자리입니다.
+     */
     servers.playwright = { command: process.execPath, args };
   }
 
@@ -621,6 +800,20 @@ function systemPrompt(context: string, tools: boolean): string {
                 "- 로그인·결제·개인정보 입력란에는 **아무것도 입력하지 마십시오**",
                 "- 브라우저는 **로그인이 없는 상태**입니다. 로그인이 필요한 화면이",
                 "  나오면 그렇다고 말하고 멈추십시오",
+                "",
+                "### 화면을 보여 달라고 하면",
+                "",
+                "**그 브라우저는 사용자 화면에 안 뜹니다** — 서버 안에서 돕니다.",
+                "그러니 「띄웠습니다」라고 하지 말고, **캡처해서 답에 넣으십시오.**",
+                "",
+                "`browser_take_screenshot` 의 `filename` 은 **반드시 이 폴더 아래**로",
+                "주십시오 — 다른 곳에 떨어지면 사용자에게 **안 보입니다**:",
+                "",
+                `    ${shotsDir()}\\<이름>.png`,
+                "",
+                "그리고 답에는 **파일 이름만**(폴더 없이) 한 줄로 적으십시오 —",
+                "시스템이 그것을 그림으로 바꿔 화면에 그립니다. 마크다운 이미지",
+                "문법을 직접 쓰지 마십시오.",
               ]
             : []),
           "",

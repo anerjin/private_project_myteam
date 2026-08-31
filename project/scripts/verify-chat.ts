@@ -28,6 +28,8 @@
  * 사용량을 쓰지 않습니다.
  */
 import { createHash, randomUUID } from "node:crypto";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 import { ASSISTANT } from "@/features/chat/assistant";
 import { env } from "@/lib/env";
@@ -151,6 +153,73 @@ async function main() {
         tools.includes(chat.BROWSER_PREFIX + "browser_navigate"),
       "다 막으면 브라우저를 켠 의미가 없다"
     );
+    check(
+      "캡처를 찍을 수 있다",
+      tools.includes(chat.BROWSER_PREFIX + "browser_take_screenshot"),
+      "사내망 팀원이 화면을 볼 유일한 길이다"
+    );
+  }
+
+  /*
+   * ★ **화면을 «보여 준다»는 약속이 지켜지는가.**
+   *
+   * 디오의 브라우저는 서버 안에서 돕니다. 운영자가 「브라우저를 못 띄우는데?」
+   * 라고 물었을 때 디오는 **「캡처해서 보여 드릴 수 있습니다」**라고 답했는데,
+   * 그럴 길이 없었습니다 — 약속만 있고 코드가 없었습니다.
+   */
+  console.log("\n★ 캡처 — 답 안에 그림으로");
+
+  /** 경로가 될 수 있는 것은 아예 안 받습니다 (`NFR-SEC-019`) */
+  for (const bad of [
+    "../../.env",
+    "..\\..\\.env",
+    "a/b.png",
+    "a\\b.png",
+    "shot.exe",
+    "shot.png.txt",
+  ]) {
+    check(`«${bad}» 는 캡처 이름이 아니다`, !chat.isShotName(bad));
+  }
+  check("«shot-drone.png» 은 받는다", chat.isShotName("shot-drone.png"));
+
+  /*
+   * **없는 파일은 링크하지 않습니다.** 모델이 지어낸 이름을 그대로 그림으로
+   * 만들면 화면에 **깨진 그림**이 뜹니다 — 「보여 준다」고 해 놓고 못 보여
+   * 주는 것이 아무것도 안 하는 것보다 나쁩니다.
+   */
+  const ghost = chat.withShotsForTest("없는-파일-1234.png 을 찍었습니다", Date.now());
+  check(
+    "없는 캡처는 그림으로 안 바꾼다",
+    !ghost.includes("/api/chat/shot/"),
+    ghost.slice(0, 60)
+  );
+
+  /** 실제로 있는 파일이면 바꿉니다 */
+  const dir = chat.shotsDir();
+  mkdirSync(dir, { recursive: true });
+  const name = `verify-shot-${randomUUID().slice(0, 8)}.png`;
+  const since = Date.now() - 1000;
+  writeFileSync(path.join(dir, name), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  try {
+    const linked = chat.withShotsForTest(`${name} 을 찍었습니다`, since);
+    check(
+      "있는 캡처는 그림이 된다",
+      linked.includes(`![${name}](/api/chat/shot/${name})`),
+      linked.slice(0, 80)
+    );
+    /*
+     * 모델이 파일 이름을 **안 적을 수도** 있습니다 — 실측에서 실제로 그랬고,
+     * 캡처는 잘 떨어졌는데 화면에는 아무것도 안 떴습니다. 파일이 생긴 것은
+     * 디스크가 아는 사실이라, 문장에 기대지 않고 끝에 붙입니다.
+     */
+    const silent = chat.withShotsForTest("찍었습니다.", since);
+    check(
+      "이름을 안 적어도 붙는다",
+      silent.includes(`/api/chat/shot/${name}`),
+      "모델의 문장에 기대지 않는다"
+    );
+  } finally {
+    rmSync(path.join(dir, name), { force: true });
   }
 
   if (configured) {

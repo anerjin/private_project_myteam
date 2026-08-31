@@ -53,7 +53,20 @@ export interface FilePayload {
   storageKey: string;
   filename: string;
   mimeType: string;
-  sizeBytes: number;
+  sizeBytes?: number;
+  /**
+   * 내려받기가 아니라 **화면에 그리게** 합니다 (`inline`).
+   *
+   * 기본은 `attachment` 입니다 — 그 이유가 이 파일 머리에 있습니다
+   * (`NFR-SEC-020`: 올라온 HTML·SVG 가 우리 도메인의 페이지로 열리면 XSS).
+   *
+   * 그래서 **이미지일 때만** 허용합니다. 아래에서 `image/` 로 시작하는지
+   * 한 번 더 봅니다 — 부르는 쪽이 실수해도 `attachment` 로 떨어집니다.
+   * PNG 는 `nosniff` 와 함께라면 브라우저가 무엇을 해도 실행되지 않습니다.
+   *
+   * 쓰는 곳: 디오가 찍은 화면 캡처를 답 안에 그릴 때.
+   */
+  inline?: boolean;
 }
 
 export async function streamFile(
@@ -75,7 +88,9 @@ export async function streamFile(
   const headers = new Headers({
     "content-type": file.mimeType || "application/octet-stream",
     // 한글 파일명 — `filename*` 이 정본이고 `filename` 은 옛 클라이언트용
-    "content-disposition": `attachment; filename="${asciiFallback(file.filename)}"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+    "content-disposition": `${
+      file.inline && file.mimeType.startsWith("image/") ? "inline" : "attachment"
+    }; filename="${asciiFallback(file.filename)}"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
     "x-content-type-options": "nosniff",
     "accept-ranges": "bytes",
     "cache-control": "private, max-age=0, must-revalidate",
