@@ -320,6 +320,48 @@ async function main() {
         : prompt.includes("화면에 안 뜹니다"),
       headed ? "CHAT_BROWSER_HEADED=1" : "CHAT_BROWSER_HEADED 꺼짐"
     );
+
+    /*
+     * ★ **브라우저 서버가 «상시»인가.**
+     *
+     * 전에는 질문마다 MCP 서버를 새로 띄웠고, 답이 끝나면 브라우저도 같이
+     * 죽어 **창이 10초 깜빡이고 사라졌습니다.** 지금은 포트에 붙습니다 —
+     * `listTools` 가 도구를 받아 왔다는 것은 그 서버가 **이미 떠 있었다**는
+     * 뜻입니다.
+     */
+    const port = env.CHAT_BROWSER_PORT;
+    let listening = false;
+    try {
+      const r = await fetch(`http://localhost:${port}/mcp`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      listening = r.status > 0;
+    } catch {
+      listening = false;
+    }
+    check("브라우저 서버가 계속 떠 있다", listening, `포트 ${port}`);
+
+    /*
+     * 창을 띄우는 설정이면 **브라우저도 우리가 들고 있어야** 합니다.
+     * MCP 가 띄우게 두면 연결이 끊길 때 창이 닫힙니다 — 프로필이 메모리든
+     * 디스크든 마찬가지였습니다(둘 다 실측).
+     */
+    if (headed) {
+      let cdp = false;
+      try {
+        const r = await fetch(`http://127.0.0.1:${port + 1}/json/version`, {
+          signal: AbortSignal.timeout(2000),
+        });
+        cdp = r.ok;
+      } catch {
+        cdp = false;
+      }
+      check(
+        "창이 닫히지 않게 브라우저를 직접 들고 있다",
+        cdp,
+        `CDP ${port + 1} — 여기 안 붙으면 답이 끝날 때 창이 닫힌다`
+      );
+    }
   }
 
   /*

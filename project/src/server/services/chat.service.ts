@@ -316,6 +316,9 @@ export async function ask(
     );
   }
 
+  // 브라우저를 켰으면 그 서버가 떠 있어야 합니다 — 없으면 첫 질문이 연결 실패입니다
+  await ensureBrowserServer();
+
   const tools = toolsConfigured();
   const args = [
     ...baseArgs(),
@@ -434,6 +437,9 @@ export const withShotsForTest = withShots;
 export async function listTools(): Promise<string[]> {
   const bin = findBinary();
   if (!bin) throw new AppError("INTERNAL_ERROR", "Claude Code CLI 를 찾지 못했습니다.");
+
+  // 「무엇을 쥐고 있나」를 물으려면 그 서버도 떠 있어야 합니다
+  await ensureBrowserServer();
 
   const args = [
     ...baseArgs(),
@@ -648,94 +654,251 @@ function mcpConfig(): string {
 
   if (browserEnabled()) {
     /*
-     * **디오의 브라우저** (`CHAT_BROWSER=1`).
+     * **브라우저 서버는 이미 떠 있습니다** (`ensureBrowserServer`).
      *
-     * | 옵션 | 왜 |
-     * | --- | --- |
-     * | `--isolated` | 프로필을 **메모리에만** 둡니다 — 로그인이 안 쌓입니다 |
-     * | `--headless` | 운영자 화면 위로 창이 튀어나오지 않습니다 |
-     * | `--blocked-origins` | 사내망·이 PC 를 막습니다 |
-     * | `--allowed-origins` | 운영자가 목록을 주면 **거기만** 열립니다 |
+     * 전에는 여기서 `command`·`args` 로 **질문마다 새로 띄웠습니다.** 그러면
+     * 답이 끝날 때 그 프로세스가 죽으면서 브라우저도 같이 닫혀 **창이 10초쯤
+     * 깜빡이고 사라졌습니다.** 운영자가 「브라우저를 못 띄우는데?」라고 한
+     * 이유가 그것이었습니다.
      *
-     * `--isolated` 가 중요합니다. 운영자의 실제 Chrome 프로필을 쓰면 디오가
-     * **GitHub·메일·사내 시스템 로그인을 쥔 채로** 남의 페이지를 엽니다.
-     * 그 페이지의 글이 명령처럼 읽히는 날(prompt injection) 그 로그인이
-     * 함께 움직입니다.
-     *
-     * > **차단 목록은 완벽한 경계가 아닙니다.** `--blocked-origins` 도움말이
-     * > 스스로 그렇게 말합니다. 진짜 경계는 **로그인이 없다는 것**이고,
-     * > 이것은 그 위에 한 겹 더 얹는 것입니다.
+     * 지금은 상시 프로세스에 **주소로 붙습니다.** 서버가 스스로 알려 준
+     * 모양입니다 — `{"playwright": {"url": "http://localhost:3101/mcp"}}`.
      */
-    const blocked = [
-      "http://localhost",
-      "https://localhost",
-      "http://127.0.0.1",
-      "http://[::1]",
-      "http://10.*",
-      "http://192.168.*",
-      "http://172.16.*",
-      "http://169.254.*",
-    ].join(";");
-
-    const args = [
-      path.join(process.cwd(), "node_modules/@playwright/mcp/cli.js"),
-      "--isolated",
-      "--blocked-origins",
-      blocked,
-    ];
     /*
-     * **창을 띄울지는 운영자가 정합니다** (`CHAT_BROWSER_HEADED`).
-     *
-     * 기본은 안 띄웁니다 — 창이 뜨면 운영자가 하던 일 위로 올라옵니다.
-     * 다만 안 띄우면 「브라우저를 못 띄우는데?」가 됩니다: 디오는 열었는데
-     * 사람 눈에는 아무 일도 없습니다.
-     *
-     * **뜨는 것은 서버 PC 의 화면**입니다. 사내망으로 들어온 팀원 화면이
-     * 아닙니다 — 그쪽에 보여 주는 것은 캡처의 몫입니다.
+     * **`type` 이 있어야 붙습니다.** 서버가 알려 준 예시(`{"url": …}`)만 넣었더니
+     * CLI 가 도구를 하나도 안 들여왔고, 디오는 「이번 세션에는 브라우저 도구가
+     * 등록돼 있지 않습니다」라고 답했습니다 — 서버는 멀쩡히 듣고 있었는데요.
      */
-    if (!env.CHAT_BROWSER_HEADED) args.push("--headless");
-
-    /*
-     * **캡처가 떨어질 자리.**
-     *
-     * 안 정해 주면 작업 디렉터리에 `.playwright-mcp/` 를 만들고 거기에
-     * 콘솔 로그·스냅샷을 쌓습니다 — 실제로 그 파일들이 **커밋에 딸려
-     * 갔습니다**(열어 본 페이지 내용이 저장소에 남습니다).
-     *
-     * 저장 폴더 아래로 보내면 백업·정리 규칙이 이미 있는 자리에 들어갑니다.
-     */
-    const dir = shotsDir();
-    // 없으면 MCP 서버가 못 쓰고, 있으면 `newShots` 가 볼 자리가 생깁니다
-    mkdirSync(dir, { recursive: true });
-    pruneShots();
-    args.push("--output-dir", dir);
-    if (env.CHAT_BROWSER_ALLOW) {
-      args.push("--allowed-origins", env.CHAT_BROWSER_ALLOW);
-    }
-
-    /*
-     * **캡처가 어디 떨어지는지는 «시켜 봐야» 알았습니다.**
-     *
-     * 세 번 재 봤습니다:
-     *
-     * | 시도 | 결과 |
-     * | --- | --- |
-     * | `--output-dir` 만 | 페이지 스냅샷·콘솔 로그만 거기로. **캡처는 안 감** |
-     * | MCP 설정에 `cwd` | **안 먹힘** — 여전히 저장소 루트 |
-     * | 프롬프트에 **절대 경로** | 됨 (`systemPrompt` 을 보십시오) |
-     *
-     * `browser_take_screenshot` 은 받은 이름을 **자기 작업 디렉터리 기준**으로
-     * 풉니다. 그래서 캡처가 `project/` 에 떨어졌고 실제로
-     * `drone-onestop-home.png` 가 **커밋될 뻔했습니다.**
-     *
-     * 「`--output-dir` 을 줬으니 거기 떨어지겠지」로 두었으면 그대로 지나갔을
-     * 자리입니다.
-     */
-    servers.playwright = { command: process.execPath, args };
+    servers.playwright = { type: "http", url: browserServerUrl() };
   }
 
   return JSON.stringify({ mcpServers: servers });
 }
+
+/** 상시 브라우저 서버의 주소 — 서버가 뜰 때 스스로 알려 주는 그 주소입니다 */
+function browserServerUrl(): string {
+  return `http://localhost:${env.CHAT_BROWSER_PORT}/mcp`;
+}
+
+/**
+ * 브라우저 서버를 **한 번만** 띄우고 계속 쓴다.
+ *
+ * ## 왜 앱이 띄우는가
+ *
+ * 운영자가 따로 실행해야 하면, 안 띄운 날 채팅이 **조용히 안 됩니다** —
+ * 이 저장소가 계속 지워 온 「눌러도 아무 일이 없는 자리」입니다.
+ * `npm run dev` 하나로 끝나야 합니다.
+ *
+ * ## 죽으면 다시 띄웁니다
+ *
+ * 브라우저가 크래시하거나 사람이 창을 닫으면 서버도 끝날 수 있습니다.
+ * 매번 **살아 있는지 보고** 아니면 새로 띄웁니다 — 「띄웠다」를 기억만 하고
+ * 믿으면, 죽은 뒤로는 영영 안 됩니다.
+ */
+let browserServer: ReturnType<typeof spawn> | null = null;
+
+/**
+ * **창을 계속 띄워 두는 브라우저.** 우리가 띄우고 우리가 들고 있습니다.
+ *
+ * MCP 는 여기에 `--cdp-endpoint` 로 붙기만 하므로, 질문이 끝나도 창이
+ * 안 닫힙니다. 앱이 살아 있는 동안 그대로 있습니다.
+ *
+ * ## 프로필은 띄울 때마다 지웁니다
+ *
+ * 창이 계속 살아 있다는 것은 **쿠키도 계속 산다**는 뜻입니다. 하루 종일
+ * 두면 로그인·추적 쿠키가 쌓입니다. `npm run dev` 를 다시 할 때마다 비워
+ * 처음 상태로 돌립니다 — 그게 이 브라우저를 되돌리는 방법이기도 합니다.
+ *
+ * ## 디버깅 포트가 열립니다
+ *
+ * `--remote-debugging-port` 는 **이 PC 안에서만** 듣지만, 이 PC 의 다른
+ * 프로그램은 그 브라우저를 조종할 수 있습니다. 로그인이 없는 프로필이라
+ * 가져갈 것이 적지만, **없던 창구가 하나 생긴 것**은 사실입니다.
+ * 그래서 창을 띄우는 설정(`CHAT_BROWSER_HEADED`)에서만 엽니다.
+ */
+let browserCtx: import("playwright").BrowserContext | null = null;
+
+/**
+ * 저 주소가 지금 답하는가.
+ *
+ * **정본은 «내 기억»이 아니라 포트입니다.** 이 모듈은 프로세스마다 따로
+ * 있습니다 — dev 서버가 브라우저를 띄워 둔 상태에서 `verify:chat` 이 별도
+ * 프로세스로 돌면, 그쪽 모듈 변수는 비어 있어 **또 띄우려 듭니다.**
+ * 실제로 그러다 프로필을 지우려 해서 `EPERM` 으로 터졌습니다 — 그 폴더를
+ * 이미 떠 있는 브라우저가 쥐고 있었습니다.
+ */
+async function alive(url: string): Promise<boolean> {
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(1500) });
+    return r.status > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureBrowser(): Promise<string> {
+  const port = env.CHAT_BROWSER_PORT + 1;
+  const endpoint = `http://127.0.0.1:${port}`;
+  if (browserCtx && browserCtx.browser()?.isConnected()) return endpoint;
+  // 다른 프로세스가 이미 띄워 두었으면 **그걸 씁니다** — 두 개를 띄우지 않습니다
+  if (await alive(`${endpoint}/json/version`)) return endpoint;
+
+  const profile = path.join(env.STORAGE_ROOT, "chat-browser-profile");
+  /*
+   * **지우다 실패해도 갑니다.** 쓰는 중인 폴더면 못 지웁니다. 못 지운 것은
+   * 「쿠키가 남는다」이고, 여기서 던지면 **채팅이 아예 안 됩니다** — 어느
+   * 쪽이 나쁜지는 분명합니다.
+   */
+  try {
+    rmSync(profile, { recursive: true, force: true });
+  } catch {
+    /* 이미 누가 쓰고 있습니다 */
+  }
+
+  const { chromium } = await import("playwright");
+  browserCtx = await chromium.launchPersistentContext(profile, {
+    // 이 PC 에 설치된 Chrome 을 씁니다 — Playwright MCP 가 쓰는 것과 같습니다
+    channel: "chrome",
+    headless: false,
+    locale: "ko-KR",
+    args: [
+      `--remote-debugging-port=${port}`,
+      "--no-first-run",
+      "--no-default-browser-check",
+    ],
+  });
+
+  const close = () => {
+    void browserCtx?.close().catch(() => {});
+    browserCtx = null;
+  };
+  process.once("exit", close);
+  process.once("SIGINT", close);
+  process.once("SIGTERM", close);
+
+  return endpoint;
+}
+
+async function ensureBrowserServer(): Promise<void> {
+  if (!browserEnabled()) return;
+  if (browserServer && browserServer.exitCode === null) return;
+  // 다른 프로세스가 이미 띄워 두었으면 그걸 씁니다 (`alive` 주석을 보십시오)
+  if (await alive(browserServerUrl())) return;
+
+  const dir = shotsDir();
+  mkdirSync(dir, { recursive: true });
+  pruneShots();
+
+  /*
+   * **사내망·이 PC 를 막습니다.** 차단 목록이 완벽한 경계는 아닙니다
+   * (`--blocked-origins` 도움말이 스스로 그렇게 말합니다) — 진짜 경계는
+   * 로그인이 없다는 것이고, 이건 그 위에 한 겹입니다.
+   */
+  const blocked = [
+    "http://localhost",
+    "https://localhost",
+    "http://127.0.0.1",
+    "http://[::1]",
+    "http://10.*",
+    "http://192.168.*",
+    "http://172.16.*",
+    "http://169.254.*",
+  ].join(";");
+
+  /*
+   * **캡처가 어디 떨어지는지는 «시켜 봐야» 알았습니다.**
+   *
+   * | 시도 | 결과 |
+   * | --- | --- |
+   * | `--output-dir` 만 | 페이지 스냅샷·콘솔 로그만 거기로. **캡처는 안 감** |
+   * | MCP 설정에 `cwd` | **안 먹힘** |
+   * | 프롬프트에 **절대 경로** | 됨 (`systemPrompt` 을 보십시오) |
+   *
+   * `browser_take_screenshot` 은 받은 이름을 **자기 작업 디렉터리 기준**으로
+   * 풉니다. 그래서 캡처가 `project/` 에 떨어졌고 실제로
+   * `drone-onestop-home.png` 가 **커밋될 뻔했습니다.**
+   *
+   * 「`--output-dir` 을 줬으니 거기 떨어지겠지」로 두었으면 지나갔을 자리입니다.
+   */
+  /*
+   * **창을 «계속» 띄워 두려면 브라우저를 우리가 들고 있어야 합니다.**
+   *
+   * Playwright MCP 는 프로필이 메모리든 디스크든 **클라이언트 연결이 끊기면
+   * 브라우저를 놓습니다.** 질문 하나가 CLI 프로세스 하나이므로 답이 끝나면
+   * 창이 닫힙니다 — 두 방식 다 실측으로 확인했습니다.
+   *
+   * 그래서 **브라우저는 우리가 띄우고**(`ensureBrowser`), MCP 는 거기
+   * `--cdp-endpoint` 로 **붙기만** 합니다. 그러면 창의 수명은 우리 것이 되고,
+   * 앱이 살아 있는 동안 계속 떠 있습니다.
+   *
+   * 창을 안 띄우는 설정에서는 이럴 값이 없습니다 — MCP 가 알아서 헤드리스로
+   * 띄웠다 닫게 둡니다.
+   */
+  const cdp = env.CHAT_BROWSER_HEADED ? await ensureBrowser() : null;
+
+  const args = [
+    path.join(process.cwd(), "node_modules/@playwright/mcp/cli.js"),
+    "--port",
+    String(env.CHAT_BROWSER_PORT),
+    ...(cdp
+      ? ["--cdp-endpoint", cdp]
+      : // 프로필을 메모리에만 둡니다 — 로그인이 디스크에 안 쌓입니다
+        ["--isolated"]),
+    "--blocked-origins",
+    blocked,
+    "--output-dir",
+    dir,
+  ];
+  if (env.CHAT_BROWSER_ALLOW) {
+    args.push("--allowed-origins", env.CHAT_BROWSER_ALLOW);
+  }
+  // 창을 띄울지는 운영자가 정합니다 (`CHAT_BROWSER_HEADED`)
+  if (!env.CHAT_BROWSER_HEADED) args.push("--headless");
+
+  const child = spawn(process.execPath, args, {
+    cwd: process.cwd(),
+    windowsHide: true,
+    shell: false,
+    stdio: "ignore",
+  });
+  browserServer = child;
+
+  /*
+   * **앱이 죽으면 브라우저도 같이 죽입니다.** 안 그러면 `npm run dev` 를
+   * 껐다 켤 때마다 브라우저가 하나씩 남습니다 — 개발 PC 에 유령이 쌓입니다.
+   */
+  const kill = () => {
+    if (browserServer && browserServer.exitCode === null) browserServer.kill();
+  };
+  process.once("exit", kill);
+  process.once("SIGINT", kill);
+  process.once("SIGTERM", kill);
+
+  // 포트가 열릴 때까지 기다립니다 — 안 기다리면 첫 질문이 «연결 실패»가 됩니다
+  await waitForPort(env.CHAT_BROWSER_PORT, 20_000);
+}
+
+/** 포트가 열릴 때까지. **열렸다는 것만** 봅니다 — 서버가 답할 준비는 CLI 가 봅니다 */
+async function waitForPort(port: number, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`http://localhost:${port}/mcp`, {
+        method: "GET",
+        signal: AbortSignal.timeout(1000),
+      });
+      // 405·406 도 «듣고 있다»는 뜻입니다 — GET 을 안 받는 엔드포인트입니다
+      if (res.status > 0) return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
+  throw new AppError(
+    "UPSTREAM_ERROR",
+    "브라우저 서버가 뜨지 않았습니다. 잠시 뒤 다시 시도해 주세요."
+  );
+}
+
 
 /**
  * 검증이 문구를 읽을 수 있게 열어 둡니다.
@@ -809,9 +972,12 @@ function systemPrompt(context: string, tools: boolean): string {
                       "설정돼 있습니다. 그러니 「띄울 수 없습니다」라고 말하지 마십시오 —",
                       "거짓입니다.",
                       "",
+                      "그 창은 **계속 떠 있습니다.** 답이 끝나도 안 닫힙니다 — 앞 질문에서",
+                      "열어 둔 탭이 그대로 있습니다. 그러니 **필요 없어진 탭은 닫으십시오**",
+                      "(`browser_tabs`). 쌓이면 다음 질문이 헷갈립니다.",
+                      "",
                       "다만 **서버 PC 앞에 앉은 사람만** 봅니다. 사내망으로 다른 PC 에서",
-                      "들어온 사람 화면에는 안 뜹니다. 그리고 답이 끝나면 브라우저가",
-                      "닫히므로 **몇 초만** 보입니다. 그래서 어느 쪽이든 **캡처를 함께**",
+                      "들어온 사람 화면에는 안 뜹니다. 그래서 어느 쪽이든 **캡처를 함께**",
                       "답에 넣으십시오 — 그것이 모두가 볼 수 있는 유일한 형태입니다.",
                     ]
                   : [
