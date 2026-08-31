@@ -240,14 +240,21 @@ function NoteEditor({
         <p className="text-destructive text-sm">{errors.title[0]}</p>
       )}
 
+      {/*
+        **`rows` 가 안 먹습니다.** `Textarea` 에 `field-sizing-content` 가
+        걸려 있어 **내용 높이에 맞춰집니다** — `rows={12}` 를 줘도 세 줄짜리
+        메모는 세 줄 높이로 그려졌습니다. 높이를 정하는 것은 `min-h` 입니다.
+
+        위는 `max-h` 로 막습니다. 안 막으면 긴 메모에서 레이어가 화면보다
+        길어져 **저장 단추가 화면 밖으로** 나갑니다.
+      */}
       <Textarea
         aria-label="내용"
         value={body}
         onChange={(e) => setBody(e.target.value)}
         maxLength={NOTE_BODY_MAX}
-        rows={12}
         placeholder="메모를 적으세요."
-        className="resize-none border-0 px-3 py-2.5 shadow-none"
+        className="max-h-[45vh] min-h-72 resize-none overflow-y-auto border-0 px-3 py-2.5 shadow-none"
       />
       {errors.body?.[0] && (
         <p className="text-destructive text-sm">{errors.body[0]}</p>
