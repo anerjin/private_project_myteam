@@ -1,0 +1,844 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - link "Skip to content" [ref=e4] [cursor=pointer]:
+        - /url: "#start-of-content"
+      - banner [ref=e9]:
+        - heading "Navigation Menu" [level=2] [ref=e10]
+        - generic [ref=e11]:
+          - link "Homepage" [ref=e13] [cursor=pointer]:
+            - /url: /
+          - generic [ref=e16]:
+            - navigation "Global" [ref=e17]:
+              - list [ref=e18]:
+                - listitem [ref=e19]:
+                  - button "Platform" [ref=e21] [cursor=pointer]
+                - listitem [ref=e24]:
+                  - button "Solutions" [ref=e26] [cursor=pointer]
+                - listitem [ref=e29]:
+                  - button "Resources" [ref=e31] [cursor=pointer]
+                - listitem [ref=e34]:
+                  - button "Open Source" [ref=e36] [cursor=pointer]
+                - listitem [ref=e39]:
+                  - button "Enterprise" [ref=e41] [cursor=pointer]
+                - listitem [ref=e44]:
+                  - link "Pricing" [ref=e45] [cursor=pointer]:
+                    - /url: https://github.com/pricing
+            - generic [ref=e46]:
+              - button "Search or jump to, type / to search" [ref=e48] [cursor=pointer]
+              - link "Sign in" [ref=e55] [cursor=pointer]:
+                - /url: /login?return_to=https%3A%2F%2Fgithub.com%2Fbrowser-use%2Fbrowser-use
+              - link "Sign up" [ref=e58] [cursor=pointer]:
+                - /url: /signup?ref_cta=Sign+up&ref_loc=header+logged+out&ref_page=%2F%3Cuser-name%3E%2F%3Crepo-name%3E&source=header-repo&source_repo=browser-use%2Fbrowser-use
+              - button "Appearance settings" [ref=e61] [cursor=pointer]
+    - main [ref=e68]:
+      - generic [ref=e69]:
+        - generic [ref=e70]:
+          - generic [ref=e72]:
+            - link "browser-use" [ref=e76] [cursor=pointer]:
+              - /url: /browser-use
+            - generic [ref=e77]: /
+            - strong [ref=e78]:
+              - link "browser-use" [ref=e79] [cursor=pointer]:
+                - /url: /browser-use/browser-use
+            - generic [ref=e80]: Public
+          - generic [ref=e81]:
+            - list:
+              - listitem [ref=e82]:
+                - link "You must be signed in to change notification settings" [ref=e83] [cursor=pointer]:
+                  - /url: /login?return_to=%2Fbrowser-use%2Fbrowser-use
+                  - text: Notifications
+              - listitem [ref=e86]:
+                - link "Fork 12.3k" [ref=e87] [cursor=pointer]:
+                  - /url: /login?return_to=%2Fbrowser-use%2Fbrowser-use
+                  - text: Fork
+                  - generic "12,267" [ref=e90]: 12.3k
+              - listitem [ref=e91]:
+                - link "You must be signed in to star a repository" [ref=e93] [cursor=pointer]:
+                  - /url: /login?return_to=%2Fbrowser-use%2Fbrowser-use
+                  - text: Star
+                  - generic "111777 users starred this repository" [ref=e96]: 112k
+        - navigation "Repository" [ref=e97]:
+          - list [ref=e98]:
+            - listitem [ref=e99]:
+              - link "Code" [ref=e100] [cursor=pointer]:
+                - /url: /browser-use/browser-use
+            - listitem [ref=e104]:
+              - link "Issues 112" [ref=e105] [cursor=pointer]:
+                - /url: /browser-use/browser-use/issues
+                - generic [ref=e109]: Issues
+                - generic "112" [ref=e110]
+            - listitem [ref=e111]:
+              - link "Pull requests 272" [ref=e112] [cursor=pointer]:
+                - /url: /browser-use/browser-use/pulls
+                - generic [ref=e115]: Pull requests
+                - generic "272" [ref=e116]
+            - listitem [ref=e117]:
+              - link "Discussions" [ref=e118] [cursor=pointer]:
+                - /url: /browser-use/browser-use/discussions
+            - listitem [ref=e122]:
+              - link "Actions" [ref=e123] [cursor=pointer]:
+                - /url: /browser-use/browser-use/actions
+            - listitem [ref=e127]:
+              - link "Projects" [ref=e128] [cursor=pointer]:
+                - /url: /browser-use/browser-use/projects
+            - listitem [ref=e132]:
+              - link "Security and quality 1" [ref=e133] [cursor=pointer]:
+                - /url: /browser-use/browser-use/security
+                - generic [ref=e136]: Security and quality
+                - generic "1" [ref=e137]
+            - listitem [ref=e138]:
+              - link "Insights" [ref=e139] [cursor=pointer]:
+                - /url: /browser-use/browser-use/pulse
+      - generic [ref=e156]:
+        - generic [ref=e159]:
+          - generic [ref=e160]:
+            - generic [ref=e161]:
+              - button "main branch" [ref=e163] [cursor=pointer]:
+                - generic [ref=e164]: main
+              - generic [ref=e168]:
+                - link [ref=e169] [cursor=pointer]:
+                  - /url: /browser-use/browser-use/branches
+                  - generic [ref=e172]:
+                    - strong [ref=e173]: "562"
+                    - text: Branches
+                - link [ref=e174] [cursor=pointer]:
+                  - /url: /browser-use/browser-use/tags
+                  - generic [ref=e177]:
+                    - strong [ref=e178]: "146"
+                    - text: Tags
+            - generic [ref=e179]:
+              - combobox "Go to file" [ref=e187]
+              - button "Code" [ref=e188] [cursor=pointer]
+          - generic [ref=e191]:
+            - generic [ref=e192]:
+              - generic [ref=e194]:
+                - heading "Latest commit" [level=2] [ref=e195]
+                - generic [ref=e196]:
+                  - generic [ref=e198]:
+                    - link [ref=e199] [cursor=pointer]:
+                      - /url: /MagMueller
+                      - img "MagMueller" [ref=e200]
+                    - link "commits by MagMueller" [ref=e201] [cursor=pointer]:
+                      - /url: /browser-use/browser-use/commits?author=MagMueller
+                      - text: MagMueller
+                  - generic [ref=e202]:
+                    - generic [ref=e204]:
+                      - 'link "fix(browser): read persisted storage state as UTF-8 (" [ref=e205] [cursor=pointer]':
+                        - /url: /browser-use/browser-use/commit/d379a328879f41cbece3b052fb5102c82032c2e5
+                      - link "#5359" [ref=e206] [cursor=pointer]:
+                        - /url: https://github.com/browser-use/browser-use/pull/5359
+                      - link ")" [ref=e207] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/d379a328879f41cbece3b052fb5102c82032c2e5
+                    - button "Open commit details" [ref=e208] [cursor=pointer]
+                    - button "success" [ref=e211] [cursor=pointer]
+                - generic [ref=e214]:
+                  - generic [ref=e216]:
+                    - link "Commit d379a32" [ref=e217] [cursor=pointer]:
+                      - /url: /browser-use/browser-use/commit/d379a328879f41cbece3b052fb5102c82032c2e5
+                      - text: d379a32
+                    - text: ·
+                    - generic "Aug 31, 2026, 3:11 PM GMT+9" [ref=e218]: Aug 31, 202631 minutes ago
+                  - generic [ref=e219]:
+                    - heading "History" [level=2] [ref=e220]
+                    - link "10,157 Commits" [ref=e221] [cursor=pointer]:
+                      - /url: /browser-use/browser-use/commits/main/
+              - heading "Folders and files" [level=2] [ref=e224]
+              - table "Folders and files" [ref=e225]:
+                - rowgroup:
+                  - row "Name Last commit message Last commit date":
+                    - columnheader "Name"
+                    - columnheader "Last commit message"
+                    - columnheader "Last commit date"
+                - rowgroup [ref=e226]:
+                  - row [ref=e227]:
+                    - cell [ref=e228]:
+                      - link ".github, (Directory)" [ref=e235] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/tree/main/.github
+                        - text: .github
+                    - cell [ref=e236]:
+                      - 'link "ci: drop the dead cloud_evals image-build trigger" [ref=e239] [cursor=pointer]':
+                        - /url: /browser-use/browser-use/commit/f9c933ed5e4d942c468725f71a34895b09b09ddf
+                    - cell "Aug 18, 20262 weeks ago" [ref=e240]
+                  - row [ref=e242]:
+                    - cell [ref=e243]:
+                      - link "bin, (Directory)" [ref=e250] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/tree/main/bin
+                        - text: bin
+                    - cell [ref=e251]:
+                      - 'link "refactor: improve type checking and linting script" [ref=e254] [cursor=pointer]':
+                        - /url: /browser-use/browser-use/commit/c99e1bb41fa6e0738a9b64facdb68f68368fa8dd
+                    - cell "Nov 11, 20259 months ago" [ref=e255]
+                  - row [ref=e257]:
+                    - cell [ref=e258]:
+                      - link "browser_use, (Directory)" [ref=e265] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/tree/main/browser_use
+                        - text: browser_use
+                    - cell [ref=e266]:
+                      - link "Merge branch 'main' into r266/storage-state-utf8" [ref=e269] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/fa780c8e5059ab1fca06ac033a421ea35daf9294
+                    - cell "Aug 31, 202639 minutes ago" [ref=e270]
+                  - row [ref=e272]:
+                    - cell [ref=e273]:
+                      - link "docker, (Directory)" [ref=e280] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/tree/main/docker
+                        - text: docker
+                    - cell [ref=e281]:
+                      - 'link "fix: correct docker build context path in build-base-images.sh" [ref=e284] [cursor=pointer]':
+                        - /url: /browser-use/browser-use/commit/51dbeff043f08f291e5f296a5b0d4d3a3fb02f49
+                    - cell "Feb 3, 20267 months ago" [ref=e285]
+                  - row [ref=e287]:
+                    - cell [ref=e288]:
+                      - link "examples, (Directory)" [ref=e295] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/tree/main/examples
+                        - text: examples
+                    - cell [ref=e296]:
+                      - 'link "docs(cloud): validate example timeout setting" [ref=e299] [cursor=pointer]':
+                        - /url: /browser-use/browser-use/commit/1359fb22cbce66d702f744a916d62146fc030358
+                    - cell "Aug 28, 20262 days ago" [ref=e300]
+                  - row [ref=e302]:
+                    - cell [ref=e303]:
+                      - link "scripts, (Directory)" [ref=e310] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/tree/main/scripts
+                        - text: scripts
+                    - cell [ref=e311]:
+                      - link "fix browser-use skill sync" [ref=e314] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/3ed95c8b9c542d2b5bf09be09fc192310bb19f65
+                    - cell "Jul 1, 20262 months ago" [ref=e315]
+                  - row [ref=e317]:
+                    - cell [ref=e318]:
+                      - link "skills, (Directory)" [ref=e325] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/tree/main/skills
+                        - text: skills
+                    - cell [ref=e326]:
+                      - link "Merge remote-tracking branch 'origin/main' into agency/cloud-skill-v4" [ref=e329] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/442455465bf1e966db2d94f75ec1423437383dfb
+                    - cell "Aug 30, 202613 hours ago" [ref=e330]
+                  - row [ref=e332]:
+                    - cell [ref=e333]:
+                      - link "static, (Directory)" [ref=e340] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/tree/main/static
+                        - text: static
+                    - cell [ref=e341]:
+                      - 'link "docs: plot luna out-of-box instead of effort-matched" [ref=e344] [cursor=pointer]':
+                        - /url: /browser-use/browser-use/commit/0a9166af02972a54fde1402b0411e119e3a2d35d
+                    - cell "Aug 4, 202627 days ago" [ref=e345]
+                  - row [ref=e347]:
+                    - cell [ref=e348]:
+                      - link "tests, (Directory)" [ref=e355] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/tree/main/tests
+                        - text: tests
+                    - cell [ref=e356]:
+                      - link "Merge branch 'main' into r266/storage-state-utf8" [ref=e359] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/fa780c8e5059ab1fca06ac033a421ea35daf9294
+                    - cell "Aug 31, 202639 minutes ago" [ref=e360]
+                  - row [ref=e362]:
+                    - cell [ref=e363]:
+                      - link ".dockerignore, (File)" [ref=e370] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/.dockerignore
+                        - text: .dockerignore
+                    - cell [ref=e371]:
+                      - link "ignore .bak files in docker and git" [ref=e374] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/6a7bbb12c9ee983caabd681794d1bf54696852bc
+                    - cell "Jun 26, 2025last year" [ref=e375]
+                  - row [ref=e377]:
+                    - cell [ref=e378]:
+                      - link ".env.example, (File)" [ref=e385] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/.env.example
+                        - text: .env.example
+                    - cell [ref=e386]:
+                      - link "env var to disable version check" [ref=e389] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/f98eb7a83848b7b4133559b52fce46894638cfd6
+                    - cell "Nov 26, 20259 months ago" [ref=e390]
+                  - row [ref=e392]:
+                    - cell [ref=e393]:
+                      - link ".gitattributes, (File)" [ref=e400] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/.gitattributes
+                        - text: .gitattributes
+                    - cell [ref=e401]:
+                      - link "Remove mp4 files and update gitattributes" [ref=e404] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/2a9170cb8106d310722a89aadfcf3da970de450e
+                    - cell "Nov 18, 20242 years ago" [ref=e405]
+                  - row [ref=e407]:
+                    - cell [ref=e408]:
+                      - link ".gitignore, (File)" [ref=e415] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/.gitignore
+                        - text: .gitignore
+                    - cell [ref=e416]:
+                      - link "support MCP registry" [ref=e419] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/604392c3922e72028f2289c0112b6c8a84562379
+                    - cell "Jul 16, 2026last month" [ref=e420]
+                  - row [ref=e422]:
+                    - cell [ref=e423]:
+                      - link ".pre-commit-config.yaml, (File)" [ref=e430] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/.pre-commit-config.yaml
+                        - text: .pre-commit-config.yaml
+                    - cell [ref=e431]:
+                      - link "fixed styling issues" [ref=e434] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/e50588f3c713d2d7497fb71589f0d059f0b07e0c
+                    - cell "Feb 23, 20266 months ago" [ref=e435]
+                  - row [ref=e437]:
+                    - cell [ref=e438]:
+                      - link ".python-version, (File)" [ref=e445] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/.python-version
+                        - text: .python-version
+                    - cell [ref=e446]:
+                      - link "bump dependency versions" [ref=e449] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/a33bd7eea57582a539ac2e1c6fa440ecbb9d6eaa
+                    - cell "Jun 3, 2025last year" [ref=e450]
+                  - row [ref=e452]:
+                    - cell [ref=e453]:
+                      - link "AGENTS.md, (File)" [ref=e460] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/AGENTS.md
+                        - text: AGENTS.md
+                    - cell [ref=e461]:
+                      - 'link "docs: replace broken profile sync link" [ref=e464] [cursor=pointer]':
+                        - /url: /browser-use/browser-use/commit/29c12c32020482943fbde9460d6dae90f1335437
+                    - cell "Jul 30, 2026last month" [ref=e465]
+                  - row [ref=e467]:
+                    - cell [ref=e468]:
+                      - link "BETA_AGENT_INTEGRATION_FEATURES.md, (File)" [ref=e475] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/BETA_AGENT_INTEGRATION_FEATURES.md
+                        - text: BETA_AGENT_INTEGRATION_FEATURES.md
+                    - cell [ref=e476]:
+                      - link "Promote beta core package quickstart" [ref=e479] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/7a888eb9a46cfa97920a40280e8644e3e8475520
+                    - cell "Jun 8, 20262 months ago" [ref=e480]
+                  - row [ref=e482]:
+                    - cell [ref=e483]:
+                      - link "CLAUDE.md, (File)" [ref=e490] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/CLAUDE.md
+                        - text: CLAUDE.md
+                    - cell [ref=e491]:
+                      - link "improve extract data" [ref=e494] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/97d022d5a848881d7e6b6ab9d63d816980ab11b8
+                    - cell "Aug 31, 2025last year" [ref=e495]
+                  - row [ref=e497]:
+                    - cell [ref=e498]:
+                      - link "CLOUD.md, (File)" [ref=e505] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/CLOUD.md
+                        - text: CLOUD.md
+                    - cell [ref=e506]:
+                      - 'link "docs: correct signup credit in Cloud guide" [ref=e509] [cursor=pointer]':
+                        - /url: /browser-use/browser-use/commit/b4e68f19b2fd88e9df38847b641447e8aedaffba
+                    - cell "Aug 30, 2026yesterday" [ref=e510]
+                  - row [ref=e512]:
+                    - cell [ref=e513]:
+                      - link "Dockerfile, (File)" [ref=e520] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/Dockerfile
+                        - text: Dockerfile
+                    - cell [ref=e521]:
+                      - link "Refactor Dockerfile and update tests for improved functionality" [ref=e524] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/72bb0de17a57ecaec23e4116558937f685ff363d
+                    - cell "Aug 27, 2025last year" [ref=e525]
+                  - row [ref=e527]:
+                    - cell [ref=e528]:
+                      - link "Dockerfile.fast, (File)" [ref=e535] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/Dockerfile.fast
+                        - text: Dockerfile.fast
+                    - cell [ref=e536]:
+                      - link "speedup docker build to 20s" [ref=e539] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/0b8fda5d7c898c28ffc830788e48640e3e58e6cf
+                    - cell "Jun 27, 2025last year" [ref=e540]
+                  - row [ref=e542]:
+                    - cell [ref=e543]:
+                      - link "LICENSE, (File)" [ref=e550] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/LICENSE
+                        - text: LICENSE
+                    - cell [ref=e551]:
+                      - link "Added MIT license" [ref=e554] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/8f145fb2bb45dc60d9e218e651bd1a59cbc5b549
+                    - cell "Nov 5, 20242 years ago" [ref=e555]
+                  - row [ref=e557]:
+                    - cell [ref=e558]:
+                      - link "README.md, (File)" [ref=e565] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/README.md
+                        - text: README.md
+                    - cell [ref=e566]:
+                      - 'link "docs: highlight rerunnable Cloud scripts" [ref=e569] [cursor=pointer]':
+                        - /url: /browser-use/browser-use/commit/c1b6df89589a2b8c66ce8de63c2e9b790421713b
+                    - cell "Aug 26, 20265 days ago" [ref=e570]
+                  - row [ref=e572]:
+                    - cell [ref=e573]:
+                      - link "pyproject.toml, (File)" [ref=e580] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/pyproject.toml
+                        - text: pyproject.toml
+                    - cell [ref=e581]:
+                      - 'link "fix: allow pydantic 2.13" [ref=e584] [cursor=pointer]':
+                        - /url: /browser-use/browser-use/commit/b4bad86d21bf693b9ae5748b667fc32fc8b8e7d5
+                    - cell "Aug 30, 2026yesterday" [ref=e585]
+                  - row [ref=e587]:
+                    - cell [ref=e588]:
+                      - link "server.json, (File)" [ref=e595] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/blob/main/server.json
+                        - text: server.json
+                    - cell [ref=e596]:
+                      - link "support MCP registry" [ref=e599] [cursor=pointer]:
+                        - /url: /browser-use/browser-use/commit/604392c3922e72028f2289c0112b6c8a84562379
+                    - cell "Jul 16, 2026last month" [ref=e600]
+            - generic [ref=e603]:
+              - generic [ref=e604]:
+                - heading "Repository files navigation" [level=2] [ref=e605]
+                - navigation "Repository files" [ref=e606]:
+                  - list [ref=e607]:
+                    - listitem [ref=e608]:
+                      - link "README" [ref=e609] [cursor=pointer]:
+                        - /url: "#"
+                    - listitem [ref=e614]:
+                      - link "Contributing" [ref=e615] [cursor=pointer]:
+                        - /url: "#"
+                    - listitem [ref=e620]:
+                      - link "MIT license" [ref=e621] [cursor=pointer]:
+                        - /url: "#"
+                    - listitem [ref=e626]:
+                      - link "Security" [ref=e627] [cursor=pointer]:
+                        - /url: "#"
+                - button "Outline" [ref=e632] [cursor=pointer]
+              - article [ref=e636]:
+                - img "Shows a black Browser Use Logo in light color mode and a white one in dark color mode." [ref=e639]
+                - img "The AI browser agent." [ref=e643]
+                - link [ref=e645] [cursor=pointer]:
+                  - /url: https://cloud.browser-use.com?utm_source=github&utm_medium=readme-badge-downloads
+                  - img "Browser-Use Package Download Statistics" [ref=e646]
+                - separator [ref=e647]
+                - generic [ref=e648]:
+                  - link [ref=e649] [cursor=pointer]:
+                    - /url: "#what-can-browser-use-do"
+                    - img "Demos" [ref=e650]
+                  - link [ref=e651] [cursor=pointer]:
+                    - /url: ""
+                  - link [ref=e652] [cursor=pointer]:
+                    - /url: https://docs.browser-use.com
+                    - img "Docs" [ref=e653]
+                  - link [ref=e654] [cursor=pointer]:
+                    - /url: ""
+                  - link [ref=e655] [cursor=pointer]:
+                    - /url: https://browser-use.com/posts
+                    - img "Blog" [ref=e656]
+                  - link [ref=e657] [cursor=pointer]:
+                    - /url: ""
+                  - link [ref=e658] [cursor=pointer]:
+                    - /url: https://browsermerch.com
+                    - img "Merch" [ref=e659]
+                  - link [ref=e660] [cursor=pointer]:
+                    - /url: ""
+                  - link [ref=e661] [cursor=pointer]:
+                    - /url: https://github.com/browser-use/browser-use
+                    - img "Github Stars" [ref=e662]
+                  - link [ref=e663] [cursor=pointer]:
+                    - /url: ""
+                  - link [ref=e664] [cursor=pointer]:
+                    - /url: https://x.com/intent/user?screen_name=browser_use
+                    - img "Twitter" [ref=e665]
+                  - link [ref=e666] [cursor=pointer]:
+                    - /url: ""
+                  - link [ref=e667] [cursor=pointer]:
+                    - /url: https://link.browser-use.com/discord
+                    - img "Discord" [ref=e668]
+                  - link [ref=e669] [cursor=pointer]:
+                    - /url: ""
+                  - link [ref=e670] [cursor=pointer]:
+                    - /url: https://cloud.browser-use.com?utm_source=github&utm_medium=readme-badge-cloud
+                    - img "Browser-Use Cloud" [ref=e671]
+                - generic [ref=e672]:
+                  - heading "What can Browser Use do?" [level=1] [ref=e673]
+                  - 'link "Permalink: What can Browser Use do?" [ref=e674] [cursor=pointer]':
+                    - /url: "#what-can-browser-use-do"
+                - paragraph [ref=e677]: "Browser Use lets an AI agent use a web browser the same way humans do — it opens pages, clicks buttons, types, and fills in forms. You describe the task, and it completes it. For example, you can have it:"
+                - generic [ref=e678]:
+                  - heading "📋 Fill Forms" [level=3] [ref=e679]
+                  - 'link "Permalink: 📋 Fill Forms" [ref=e680] [cursor=pointer]':
+                    - /url: "#-fill-forms"
+                - generic [ref=e683]:
+                  - 'heading "Task: \"Fill in this job application with my resume and information.\"" [level=4] [ref=e684]'
+                  - 'link "Permalink: Task: \"Fill in this job application with my resume and information.\"" [ref=e685] [cursor=pointer]':
+                    - /url: "#task-fill-in-this-job-application-with-my-resume-and-information"
+                - paragraph [ref=e688]:
+                  - link [ref=e690] [cursor=pointer]:
+                    - /url: https://private-user-images.githubusercontent.com/67061560/635660026-57611d8e-0474-4de6-84b7-37a0c0cd27e7.gif?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3ODgxNTg4OTksIm5iZiI6MTc4ODE1ODU5OSwicGF0aCI6Ii82NzA2MTU2MC82MzU2NjAwMjYtNTc2MTFkOGUtMDQ3NC00ZGU2LTg0YjctMzdhMGMwY2QyN2U3LmdpZj9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNjA4MzElMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjYwODMxVDA2NDMxOVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTZmYTQ4ZDE4MDMzM2M2NTExMzI5ZWNjODVjMzc3ZTdiMTU0NTI0NTVjMjViOTQxZjZlZGI0OWU2Mzg3OTljODMmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JnJlc3BvbnNlLWNvbnRlbnQtdHlwZT1pbWFnZSUyRmdpZiJ9.5HuDYLOY_GhLqk2eFtH2QZl1Uurwwy0n0GQ7wGRBVFo
+                    - img "Job Application Demo" [ref=e691]
+                - paragraph [ref=e692]:
+                  - link "Example code ↗" [ref=e693] [cursor=pointer]:
+                    - /url: https://github.com/browser-use/browser-use/blob/main/examples/use-cases/apply_to_job.py
+                - generic [ref=e694]:
+                  - heading "🍎 Extract data" [level=3] [ref=e695]
+                  - 'link "Permalink: 🍎 Extract data" [ref=e696] [cursor=pointer]':
+                    - /url: "#-extract-data"
+                - generic [ref=e699]:
+                  - 'heading "Task: \"Extract structured data about my followers and export it as a CSV.\"" [level=4] [ref=e700]'
+                  - 'link "Permalink: Task: \"Extract structured data about my followers and export it as a CSV.\"" [ref=e701] [cursor=pointer]':
+                    - /url: "#task-extract-structured-data-about-my-followers-and-export-it-as-a-csv"
+                - group [ref=e704]:
+                  - generic "extract-followers-from-3.5.mp4" [ref=e705] [cursor=pointer]
+                - paragraph [ref=e710]:
+                  - link "Browser Use Cloud Docs ↗" [ref=e711] [cursor=pointer]:
+                    - /url: https://docs.browser-use.com/cloud/quickstart
+                - generic [ref=e712]:
+                  - heading "Quickstart" [level=1] [ref=e713]
+                  - 'link "Permalink: Quickstart" [ref=e714] [cursor=pointer]':
+                    - /url: "#quickstart"
+                - paragraph [ref=e717]: "If you want to use Browser Use in your agent (Claude Code, Codex, Cursor, Hermes, OpenClaw, etc.), paste this prompt, and it sets everything up itself:"
+                - generic [ref=e718]:
+                  - code [ref=e720]: "Install or upgrade browser-use to the latest stable version with uv using Python 3.12, run `browser-use skill install` to register the skill, and connect it to my browser. If setup or connection fails, follow https://github.com/browser-use/browser-harness/blob/main/install.md."
+                  - button "Copy code to clipboard" [ref=e722] [cursor=pointer]
+                - paragraph [ref=e726]: Then tell your agent what you want done.
+                - generic [ref=e727]:
+                  - 'heading "Python library: the easiest way to automate the web" [level=1] [ref=e728]'
+                  - 'link "Permalink: Python library: the easiest way to automate the web" [ref=e729] [cursor=pointer]':
+                    - /url: "#python-library-the-easiest-way-to-automate-the-web"
+                - paragraph [ref=e732]: "Want to automate the web at scale, from your own code, and with any LLM? Use the Python library:"
+                - paragraph [ref=e733]:
+                  - strong [ref=e734]: "1. Install Browser Use (Python >= 3.11):"
+                - generic [ref=e735]:
+                  - generic [ref=e736]:
+                    - text: uv add browser-use
+                    - generic [ref=e737]: "# or: pip install browser-use"
+                  - button "Copy code to clipboard" [ref=e739] [cursor=pointer]
+                - paragraph [ref=e743]:
+                  - strong [ref=e744]:
+                    - text: 2. Add your LLM API key to
+                    - code [ref=e745]: .env
+                  - text: . Get one from
+                  - link "Browser Use Cloud" [ref=e746] [cursor=pointer]:
+                    - /url: https://cloud.browser-use.com/new-api-key?utm_source=github&utm_medium=readme-quickstart-api-key
+                  - text: ", or bring your own provider key:"
+                - generic [ref=e747]:
+                  - generic [ref=e748]:
+                    - generic [ref=e749]: "# .env"
+                    - text: BROWSER_USE_API_KEY=your-key
+                    - generic [ref=e750]: "# GOOGLE_API_KEY=your-key"
+                    - generic [ref=e751]: "# ANTHROPIC_API_KEY=your-key"
+                  - button "Copy code to clipboard" [ref=e753] [cursor=pointer]
+                - paragraph [ref=e757]:
+                  - strong [ref=e758]: "3. Run your first agent:"
+                - generic [ref=e759]:
+                  - generic [ref=e760]: "import asyncio from browser_use import Agent, ChatBrowserUse async def main(): agent = Agent( task=\"Find the number of stars of the browser-use repo\", llm=ChatBrowserUse(model='openai/gpt-5.5'), # llm=ChatBrowserUse(model='bu-2-0-mini-preview'), # Browser Use's optimized model # llm=ChatOpenAI(model='gpt-5.5'), # llm=ChatAnthropic(model='claude-opus-4-8'), # Sonnet also works well ) history = await agent.run() if __name__ == \"__main__\": asyncio.run(main())"
+                  - button "Copy code to clipboard" [ref=e762] [cursor=pointer]
+                - paragraph [ref=e766]:
+                  - text: Check out the
+                  - link "library docs" [ref=e767] [cursor=pointer]:
+                    - /url: https://docs.browser-use.com/open-source/introduction
+                  - text: and the
+                  - link "cloud docs" [ref=e768] [cursor=pointer]:
+                    - /url: https://docs.cloud.browser-use.com?utm_source=github&utm_medium=readme-cloud-docs
+                  - text: for more!
+                - generic [ref=e769]:
+                  - heading "Open Source vs Cloud" [level=1] [ref=e770]
+                  - 'link "Permalink: Open Source vs Cloud" [ref=e771] [cursor=pointer]':
+                    - /url: "#open-source-vs-cloud"
+                - img "BU Bench V1 - LLM Success Rates" [ref=e776]
+                - paragraph [ref=e777]:
+                  - text: "We benchmark Browser Use across 100 real-world browser tasks. Full benchmark is open source:"
+                  - strong [ref=e778]:
+                    - link "browser-use/benchmark" [ref=e779] [cursor=pointer]:
+                      - /url: https://github.com/browser-use/benchmark
+                  - text: .
+                - paragraph [ref=e780]:
+                  - text: Browser Use is also
+                  - strong [ref=e781]:
+                    - text: "#1 on the"
+                    - link "Odysseys leaderboard" [ref=e782] [cursor=pointer]:
+                      - /url: https://odysseysbench.com/leaderboard
+                  - text: with an 87.4% average, ahead of computer-use agents from OpenAI, Anthropic, Google, and Microsoft. Odysseys measures the agent's performance on 200 long-horizon web tasks.
+                - paragraph [ref=e783]:
+                  - strong [ref=e784]: Use the Open-Source Agent
+                - list [ref=e785]:
+                  - listitem [ref=e786]: Free, and runs on your own machine
+                  - listitem [ref=e787]: "Deep code-level integration and control: pick your LLM, customize the agent's behavior"
+                  - listitem [ref=e788]:
+                    - text: We recommend pairing it with our
+                    - link "cloud browsers" [ref=e789] [cursor=pointer]:
+                      - /url: https://docs.browser-use.com/open-source/customize/browser/remote
+                    - text: for leading stealth, proxy rotation, and scaling
+                - paragraph [ref=e790]:
+                  - strong [ref=e791]:
+                    - text: Use the
+                    - link "Fully-Hosted Cloud Agent" [ref=e792] [cursor=pointer]:
+                      - /url: https://cloud.browser-use.com?utm_source=github&utm_medium=readme-hosted-agent
+                    - text: (recommended)
+                - list [ref=e793]:
+                  - listitem [ref=e794]: Much more powerful agent for complex tasks (see plot above)
+                  - listitem [ref=e795]: Easiest way to start and scale
+                  - listitem [ref=e796]: Best stealth with proxy rotation and captcha solving
+                  - listitem [ref=e797]: 1000+ integrations (Gmail, Slack, Notion, and more)
+                  - listitem [ref=e798]: Persistent filesystem and memory
+                  - listitem [ref=e799]:
+                    - text: Rerunnable scripts fetch live data, even when sites change (
+                    - link "guide" [ref=e800] [cursor=pointer]:
+                      - /url: https://docs.browser-use.com/cloud/agent/scripts
+                    - text: )
+                - generic [ref=e801]:
+                  - generic [ref=e802]:
+                    - text: curl -X POST https://api.browser-use.com/api/v4/runs \ -H
+                    - generic [ref=e803]: "\"X-Browser-Use-API-Key: $BROWSER_USE_API_KEY\""
+                    - text: \ -H
+                    - generic [ref=e804]: "\"Content-Type: application/json\""
+                    - text: \ -d
+                    - generic [ref=e805]: "'{\"task\": \"Your task\"}'"
+                  - button "Copy code to clipboard" [ref=e807] [cursor=pointer]
+                - generic [ref=e811]:
+                  - heading [level=2] [ref=e812]:
+                    - text: Integrations, hosting, custom tools, MCP, and more on our
+                    - link "Docs ↗" [ref=e813] [cursor=pointer]:
+                      - /url: https://docs.browser-use.com
+                  - 'link "Permalink: Integrations, hosting, custom tools, MCP, and more on our Docs ↗" [ref=e814] [cursor=pointer]':
+                    - /url: "#integrations-hosting-custom-tools-mcp-and-more-on-our-docs-"
+                - generic [ref=e817]:
+                  - heading "FAQ" [level=1] [ref=e818]
+                  - 'link "Permalink: FAQ" [ref=e819] [cursor=pointer]':
+                    - /url: "#faq"
+                - group [ref=e822]:
+                  - generic "Should I use the CLI vs. the Python library?" [ref=e823] [cursor=pointer]
+                - group [ref=e824]:
+                  - generic "What's the best model to use?" [ref=e825] [cursor=pointer]
+                - group [ref=e826]:
+                  - generic "Can I use Claude / GPT / Gemini through ChatBrowserUse?" [ref=e827] [cursor=pointer]
+                - group [ref=e828]:
+                  - generic "Should I use the Browser Use system prompt with the open-source preview model?" [ref=e829] [cursor=pointer]
+                - group [ref=e830]:
+                  - generic "Can I use custom tools with the agent?" [ref=e831] [cursor=pointer]
+                - group [ref=e832]:
+                  - generic "Can I use this for free?" [ref=e833] [cursor=pointer]
+                - group [ref=e834]:
+                  - generic "Terms of Service" [ref=e835] [cursor=pointer]
+                - group [ref=e836]:
+                  - generic "How do I handle authentication?" [ref=e837] [cursor=pointer]
+                - group [ref=e838]:
+                  - generic "How do I solve CAPTCHAs?" [ref=e839] [cursor=pointer]
+                - group [ref=e840]:
+                  - generic "How do I go into production?" [ref=e841] [cursor=pointer]
+                - generic [ref=e842]:
+                  - heading "Citation" [level=2] [ref=e843]
+                  - 'link "Permalink: Citation" [ref=e844] [cursor=pointer]':
+                    - /url: "#citation"
+                - paragraph [ref=e847]: "If you use Browser Use in your research or project, please cite:"
+                - generic [ref=e848]:
+                  - generic [ref=e849]:
+                    - text: "@software{browser_use2024, author ="
+                    - generic [ref=e850]: "{Müller, Magnus and Žunič, Gregor}"
+                    - text: ", title ="
+                    - generic [ref=e851]: "{Browser Use: Enable AI to control your browser}"
+                    - text: ", year ="
+                    - generic [ref=e852]: "{2024}"
+                    - text: ", publisher ="
+                    - generic [ref=e853]: "{GitHub}"
+                    - text: ", url ="
+                    - generic [ref=e854]: "{https://github.com/browser-use/browser-use}"
+                    - text: "}"
+                  - button "Copy code to clipboard" [ref=e856] [cursor=pointer]
+                - generic [ref=e860]:
+                  - paragraph [ref=e861]:
+                    - strong [ref=e862]: Tell your computer what to do, and it gets it done.
+                  - link [ref=e863] [cursor=pointer]:
+                    - /url: https://private-user-images.githubusercontent.com/67061560/425692580-06fa3078-8461-4560-b434-445510c1766f.jpeg?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3ODgxNTg4OTksIm5iZiI6MTc4ODE1ODU5OSwicGF0aCI6Ii82NzA2MTU2MC80MjU2OTI1ODAtMDZmYTMwNzgtODQ2MS00NTYwLWI0MzQtNDQ1NTEwYzE3NjZmLmpwZWc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjYwODMxJTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI2MDgzMVQwNjQzMTlaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT1kM2Y5YjRhM2E4ZWNhMzFiYmZhYzBkYzlmNWZkOGY0OWMwZGZmYmJjODQxMzY1ZGYwMzc4YjM2ZDk2ZDg0N2NlJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCZyZXNwb25zZS1jb250ZW50LXR5cGU9aW1hZ2UlMkZqcGVnIn0.jTglqrNU03Lv4--OZyY9CfGgD91MPWhc8l0gEEllw5A
+                  - paragraph [ref=e865]:
+                    - link [ref=e866] [cursor=pointer]:
+                      - /url: https://x.com/intent/user?screen_name=mamagnus00
+                      - img "Twitter Follow" [ref=e867]
+                    - link [ref=e868] [cursor=pointer]:
+                      - /url: https://x.com/intent/user?screen_name=gregpr07
+                      - img "Twitter Follow" [ref=e869]
+                - generic [ref=e870]: Made with ❤️ in Zurich and San Francisco
+        - generic [ref=e873]:
+          - generic [ref=e874]:
+            - heading "About" [level=2] [ref=e875]
+            - paragraph [ref=e876]: 🌐 Make websites accessible for AI agents. Automate tasks online with ease.
+            - generic "https://browser-use.com" [ref=e880]:
+              - link "browser-use.com" [ref=e881] [cursor=pointer]:
+                - /url: https://browser-use.com
+            - heading "Topics" [level=3] [ref=e882]
+            - generic [ref=e883]:
+              - link "ai-agents" [ref=e884] [cursor=pointer]:
+                - /url: /topics/ai-agents
+              - link "ai-tools" [ref=e885] [cursor=pointer]:
+                - /url: /topics/ai-tools
+              - link "browser-automation" [ref=e886] [cursor=pointer]:
+                - /url: /topics/browser-automation
+              - link "browser-use" [ref=e887] [cursor=pointer]:
+                - /url: /topics/browser-use
+              - link "llm" [ref=e888] [cursor=pointer]:
+                - /url: /topics/llm
+              - link "playwright" [ref=e889] [cursor=pointer]:
+                - /url: /topics/playwright
+              - link "python" [ref=e890] [cursor=pointer]:
+                - /url: /topics/python
+            - heading "Resources" [level=3] [ref=e891]
+            - link "Readme" [ref=e893] [cursor=pointer]:
+              - /url: "#readme-ov-file"
+            - link "MIT license" [ref=e897] [cursor=pointer]:
+              - /url: "#MIT-1-ov-file"
+            - heading "Contributing" [level=3] [ref=e900]
+            - link "Contributing" [ref=e902] [cursor=pointer]:
+              - /url: "#contributing-ov-file"
+            - heading "Security policy" [level=3] [ref=e905]
+            - link "Security policy" [ref=e907] [cursor=pointer]:
+              - /url: "#security-ov-file"
+            - link "Activity" [ref=e911] [cursor=pointer]:
+              - /url: /browser-use/browser-use/activity
+            - link "Custom properties" [ref=e915] [cursor=pointer]:
+              - /url: /browser-use/browser-use/custom-properties
+            - heading "Stars" [level=3] [ref=e918]
+            - generic [ref=e920]:
+              - strong [ref=e923]: 111.8k
+              - text: stars
+            - heading "Watchers" [level=3] [ref=e924]
+            - generic [ref=e926]:
+              - strong [ref=e929]: "462"
+              - text: watching
+            - heading "Forks" [level=3] [ref=e930]
+            - link [ref=e932] [cursor=pointer]:
+              - /url: /browser-use/browser-use/forks
+              - strong [ref=e936]: 12.3k
+              - text: forks
+            - link "Report repository" [ref=e938] [cursor=pointer]:
+              - /url: /contact/report-content?content_url=https%3A%2F%2Fgithub.com%2Fbrowser-use%2Fbrowser-use&report=browser-use+%28user%29
+          - generic [ref=e939]:
+            - heading "Releases (135)" [level=2] [ref=e940]:
+              - generic [ref=e941]:
+                - link "Releases" [ref=e942] [cursor=pointer]:
+                  - /url: /browser-use/browser-use/releases
+                - generic [ref=e943]: "135"
+                - generic [ref=e944]: (135)
+            - link "0.13.8 Latest Aug 16, 20262 weeks ago" [ref=e945] [cursor=pointer]:
+              - /url: /browser-use/browser-use/releases/tag/0.13.8
+              - generic [ref=e948]:
+                - generic [ref=e949]:
+                  - generic "0.13.8" [ref=e950]
+                  - generic [ref=e951]: Latest
+                - generic [ref=e952]: Aug 16, 20262 weeks ago
+            - link "+ 134 releases" [ref=e954] [cursor=pointer]:
+              - /url: /browser-use/browser-use/releases
+          - generic [ref=e955]:
+            - heading "Used by (2.8K)" [level=2] [ref=e956]:
+              - generic [ref=e957]:
+                - link "Used by" [ref=e958] [cursor=pointer]:
+                  - /url: /browser-use/browser-use/network/dependents
+                - generic [ref=e959]: 2.8K
+                - generic [ref=e960]: (2.8K)
+            - link "@anjilab @adryserage @adryserage @PlayCastDotIo @bsantanna + 2,806" [ref=e961] [cursor=pointer]:
+              - /url: /browser-use/browser-use/network/dependents
+              - generic [ref=e963]:
+                - img "@anjilab" [ref=e964]
+                - img "@adryserage" [ref=e965]
+                - img "@adryserage" [ref=e966]
+                - img "@PlayCastDotIo" [ref=e967]
+                - img "@bsantanna" [ref=e968]
+              - generic [ref=e969]: + 2,806
+          - generic [ref=e970]:
+            - heading "Contributors (353)" [level=2] [ref=e971]:
+              - generic [ref=e972]:
+                - link "Contributors" [ref=e973] [cursor=pointer]:
+                  - /url: /browser-use/browser-use/graphs/contributors
+                - generic [ref=e974]: "353"
+                - generic [ref=e975]: (353)
+            - list [ref=e976]:
+              - listitem [ref=e977]:
+                - link [ref=e978] [cursor=pointer]:
+                  - /url: /MagMueller
+                  - img "@MagMueller" [ref=e979]
+              - listitem [ref=e980]:
+                - link [ref=e981] [cursor=pointer]:
+                  - /url: /pirate
+                  - img "@pirate" [ref=e982]
+              - listitem [ref=e983]:
+                - link [ref=e984] [cursor=pointer]:
+                  - /url: /mertunsall
+                  - img "@mertunsall" [ref=e985]
+              - listitem [ref=e986]:
+                - link [ref=e987] [cursor=pointer]:
+                  - /url: /sauravpanda
+                  - img "@sauravpanda" [ref=e988]
+              - listitem [ref=e989]:
+                - link [ref=e990] [cursor=pointer]:
+                  - /url: /gregpr07
+                  - img "@gregpr07" [ref=e991]
+              - listitem [ref=e992]:
+                - link [ref=e993] [cursor=pointer]:
+                  - /url: /laithrw
+                  - img "@laithrw" [ref=e994]
+              - listitem [ref=e995]:
+                - link [ref=e996] [cursor=pointer]:
+                  - /url: /ShawnPana
+                  - img "@ShawnPana" [ref=e997]
+              - listitem [ref=e998]:
+                - link [ref=e999] [cursor=pointer]:
+                  - /url: /Alezander9
+                  - img "@Alezander9" [ref=e1000]
+              - listitem [ref=e1001]:
+                - link [ref=e1002] [cursor=pointer]:
+                  - /url: /reformedot
+                  - img "@reformedot" [ref=e1003]
+              - listitem [ref=e1004]:
+                - link [ref=e1005] [cursor=pointer]:
+                  - /url: /claude
+                  - img "@claude" [ref=e1006]
+              - listitem [ref=e1007]:
+                - link [ref=e1008] [cursor=pointer]:
+                  - /url: /kalil0321
+                  - img "@kalil0321" [ref=e1009]
+              - listitem [ref=e1010]:
+                - link [ref=e1011] [cursor=pointer]:
+                  - /url: /cursoragent
+                  - img "@cursoragent" [ref=e1012]
+              - listitem [ref=e1013]:
+                - link [ref=e1014] [cursor=pointer]:
+                  - /url: /cubic-dev-ai[bot]
+                  - img "@cubic-dev-ai[bot]" [ref=e1015]
+              - listitem [ref=e1016]:
+                - link [ref=e1017] [cursor=pointer]:
+                  - /url: /avocardio
+                  - img "@avocardio" [ref=e1018]
+            - link "+ 339 contributors" [ref=e1020] [cursor=pointer]:
+              - /url: /browser-use/browser-use/graphs/contributors
+          - generic [ref=e1021]:
+            - heading "Languages" [level=2] [ref=e1022]
+            - generic [ref=e1024]:
+              - 'progressbar "Python: 99.2%" [ref=e1025]'
+              - 'progressbar "Other: 0.8%" [ref=e1026]'
+            - list [ref=e1027]:
+              - listitem [ref=e1028]:
+                - link "Python 99.2%" [ref=e1029] [cursor=pointer]:
+                  - /url: /browser-use/browser-use/search?l=python
+                  - generic [ref=e1031]: Python
+                  - generic [ref=e1032]: 99.2%
+              - listitem [ref=e1033]:
+                - link "Other 0.8%" [ref=e1034] [cursor=pointer]:
+                  - /url: /browser-use/browser-use/search?l=Other
+                  - generic [ref=e1036]: Other
+                  - generic [ref=e1037]: 0.8%
+    - contentinfo [ref=e1039]:
+      - heading "Footer" [level=2] [ref=e1040]
+      - generic [ref=e1041]:
+        - generic [ref=e1042]:
+          - link "GitHub Homepage" [ref=e1043] [cursor=pointer]:
+            - /url: https://github.com
+          - generic [ref=e1046]: © 2026 GitHub, Inc.
+        - navigation "Footer" [ref=e1047]:
+          - heading "Footer navigation" [level=3] [ref=e1048]
+          - list "Footer navigation" [ref=e1049]:
+            - listitem [ref=e1050]:
+              - link "Terms" [ref=e1051] [cursor=pointer]:
+                - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+            - listitem [ref=e1052]:
+              - link "Privacy" [ref=e1053] [cursor=pointer]:
+                - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+            - listitem [ref=e1054]:
+              - link "Security" [ref=e1055] [cursor=pointer]:
+                - /url: https://github.com/security
+            - listitem [ref=e1056]:
+              - link "Status" [ref=e1057] [cursor=pointer]:
+                - /url: https://www.githubstatus.com/
+            - listitem [ref=e1058]:
+              - link "Community" [ref=e1059] [cursor=pointer]:
+                - /url: https://github.community/
+            - listitem [ref=e1060]:
+              - link "Docs" [ref=e1061] [cursor=pointer]:
+                - /url: https://docs.github.com/
+            - listitem [ref=e1062]:
+              - link "Contact" [ref=e1063] [cursor=pointer]:
+                - /url: https://support.github.com?tags=dotcom-footer
+            - listitem [ref=e1064]:
+              - button "Manage cookies" [ref=e1066] [cursor=pointer]
+            - listitem [ref=e1067]:
+              - button "Do not share my personal information" [ref=e1069] [cursor=pointer]
+  - alert [ref=e1072]
