@@ -70,7 +70,11 @@ const REQ = path.resolve(ROOT, "../_docs/01.요구사항/03_기능_요구사항.
  * 요구사항을 더하거나 폐기하면 이 숫자를 **손으로** 고칩니다. 그 한 줄이
  * 「대장이 바뀌었다」를 사람이 알아차리는 자리입니다.
  */
-const EXPECTED_REQUIREMENTS = 105;
+/*
+ * `105 → 109`. **`FR-NOTE-001`~`004` 를 더했습니다** — 나의 노트(개인 메모).
+ * 운영자가 새로 요청한 기능이고, 요구사항 대장에 없던 항목입니다.
+ */
+const EXPECTED_REQUIREMENTS = 109;
 
 function loadRequirements() {
   const src = readFileSync(REQ, "utf8");

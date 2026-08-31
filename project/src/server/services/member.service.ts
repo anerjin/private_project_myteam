@@ -143,7 +143,8 @@ const SPECS: Record<Transition["kind"], TransitionSpec> = {
    *
    * **즉시 처리와 1년 뒤 배치가 나뉩니다** (`DEC-021`, `REQ-02 · 2.3`).
    *
-   * 즉시: 이름 마스킹 · 전 세션 만료 · **전 API 키 폐기** · 개인 컬렉션·북마크 삭제.
+   * 즉시: 이름 마스킹 · 전 세션 만료 · **전 API 키 폐기** ·
+   * 개인 컬렉션·북마크·**메모** 삭제.
    * 1년 뒤(`maintenance.service`): 아이디를 `reserved_usernames` 로 옮기고
    * 계정을 익명화합니다.
    *
@@ -362,8 +363,12 @@ export async function transition(
     // 세션 «행» 은 같은 트랜잭션에서. 캐시는 커밋 후 (DEC-035 순서)
     const { count } = await deleteSessionsFor(tx, targetId);
 
-    let withdrawn: { keys: number; collections: number; bookmarks: number } | null =
-      null;
+    let withdrawn: {
+      keys: number;
+      collections: number;
+      bookmarks: number;
+      notes: number;
+    } | null = null;
     if (t.kind === "WITHDRAW") {
       /*
        * **API 키는 «폐기»합니다.** `DEC-037` 이 「정지·거부는 폐기하지 않고 매
@@ -383,10 +388,23 @@ export async function transition(
         where: { userId: targetId },
       });
 
+      /*
+       * **개인 메모는 통째로 지웁니다** (`FR-NOTE-004`).
+       *
+       * 컬렉션은 「팀 공개는 남기고 비공개만」이었습니다 — 온보딩 묶음이
+       * 팀의 자산이기 때문입니다. 메모에는 그런 구분이 없습니다.
+       * **전부 비공개이고, 아무도 이어받지 않습니다.**
+       *
+       * 소프트 삭제도 아닙니다. 휴지통을 두지 않기로 했고, 탈퇴한 사람의
+       * 개인 메모를 30일 더 들고 있을 이유가 없습니다.
+       */
+      const notes = await tx.note.deleteMany({ where: { ownerId: targetId } });
+
       withdrawn = {
         keys,
         collections: collections.count,
         bookmarks: bookmarks.count,
+        notes: notes.count,
       };
     }
 

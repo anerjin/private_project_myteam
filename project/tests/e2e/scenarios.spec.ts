@@ -640,3 +640,91 @@ test("⑦ 디오와 나눈 대화가 새로고침을 넘어가고, 사람마다 
   await page.reload({ waitUntil: "networkidle" });
   await expect(panel.getByText(MARK)).toHaveCount(0);
 });
+
+/* ────────────────────────────────────────────────────────────────────────
+ * ⑧ 나의 노트 — 쓰고 고치고 지운다. 그리고 **남에게 안 보인다**
+ * ──────────────────────────────────────────────────────────────────────── */
+test("⑧ 내 노트를 쓰고 고치고 지운다 — 남에게는 안 보인다", async ({ page }) => {
+  /*
+   * `verify:notes` 가 service 를 직접 불러 「나만 본다」를 이미 봤습니다.
+   * 여기서는 **화면과 Server Action** 을 봅니다 — 폼 제출·리다이렉트·
+   * 확인 대화상자는 그쪽 검사에 없습니다.
+   *
+   * 그리고 **주소를 직접 쳐서** 남의 노트에 닿아 봅니다. service 를 부르는
+   * 검사로는 「라우트가 그 판정을 부르는가」를 못 봅니다.
+   */
+  const me = await makeUser({ tag: "note", role: "MEMBER" });
+  const other = await makeUser({ tag: "note2", role: "MEMBER" });
+
+  await signIn(page, me.username);
+  await page.goto("/notes");
+  await expect(page.getByText("아직 노트가 없습니다")).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // ── 쓴다 — **화면을 옮기지 않고** 가운데 레이어에서 ──
+  await page.getByRole("button", { name: "메모 작성…" }).click();
+  const layer = page.getByRole("dialog");
+  await expect(layer).toBeVisible();
+  await layer.getByLabel("제목").fill("E2E 개인 메모");
+  await layer.getByLabel("내용").fill("나만 보는 내용입니다.");
+  await layer.getByRole("button", { name: "저장" }).click();
+
+  await expect(layer).toBeHidden({ timeout: 20_000 });
+  // 카드로 돌아옵니다 — 목록에서 벗어난 적이 없습니다
+  await expect(page).toHaveURL(/\/notes$/);
+  const card = page.getByRole("button", { name: /E2E 개인 메모/ });
+  await expect(card).toBeVisible({ timeout: 15_000 });
+
+  // ── 카드를 누르면 레이어가 열린다. 주소에도 남는다 ──
+  await card.click();
+  await expect(layer).toBeVisible();
+  await expect(page).toHaveURL(/\/notes\?note=/, { timeout: 15_000 });
+  await expect(layer.getByLabel("내용")).toHaveValue("나만 보는 내용입니다.");
+  const noteId = new URL(page.url()).searchParams.get("note")!;
+
+  // ── 고친다 — 같은 레이어에서. 「보기」와 「수정」을 나누지 않았습니다 ──
+  await layer.getByLabel("제목").fill("E2E 개인 메모 (고침)");
+  await layer.getByRole("button", { name: "저장" }).click();
+  await expect(layer).toBeHidden({ timeout: 20_000 });
+  await expect(
+    page.getByRole("button", { name: /E2E 개인 메모 \(고침\)/ })
+  ).toBeVisible({ timeout: 15_000 });
+
+  /*
+   * ── 남에게는 안 보인다 ──
+   *
+   * **주소를 알아도 안 열립니다.** 그리고 「권한이 없습니다」가 아니라
+   * **없는 것처럼** 답해야 합니다 — 구별해서 답하면 그 id 가 존재한다는
+   * 사실이 새어 나갑니다.
+   */
+  await page.context().clearCookies();
+  await signIn(page, other.username);
+  await page.goto(`/notes?note=${noteId}`);
+  await expect(page.getByText("그 메모를 찾을 수 없습니다")).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByText("E2E 개인 메모")).toHaveCount(0);
+  await expect(page.getByText("나만 보는 내용입니다.")).toHaveCount(0);
+
+  // ── 지운다 — 되돌릴 수 없다 ──
+  await page.context().clearCookies();
+  await signIn(page, me.username);
+  await page.goto(`/notes?note=${noteId}`);
+  await expect(layer).toBeVisible({ timeout: 15_000 });
+  await layer.getByRole("button", { name: "삭제" }).click();
+  /*
+   * 문구가 「휴지통으로 옮깁니다」면 **거짓말**입니다 — 메모에는 휴지통이
+   * 없습니다. 자료 쪽 문구를 복사해 오는 날 이 검사가 잡습니다.
+   */
+  await expect(page.getByText("되돌릴 수 없습니다")).toBeVisible();
+  await page.getByRole("button", { name: "지웁니다" }).click();
+
+  await expect(page.getByText("아직 노트가 없습니다")).toBeVisible({
+    timeout: 20_000,
+  });
+
+  // 행 자체가 사라졌는가 — 화면에서 안 보이는 것과 다른 사실입니다
+  expect(await db.note.count({ where: { id: noteId } })).toBe(0);
+});

@@ -4,6 +4,7 @@ import {
   FolderTree,
   LayoutDashboard,
   ListChecks,
+  NotebookPen,
   ScrollText,
   Settings,
   ShieldCheck,
@@ -37,6 +38,12 @@ export const serviceLibraryGroup: NavGroup = {
   items: [
     { title: "컬렉션", href: "/collections", icon: FolderTree },
     { title: "북마크", href: "/bookmarks", icon: BookMarked },
+    /*
+     * **나만 보는 메모** (`FR-NOTE-001`). 앞의 둘과 달리 자료를 «담는» 것이
+     * 아니라 **직접 쓰는** 것입니다 — 그래서 아이콘도 폴더·책갈피가 아니라
+     * 펜입니다.
+     */
+    { title: "나의 노트", href: "/notes", icon: NotebookPen },
   ],
 };
 
@@ -80,6 +87,7 @@ export const SEGMENT_LABEL: Record<string, string> = {
   edit: "수정",
   collections: "컬렉션",
   bookmarks: "북마크",
+  notes: "나의 노트",
   search: "검색",
   me: "마이페이지",
   admin: "관리자",

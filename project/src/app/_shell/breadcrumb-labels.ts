@@ -77,6 +77,15 @@ export async function serviceBreadcrumbLabels(): Promise<
     const name = await collectionService.nameBySlug(slug);
     if (name) labels[slug] = name;
   }
+  /*
+   * **노트에는 동적 세그먼트가 없습니다.** 상세를 화면이 아니라 **가운데
+   * 레이어**로 열기로 하면서(`?note=<id>`) 경로가 `/notes` 하나가 됐습니다 —
+   * 빵부스러기가 풀 `id` 자체가 없습니다.
+   *
+   * 그래도 `note.service.titleFor` 는 남겨 둡니다. 「제목도 소유자를 봐야
+   * 한다」는 규칙이 `verify:notes` 에 남아 있고, 언젠가 깊은 링크를 다시
+   * 만들 때 그 규칙이 먼저 있어야 합니다.
+   */
 
   return labels;
 }
