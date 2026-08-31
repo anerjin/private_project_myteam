@@ -27,7 +27,7 @@
  * 모델에게는 아무것도 묻지 않으므로(`init` 뒤에 바로 죽입니다) 구독
  * 사용량을 쓰지 않습니다.
  */
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { env } from "@/lib/env";
 import { db } from "@/lib/db";
@@ -171,6 +171,33 @@ async function main() {
     chat.toRelativeLinksForTest("https://github.com/OSGeo/gdal") ===
       "https://github.com/OSGeo/gdal"
   );
+
+  /*
+   * **사라진 대화를 이어 달라고 하면.**
+   *
+   * 말풍선을 브라우저에 저장하면서 `sessionId` 가 며칠씩 살아남게 됐습니다.
+   * CLI 의 대화 기록은 이 PC 의 `~/.claude` 에 있고 지워질 수 있는데, 그때
+   * CLI 는 exit 1 로 「No conversation found」를 냅니다. 받아 주지 않으면
+   * **한 번 지워진 뒤로 그 사람의 채팅이 영영 안 됩니다.**
+   *
+   * > 이 검사만 **모델을 실제로 부릅니다**(약 7초, 구독 사용량 한 번).
+   * > 재시도 경로는 부르지 않고는 증명할 방법이 없습니다 — E2E 에 넣지 않고
+   * > 여기 둔 이유입니다.
+   */
+  if (configured) {
+    const dead = randomUUID();
+    const r = await chat.ask("안녕", "자료 목록", dead).catch((e) => e);
+    check(
+      "없는 세션을 이어 달라 해도 죽지 않는다",
+      typeof r?.reply === "string" && r.reply.length > 0,
+      r instanceof Error ? r.message : `${r?.reply?.slice(0, 30)}…`
+    );
+    check(
+      "«이어붙이지 못했다»고 알린다",
+      r?.resumed === false,
+      "화면이 그 말을 해야 «왜 갑자기 모르지»로 안 헤맨다"
+    );
+  }
 }
 
 main()

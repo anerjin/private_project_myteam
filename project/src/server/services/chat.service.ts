@@ -169,7 +169,33 @@ export interface ChatReply {
   turns: number;
   /** 도구를 쓸 수 있었는가 — 못 썼으면 화면이 그 사실을 말합니다 */
   toolsEnabled: boolean;
+  /**
+   * 앞의 대화를 **이어붙였는가.**
+   *
+   * `false` 인데 `sessionId` 를 넘겼다면 **그 대화가 사라진 것**입니다 —
+   * 말풍선은 브라우저에 남아 있어도 모델은 아무것도 기억하지 못합니다.
+   * 화면이 그 사실을 말해야 사용자가 「왜 갑자기 모르지」로 헤매지 않습니다.
+   */
+  resumed: boolean;
 }
+
+/**
+ * CLI 가 0 이 아닌 코드로 끝났다.
+ *
+ * `stderr` 를 **사용자에게 주지 않습니다**(`NFR-SEC-016`) — 경로·설정이 섞여
+ * 나옵니다. 다만 «왜 실패했는지»로 갈라야 할 때가 있어 여기까지는 들고 옵니다.
+ */
+class CliFailure extends Error {
+  constructor(
+    readonly stderr: string,
+    readonly code: number | null
+  ) {
+    super("claude cli failed");
+  }
+}
+
+/** 이어붙일 대화가 없어졌을 때 CLI 가 하는 말 */
+const GONE = /No conversation found/i;
 
 export function isAvailable(): boolean {
   return findBinary() !== null;
@@ -219,14 +245,41 @@ export async function ask(
   if (tools) {
     args.push("--mcp-config", mcpConfig(), "--allowedTools", ...READ_TOOLS);
   }
-  if (sessionId && UUID.test(sessionId)) {
-    args.push("--resume", sessionId);
-  }
+
+  const wantsResume = Boolean(sessionId && UUID.test(sessionId));
 
   await acquire();
   const startedAt = Date.now();
   try {
-    const raw = await run(bin, args, message);
+    /*
+     * **이어붙일 대화가 사라졌으면 새로 시작합니다.**
+     *
+     * 말풍선을 브라우저에 저장하기 시작하면서 `sessionId` 가 **며칠씩**
+     * 살아남게 됐습니다. 그런데 CLI 의 대화 기록은 이 PC 의
+     * `~/.claude` 에 있고 지워질 수 있습니다 — 그때 CLI 는 exit 1 로
+     * 「No conversation found」를 냅니다.
+     *
+     * 그대로 두면 **한 번 지워진 뒤로 그 사람의 채팅이 영영 안 됩니다.**
+     * 여기서 받아 새 대화로 다시 묻고, `resumed: false` 로 알립니다.
+     */
+    let resumed = wantsResume;
+    let raw: string;
+    try {
+      raw = await run(
+        bin,
+        wantsResume ? [...args, "--resume", sessionId!] : args,
+        message
+      );
+    } catch (e) {
+      if (!(wantsResume && e instanceof CliFailure && GONE.test(e.stderr))) {
+        throw asAppError(e);
+      }
+      resumed = false;
+      raw = await run(bin, args, message).catch((e2) => {
+        throw asAppError(e2);
+      });
+    }
+
     const parsed = JSON.parse(raw) as {
       type?: string;
       subtype?: string;
@@ -250,10 +303,21 @@ export async function ask(
       ms: Date.now() - startedAt,
       turns: parsed.num_turns ?? 0,
       toolsEnabled: tools,
+      resumed,
     };
   } finally {
     release();
   }
+}
+
+/** `CliFailure` 는 우리끼리 쓰는 것 — 바깥에는 사용자에게 보여 줄 말만 나갑니다 */
+function asAppError(e: unknown): AppError {
+  if (e instanceof AppError) return e;
+  if (e instanceof CliFailure) {
+    console.error("[chat] CLI 실패", e.code, e.stderr.slice(0, 500));
+    return new AppError("UPSTREAM_ERROR", "대답을 받지 못했습니다.");
+  }
+  return new AppError("UPSTREAM_ERROR", "대답을 받지 못했습니다.");
 }
 
 /**
@@ -489,10 +553,10 @@ function run(bin: string, args: string[], stdin: string): Promise<string> {
       if (code !== 0) {
         /*
          * **stderr 를 그대로 사용자에게 주지 않습니다** (`NFR-SEC-016`).
-         * 경로·설정이 섞여 나옵니다. 서버 로그에만 남깁니다.
+         * 경로·설정이 섞여 나옵니다. 부르는 쪽이 «왜 실패했는지»로 갈라야
+         * 해서 여기까지만 들고 가고, 로그도 거기서 남깁니다.
          */
-        console.error("[chat] CLI 실패", code, err.slice(0, 500));
-        reject(new AppError("UPSTREAM_ERROR", "대답을 받지 못했습니다."));
+        reject(new CliFailure(err, code));
         return;
       }
       resolve(out);

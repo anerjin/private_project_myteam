@@ -1,6 +1,13 @@
-"use client";
+﻿"use client";
 
-import { MessageSquare, PanelRightClose, Send, Sparkles, Undo2 } from "lucide-react";
+import {
+  Eraser,
+  MessageSquare,
+  PanelRightClose,
+  Send,
+  Sparkles,
+  Undo2,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -43,11 +50,81 @@ interface Turn {
   /** 등록을 시도했지만 못 한 이유 */
   note?: string;
   undone?: boolean;
+  /** 앞의 대화를 이어붙이지 못했다 — 말풍선은 남아 있지만 모델은 모릅니다 */
+  lostThread?: boolean;
 }
 
 const STORAGE_KEY = "qb.chat.open";
 
-export function ChatPanel() {
+/**
+ * 나눈 이야기를 **이 브라우저에** 남깁니다 (`localStorage`).
+ *
+ * ## 왜 DB 가 아닌가
+ *
+ * 대화는 자료가 아닙니다. DB 에 넣으면 백업·보존기간·익명화·감사에 전부
+ * 얹혀야 하고(`NFR-PRIV-*`), 그 값에 비해 얻는 것이 「새로고침해도 남는다」
+ * 하나입니다. 브라우저에 두면 **그 사람 PC 밖으로 나가지 않습니다.**
+ *
+ * 대신 이런 성질입니다 — 기기가 바뀌면 안 따라오고, 브라우저 데이터를
+ * 지우면 사라집니다. 사내 도우미에는 그 정도가 맞습니다.
+ *
+ * ## 사람마다 다른 열쇠를 씁니다
+ *
+ * 한 PC 를 여러 사람이 쓰면 앞사람 대화가 뒷사람에게 보입니다. 열쇠에
+ * `userId` 를 넣어 **다른 사람으로 로그인하면 안 보이게** 합니다.
+ */
+const historyKey = (userId: string) => `qb.chat.hist.${userId}`;
+
+/**
+ * 남길 말풍선 수. `localStorage` 는 origin 당 5MB 안팎이고 **이 저장소를
+ * 다른 것도 씁니다** — 대화가 그걸 다 먹으면 안 됩니다.
+ */
+const KEEP_TURNS = 60;
+
+interface Saved {
+  sessionId: string | null;
+  turns: Turn[];
+}
+
+function load(userId: string): Saved | null {
+  try {
+    const raw = window.localStorage.getItem(historyKey(userId));
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Saved;
+    // 남의 손이 닿았거나 형태가 바뀐 값 — 없는 셈 칩니다
+    if (!Array.isArray(v?.turns)) return null;
+    return v;
+  } catch {
+    return null;
+  }
+}
+
+function save(userId: string, v: Saved): void {
+  try {
+    /*
+     * **빈 대화는 «지웁니다», 빈 값으로 쓰지 않습니다.**
+     *
+     * 「대화 지우기」가 `removeItem` 을 해도 곧바로 저장 이펙트가 돌아
+     * `{turns: []}` 를 도로 써 넣었습니다 — 지운 자리에 껍데기가 남습니다.
+     * 쓰는 곳을 여기 하나로 두고, 비면 열쇠째 없앱니다.
+     */
+    if (v.turns.length === 0) {
+      window.localStorage.removeItem(historyKey(userId));
+      return;
+    }
+    window.localStorage.setItem(
+      historyKey(userId),
+      JSON.stringify({ ...v, turns: v.turns.slice(-KEEP_TURNS) })
+    );
+  } catch {
+    /*
+     * 저장소가 꽉 찼거나(QuotaExceeded) 막혀 있습니다. **여기서 죽으면
+     * 대화 자체가 멈춥니다** — 남기지 못할 뿐이므로 그냥 갑니다.
+     */
+  }
+}
+
+export function ChatPanel({ userId }: { userId: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -62,6 +139,9 @@ export function ChatPanel() {
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  /** 저장해 둔 것을 읽기 «전»에 저장해 덮어쓰지 않기 위한 빗장 */
+  const [ready, setReady] = useState(false);
+  const restored = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   /*
@@ -82,9 +162,28 @@ export function ChatPanel() {
       } catch {
         /* 저장소를 막아 둔 브라우저 — 닫힌 채로 시작합니다 */
       }
+      // 나눈 이야기도 같은 타이밍에 되살립니다 (하이드레이션 뒤)
+      const saved = load(userId);
+      if (saved) {
+        setTurns(saved.turns);
+        setSessionId(saved.sessionId);
+        restored.current = true;
+      }
+      setReady(true);
     }, 0);
     return () => clearTimeout(timer);
-  }, []);
+  }, [userId]);
+
+  /*
+   * **되살리기 전에는 저장하지 않습니다.**
+   *
+   * 첫 렌더의 빈 `turns` 를 그대로 쓰면 저장해 둔 대화를 **읽기도 전에
+   * 빈 값으로 덮습니다.** `ready` 가 그 순서를 지킵니다.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    save(userId, { sessionId, turns });
+  }, [ready, userId, sessionId, turns]);
 
   useEffect(() => {
     if (!open || status) return;
@@ -147,6 +246,12 @@ export function ChatPanel() {
       return;
     }
     setSessionId(r.data.sessionId);
+    /*
+     * 되살린 대화를 **모델이 못 이어받았을 때**만 한 번 말합니다. 말풍선은
+     * 남아 있는데 모델이 앞을 모르면 사용자는 「왜 갑자기 모르지」로 헤맵니다.
+     */
+    const lost = !r.data.resumed && restored.current;
+    restored.current = false;
     setTurns((t) => [
       ...t,
       {
@@ -155,9 +260,18 @@ export function ChatPanel() {
         ms: r.data.ms,
         created: r.data.created,
         note: r.data.registerNote,
+        lostThread: lost,
       },
     ]);
     if (r.data.created) router.refresh();
+  }
+
+  /** 나눈 이야기를 지웁니다 — 남는 곳이 생겼으니 **비울 자리**도 있어야 합니다 */
+  function clearHistory() {
+    setTurns([]);
+    setSessionId(null);
+    restored.current = false;
+    // 저장소는 건드리지 않습니다 — 비면 `save` 가 열쇠째 없앱니다
   }
 
   /**
@@ -228,10 +342,26 @@ export function ChatPanel() {
       <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3">
         <Sparkles className="text-muted-foreground size-4" />
         <span className="text-sm font-medium">도우미</span>
+        {/*
+          대화가 브라우저에 남으므로 **비울 자리**가 있어야 합니다.
+          없으면 지난주 이야기를 계속 이고 다니게 됩니다.
+        */}
+        {turns.length > 0 && (
+          <Button
+            size="icon"
+            variant="ghost"
+            className="ml-auto"
+            aria-label="대화 지우기"
+            title="나눈 이야기를 지웁니다"
+            onClick={clearHistory}
+          >
+            <Eraser className="size-4" />
+          </Button>
+        )}
         <Button
           size="icon"
           variant="ghost"
-          className="ml-auto"
+          className={turns.length > 0 ? undefined : "ml-auto"}
           aria-label="도우미 닫기"
           onClick={() => toggle(false)}
         >
@@ -288,6 +418,17 @@ export function ChatPanel() {
               `rehype-sanitize` 를 지나므로 모델이 무엇을 뱉든 태그가 살아
               나가지 않습니다 (`NFR-SEC-007`).
             */}
+            {/*
+              **앞을 못 이어받았으면 그렇다고 말합니다.** 말풍선은 위에 그대로
+              남아 있는데 모델만 기억을 잃은 상태라, 안 말하면 사용자는
+              「방금 말했잖아」로 헤맵니다.
+            */}
+            {t.lostThread && (
+              <p className="text-muted-foreground mb-2 border-b pb-2 text-xs">
+                앞의 대화를 이어가지 못했습니다 — 위 내용은 남아 있지만 도우미는
+                여기서부터 다시 시작합니다.
+              </p>
+            )}
             {t.role === "bot" ? (
               <MarkdownViewer content={t.text} className="prose-sm" />
             ) : (

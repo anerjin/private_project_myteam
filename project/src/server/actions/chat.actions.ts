@@ -35,6 +35,8 @@ export interface ChatAnswer {
   sessionId: string | null;
   ms: number;
   toolsEnabled: boolean;
+  /** 앞의 대화를 이어붙였는가 — `false` 면 모델은 앞을 기억하지 못합니다 */
+  resumed: boolean;
   /** 자동 등록이 일어났으면 그 결과 — 화면이 링크와 「되돌리기」를 그립니다 */
   created?: { id: string; title: string; href: string };
   /** 등록을 시도했지만 못 한 이유 (중복·검증 실패) */
@@ -89,6 +91,8 @@ export async function askChatAction(
       sessionId: r.sessionId,
       ms: r.ms,
       toolsEnabled: r.toolsEnabled,
+      // 넘긴 세션이 살아 있었는가. 화면이 「이어가지 못했다」를 말합니다
+      resumed: parsed.data.sessionId ? r.resumed : true,
     };
     if (!proposal) return ok(base);
 

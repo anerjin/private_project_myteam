@@ -554,3 +554,87 @@ test("⑥ CLI 로 넣은 자료가 화면에 «CLI 수집»으로 뜬다", async
   });
   expect(row.sourceChannel).toBe("MCP");
 });
+
+/* ────────────────────────────────────────────────────────────────────────
+ * ⑦ 도우미 대화가 새로고침을 넘어간다
+ * ──────────────────────────────────────────────────────────────────────── */
+test("⑦ 도우미 대화가 새로고침을 넘어가고, 사람마다 따로 남는다", async ({
+  page,
+}) => {
+  /*
+   * **모델을 부르지 않습니다.**
+   *
+   * 여기서 볼 것은 「저장하고 되살리는 배선」이지 모델의 답이 아닙니다.
+   * 한 번 물으면 10초가 걸리고 **구독 사용량**을 씁니다 — E2E 가 돌 때마다
+   * 그걸 태우면 검사가 사람의 몫을 갉아먹습니다. 그래서 대화를 «심고»
+   * 되살아나는지만 봅니다.
+   *
+   * 되살린 대화를 모델이 못 이어받는 경우(`No conversation found`)는
+   * `verify:chat` 이 실제로 불러서 봅니다 — 거기는 한 번만 돕니다.
+   */
+  const me = await makeUser({ tag: "chat", role: "MEMBER" });
+  await signIn(page, me.username);
+  await page.goto("/resources");
+
+  const KEY = `qb.chat.hist.${me.id}`;
+  const MARK = "사번은 DOI-7788";
+
+  await page.evaluate(
+    ([key, mark]) => {
+      window.localStorage.setItem("qb.chat.open", "1");
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({
+          sessionId: null,
+          turns: [
+            { role: "me", text: mark },
+            { role: "bot", text: "알겠습니다." },
+          ],
+        })
+      );
+    },
+    [KEY, MARK] as const
+  );
+
+  await page.reload({ waitUntil: "networkidle" });
+  const panel = page.getByLabel("도우미");
+  await expect(panel.getByText(MARK)).toBeVisible({ timeout: 15_000 });
+
+  // 다른 화면으로 옮겨도 남습니다 — 패널은 레이아웃에 있습니다
+  await page.goto("/bookmarks");
+  await expect(panel.getByText(MARK)).toBeVisible({ timeout: 15_000 });
+
+  /*
+   * **다른 사람 것은 안 보입니다.** 한 PC 를 여럿이 쓰면 앞사람 대화가
+   * 뒷사람에게 보입니다 — 열쇠에 `userId` 가 들어가는 이유입니다.
+   */
+  const other = await makeUser({ tag: "chat2", role: "MEMBER" });
+  /*
+   * **쿠키만 지웁니다.** `signIn` 은 `/login` 으로 가는데 로그인한 채로는
+   * 되돌려보내져 아이디 칸이 없습니다. 그리고 `localStorage` 는 **남겨야**
+   * 합니다 — 남아 있는데도 안 보이는 것이 이 검사의 요점입니다.
+   */
+  await page.context().clearCookies();
+  await signIn(page, other.username);
+  await page.goto("/resources");
+  await page.waitForTimeout(1_000);
+  await expect(panel.getByText(MARK)).toHaveCount(0);
+
+  /*
+   * **비울 자리가 있고, 비우면 저장소에서도 없어집니다.** 「지웠는데 껍데기가
+   * 남는」 상태를 한 번 만들었습니다 — 지우자마자 저장 이펙트가 돌아
+   * `{turns: []}` 를 도로 써 넣었습니다.
+   */
+  await page.context().clearCookies();
+  await signIn(page, me.username);
+  await page.goto("/resources");
+  await expect(panel.getByText(MARK)).toBeVisible({ timeout: 15_000 });
+  await panel.getByRole("button", { name: "대화 지우기" }).click();
+  await expect(panel.getByText(MARK)).toHaveCount(0);
+
+  const left = await page.evaluate((key) => window.localStorage.getItem(key), KEY);
+  expect(left).toBeNull();
+
+  await page.reload({ waitUntil: "networkidle" });
+  await expect(panel.getByText(MARK)).toHaveCount(0);
+});

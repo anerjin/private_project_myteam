@@ -94,8 +94,12 @@ export default async function ServiceLayout({ children }: LayoutProps<"/">) {
         `useSearchParams` 를 쓰므로 `Suspense` 경계가 필요합니다 — 없으면 이
         레이아웃 아래 모든 화면이 통째로 클라이언트 렌더로 밀립니다.
       */}
+      {/*
+        `userId` 는 **저장소 열쇠**입니다. 나눈 이야기가 이 브라우저에 남는데,
+        한 PC 를 여럿이 쓰면 앞사람 대화가 뒷사람에게 보입니다.
+      */}
       <Suspense fallback={null}>
-        <ChatPanel />
+        <ChatPanel userId={session.userId} />
       </Suspense>
     </SidebarProvider>
   );
