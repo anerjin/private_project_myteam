@@ -51,3 +51,6 @@ next-env.d.ts
 test-results/
 playwright-report/
 .playwright/
+
+# Playwright MCP 가 남기는 콘솔·스냅샷 로그 (디오가 페이지를 열 때)
+.playwright-mcp/
