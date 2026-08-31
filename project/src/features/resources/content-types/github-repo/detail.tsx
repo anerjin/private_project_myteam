@@ -25,14 +25,44 @@ export function Detail({ resource }: { resource: Resource }) {
 
   return (
     <div className="space-y-4">
+      {/*
+        **「못 읽었다」와 「사라졌다」는 다른 사실입니다.**
+
+        `isGone` 은 GitHub 이 404 를 준 것뿐이고, 그 안에는 세 가지가 섞여
+        있습니다: 삭제됨 · 비공개로 바뀜 · **처음부터 못 읽음**(비공개이거나
+        아직 없는 주소).
+
+        전에는 전부 「원본이 사라졌습니다 … 아래 아카이브를 이용하세요」라고
+        했습니다. 한 번도 읽은 적 없는 저장소에는 **거짓**이고, 아카이브가
+        없을 때는 **없는 것을 가리킵니다.** 사내 저장소를 등록한 운영자가
+        정확히 그 화면을 봤습니다.
+
+        가르는 신호는 **메타를 한 번이라도 받았는가**입니다 — 받았으면
+        `stars` 가 있습니다.
+      */}
       {d.isGone && (
         <Alert variant="destructive">
           <AlertTriangle />
-          <AlertTitle>원본이 사라졌습니다</AlertTitle>
-          <AlertDescription>
-            저장소가 삭제되었거나 비공개로 전환되었습니다. 아래 아카이브를
-            이용하세요.
-          </AlertDescription>
+          {d.stars === undefined ? (
+            <>
+              <AlertTitle>이 저장소를 읽지 못했습니다</AlertTitle>
+              <AlertDescription>
+                한 번도 읽은 적이 없습니다 — <b>비공개이거나 아직 없는 주소</b>
+                입니다. 비공개 저장소는 관리자가 GitHub 토큰을 넣어야 읽을 수
+                있습니다. 주소가 맞는지도 함께 확인해 보세요.
+              </AlertDescription>
+            </>
+          ) : (
+            <>
+              <AlertTitle>원본이 사라졌습니다</AlertTitle>
+              <AlertDescription>
+                저장소가 삭제되었거나 비공개로 전환되었습니다.
+                {d.archiveStatus === "DONE"
+                  ? " 보관해 둔 아카이브로 소스를 받을 수 있습니다."
+                  : " 아카이브를 받아 둔 적이 없어 요약·README 만 남아 있습니다."}
+              </AlertDescription>
+            </>
+          )}
         </Alert>
       )}
 

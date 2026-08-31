@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   refreshGithubMetaAction,
@@ -69,16 +68,17 @@ export function GithubPanel({
         불가」를 문제로 적어 뒀습니다. 그러니 사라졌을 때 **아카이브를 강조**해야
         하고, 아카이브가 없으면 그 사실도 말해야 합니다.
       */}
-      {isGone && (
-        <Alert variant={done ? "default" : "destructive"}>
-          <AlertTitle>원본 저장소를 찾을 수 없습니다</AlertTitle>
-          <AlertDescription>
-            {done
-              ? "삭제됐거나 비공개로 바뀌었습니다. 보관해 둔 아카이브로 소스를 받을 수 있습니다."
-              : "삭제됐거나 비공개로 바뀌었고, 아카이브도 없습니다. 이 자료의 요약·README 만 남아 있습니다."}
-          </AlertDescription>
-        </Alert>
-      )}
+      {/*
+        **같은 말을 두 번 하지 않습니다.**
+
+        여기와 상세 위쪽이 「저장소를 찾을 수 없습니다」를 나란히 띄우고
+        있었습니다. 게다가 이쪽은 「아카이브도 없습니다」라고 하는데 상세
+        위쪽은 같은 화면에서 「아래 아카이브를 이용하세요」라고 했습니다 —
+        **한 화면이 서로 반대되는 말을 했습니다.**
+
+        저장소 상태 안내는 `content-types/github-repo/detail.tsx` 한 곳으로
+        모았습니다. 이 패널은 **아카이브** 이야기만 합니다.
+      */}
 
       <div className="flex flex-wrap gap-2">
         {done && (
@@ -120,10 +120,26 @@ export function GithubPanel({
               > 만듭니다. `runNow` 가 「돌고 있는 것」을 두 번 안 집으므로
               > 살아 있는 실행과 겹치지 않습니다.
             */}
+            {/*
+              **읽지 못하는 저장소는 아카이브도 못 받습니다.**
+
+              그런데 버튼이 그대로 있어서, 운영자가 눌렀고 작업이
+              `HTTP 404` 로 실패해 실패 목록에 한 줄이 쌓였습니다.
+              **눌러도 안 되는 버튼**은 이 저장소가 반복해서 지워 온 것이라,
+              잠그고 «왜 안 되는지»를 함께 답니다.
+
+              이미 받아 둔 아카이브가 있으면 잠그지 않습니다 — 원본이 사라진
+              뒤에도 다시 시도해 볼 이유가 있습니다.
+            */}
             <Button
               variant="outline"
               size="sm"
-              disabled={pending}
+              disabled={pending || (isGone && !done)}
+              title={
+                isGone && !done
+                  ? "저장소를 읽지 못해 아카이브를 받을 수 없습니다"
+                  : undefined
+              }
               onClick={() =>
                 run(
                   () => startArchiveAction(resourceId),

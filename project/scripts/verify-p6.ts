@@ -48,6 +48,9 @@ const madeUsers: string[] = [];
 const madeResources: string[] = [];
 const madeKeys: string[] = [];
 
+/** 「한 번도 못 읽은」 저장소의 slug — 화면 문구를 `checkScreens` 가 봅니다 */
+let goneSlug: string | null = null;
+
 async function mkUser(tag: string) {
   const u = await db.user.create({
     data: {
@@ -334,6 +337,15 @@ async function run() {
       again.attempts > done.attempts,
       `${done.attempts} → ${again.attempts}`
     );
+
+    const row = await db.githubRepo.findUniqueOrThrow({
+      where: { resourceId: created.id },
+      select: { isGone: true, stars: true },
+    });
+    check("못 읽으면 isGone 이 선다", row.isGone === true);
+    check("한 번도 못 읽었으므로 stars 가 비어 있다", row.stars === null);
+    // 화면이 그 둘을 구별해 말하는지는 `checkScreens` 가 봅니다
+    goneSlug = created.slug;
   }
 
   console.log("\n★ 첨부 — 3중 검증 (NFR-SEC-009 · FR-FILE-004)");
@@ -640,6 +652,33 @@ async function checkScreens(userId: string) {
     }
     return fetch(BASE + path, { headers: { cookie, ...headers } });
   };
+
+  /*
+   * **「못 읽었다」와 「사라졌다」를 화면이 구별해 말하는가** (`FR-GH-007`).
+   *
+   * `isGone` 은 404 하나로 세 가지를 덮습니다 — 삭제됨 · 비공개로 바뀜 ·
+   * **처음부터 못 읽음**. 화면은 전부 「원본이 사라졌습니다 … 아래 아카이브를
+   * 이용하세요」라고 말하고 있었습니다. 사내 저장소를 등록한 운영자가 그
+   * 화면을 봤고, **아카이브도 없는데 아카이브를 가리키고** 있었습니다.
+   *
+   * service 로는 안 잡히는 결함입니다 — 문구는 화면에만 있습니다.
+   */
+  if (goneSlug) {
+    const r = await get(`/resources/github-repo/${encodeURI(goneSlug)}`);
+    const html = r ? await r.text() : "";
+    check("못 읽은 저장소 상세가 열린다", r?.status === 200, `${r?.status}`);
+    check(
+      "«읽지 못했다»고 말한다",
+      html.includes("읽지 못했습니다"),
+      "한 번도 못 읽은 저장소에 «사라졌다»는 거짓이다"
+    );
+    check("«사라졌다»고 하지 않는다", !html.includes("원본이 사라졌습니다"));
+    check(
+      "없는 아카이브를 가리키지 않는다",
+      !html.includes("아래 아카이브를"),
+      "아카이브가 없는데 이용하라고 하면 갈 곳이 없다"
+    );
+  }
 
   const p = parseResourceInput({
     type: "GITHUB_REPO",
