@@ -949,6 +949,48 @@ async function run() {
     check("404 는 GONE", d.sourceStatus === "GONE", String(d.sourceStatus));
 
     /*
+     * ★ **2단계 — 그려 보고 판단하는 길.**
+     *
+     * `CHECK_LINK` 는 「200 인데 볼 것이 없는」 주소만 브라우저로 다시 봅니다.
+     * 그런데 배치를 그냥 돌리면 그 길이 **한 번도 안 지나갈 수 있습니다** —
+     * 실제로 실측에서 `rendered: 0` 이 나왔고, 그 상태로 두면 아무도 안 도는
+     * 코드를 「된다」고 믿게 됩니다 (`DEC-044`: 0건은 증거가 아니다).
+     *
+     * 그래서 여기서는 **직접 부릅니다.** 바깥 인터넷은 안 씁니다.
+     */
+    const { probeRendered } = await import("@/server/jobs/scheduled");
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch({ headless: true });
+    try {
+      check(
+        "렌더해서 보면 살아 있는 화면은 OK",
+        (await probeRendered(browser, `${BASE}/login`)) === "OK"
+      );
+      /*
+       * 404 라 그릴 것이 없습니다. **「모르겠다」는 `GONE` 이 아니라 `MOVED`**
+       * 입니다 — 렌더 단계는 추측이고, 추측으로 「원본이 없어졌다」고 못 박으면
+       * 되돌리는 사람이 아무도 없습니다.
+       */
+      check(
+        "그려도 볼 것이 없으면 MOVED",
+        (await probeRendered(browser, `${BASE}/api/vp8-not-here`)) === "MOVED",
+        "«없다»가 아니라 «확인 못 했다»"
+      );
+    } finally {
+      await browser.close();
+    }
+
+    /*
+     * **HTML 이 아닌 응답에는 내용 판정을 안 합니다.** `/api/health` 는 JSON
+     * 이라 글자가 적은데, 거기에 「껍데기인가」를 들이대면 멀쩡한 자료가
+     * 전부 `MOVED` 로 뒤집힙니다. 바로 위 「사는 링크는 OK」가 그 증거입니다.
+     */
+    const healthType = (
+      await fetch(`${BASE}/api/health`).then((r) => r.headers.get("content-type"))
+    )?.includes("json");
+    check("health 는 JSON 이다", healthType === true, "위 검사의 전제");
+
+    /*
      * **로그인 뒤의 주소는 `GONE` 이 아닙니다.** 확인할 수 없는 것을
      * 「죽었다」로 표시하면 멀쩡한 자료에 「원본 없음」이 붙고, 되돌리는
      * 사람이 아무도 없습니다.

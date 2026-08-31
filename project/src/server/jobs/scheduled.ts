@@ -1,5 +1,7 @@
 import "server-only";
 
+import { chromium, type Browser } from "playwright";
+
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { safeFetch } from "@/lib/safe-fetch";
@@ -69,14 +71,98 @@ const LINK_TIMEOUT_MS = 8000;
 const SELF = [new URL(env.APP_URL).origin];
 
 /**
- * 한 링크의 생존.
+ * 페이지가 「없다」고 스스로 말하는 문구.
  *
- * **`HEAD` 를 먼저 씁니다.** 본문을 안 받으므로 빠르고, 200건을 순회할 때
- * 차이가 큽니다. 다만 `HEAD` 를 막아 둔 서버가 있어 `405`·`501` 이면
- * `GET` 으로 한 번 더 봅니다 — 그것을 「죽었다」로 세면 멀쩡한 링크가
- * 대량으로 `GONE` 이 됩니다.
+ * **여기 걸리면 `MOVED` 입니다 — `GONE` 이 아닙니다.** 이것은 추측이고,
+ * 추측으로 「원본이 없어졌다」고 못 박으면 되돌리는 사람이 아무도 없습니다.
+ * 게다가 개발팀 자료실에는 **「404 에러 해결법」 같은 제목이 실제로 있습니다.**
+ * `MOVED` 는 「사람이 보고 판단하라」는 뜻이라 그 자리에 맞습니다.
  */
-async function probe(url: string): Promise<"OK" | "MOVED" | "GONE"> {
+const SOFT_404 = [
+  /\b404\b/,
+  /not\s*found/i,
+  /page\s+(?:does\s*not|doesn'?t)\s+exist/i,
+  /페이지를?\s*찾을\s*수\s*없/,
+  /존재하지\s*않는\s*페이지/,
+];
+
+/** 본문을 이만큼만 읽습니다 — `<title>` 은 앞에 있고, 나머지는 볼 이유가 없습니다 */
+const BODY_PEEK_BYTES = 64 * 1024;
+
+/**
+ * **문턱이 둘인 이유 — 뜻이 다릅니다.**
+ *
+ * | | 값 | 틀렸을 때의 대가 |
+ * | --- | --- | --- |
+ * | `PEEK_TEXT_MIN` | 200 | 브라우저를 한 번 더 엽니다 — **싸다** |
+ * | `RENDERED_TEXT_MIN` | 30 | 멀쩡한 자료에 「확인 필요」가 붙습니다 — **비싸다** |
+ *
+ * 그래서 앞은 넉넉하게(의심되면 다시 본다), 뒤는 **아주 엄격하게**(다 그렸는데도
+ * 사실상 아무것도 없을 때만) 잡습니다.
+ *
+ * > 처음엔 둘 다 200 이었습니다. 그랬더니 **우리 로그인 화면(94자)** 이
+ * > 「죽었다」로 나왔습니다 — 짧지만 멀쩡히 살아 있는 화면입니다. 한국어는
+ * > 글자당 정보가 많아 200자면 꽤 긴 문서입니다.
+ */
+const PEEK_TEXT_MIN = 200;
+const RENDERED_TEXT_MIN = 30;
+
+/** 앞부분만 읽고 **스트림을 끊습니다** — 죽은 링크 확인에 5MB 를 받을 이유가 없습니다 */
+async function peek(res: Response): Promise<string> {
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (size < BODY_PEEK_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      size += value.length;
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  return new TextDecoder("utf-8", { fatal: false }).decode(
+    Buffer.concat(chunks.map((c) => Buffer.from(c)))
+  );
+}
+
+function titleOf(html: string): string {
+  return /<title[^>]*>([\s\S]{0,300}?)<\/title>/i.exec(html)?.[1]?.trim() ?? "";
+}
+
+/** 스크립트·스타일을 뺀 «사람이 읽는» 글자 수 */
+function visibleTextLength(html: string): number {
+  return html
+    .replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim().length;
+}
+
+interface HttpProbe {
+  verdict: "OK" | "MOVED" | "GONE";
+  /**
+   * HTTP 는 «있다»고 했는데 **판단할 내용이 없었습니다.**
+   *
+   * JS 로 그리는 사이트는 첫 HTML 이 빈 껍데기라, 문서가 사라져도 200 이고
+   * 본문도 비어 있습니다 — **HTTP 만으로는 구별할 수 없습니다.** 이때만
+   * 브라우저를 엽니다.
+   */
+  needsRender: boolean;
+}
+
+/**
+ * 한 링크의 생존 — 1단계, HTTP.
+ *
+ * > **전에는 `HEAD` 를 먼저 썼습니다.** 본문을 안 받아 빠르지만, 그래서
+ * > **본문을 볼 수 없었습니다** — 문서가 사라진 자리에 「Page not found」를
+ * > 200 으로 돌려주는 사이트를 전부 `OK` 로 셌습니다. 지금은 `GET` 한 번으로
+ * > 끝내고 앞 64KB 만 읽습니다. 요청 수는 오히려 줄었습니다(`405` 재시도가
+ * > 없어졌습니다).
+ */
+async function probeHttp(url: string): Promise<HttpProbe> {
   const ctl = AbortSignal.timeout(LINK_TIMEOUT_MS);
   try {
     /*
@@ -90,24 +176,68 @@ async function probe(url: string): Promise<"OK" | "MOVED" | "GONE"> {
      * `redirect: "follow"` 도 함께 사라졌습니다. 바깥 주소가 사설 IP 로
      * 튕기면 첫 검사를 통과한 뒤에 안쪽으로 들어갑니다.
      */
-    let { res, finalUrl } = await safeFetch(url, { method: "HEAD", signal: ctl }, SELF);
-    if (res.status === 405 || res.status === 501) {
-      ({ res, finalUrl } = await safeFetch(url, { method: "GET", signal: ctl }, SELF));
+    const { res, finalUrl } = await safeFetch(
+      url,
+      { method: "GET", signal: ctl },
+      SELF
+    );
+    if (res.status === 404 || res.status === 410) {
+      await res.body?.cancel().catch(() => {});
+      return { verdict: "GONE", needsRender: false };
     }
-    if (res.status === 404 || res.status === 410) return "GONE";
     if (!res.ok) {
       /*
        * **`5xx`·`403` 을 「죽었다」로 세지 않습니다.** 서버가 잠깐 아프거나
        * 봇을 막는 것일 수 있고, 그때 `GONE` 으로 표시하면 멀쩡한 자료에
        * 「원본 없음」이 붙습니다 — 되돌리는 사람이 아무도 없습니다.
        */
-      return "MOVED";
+      await res.body?.cancel().catch(() => {});
+      return { verdict: "MOVED", needsRender: false };
     }
+
     /*
      * 최종 주소가 다르면 옮겨 간 것입니다. **자동으로 고치지 않습니다** —
      * 단축 URL·추적 리다이렉트도 여기 걸리므로, 사람이 보고 판단합니다.
      */
-    return finalUrl !== url ? "MOVED" : "OK";
+    if (finalUrl !== url) {
+      await res.body?.cancel().catch(() => {});
+      return { verdict: "MOVED", needsRender: false };
+    }
+
+    /*
+     * **HTML 일 때만 내용을 봅니다.**
+     *
+     * 아래 두 판정(제목이 «없다»고 말하는가 · 글자가 없는 껍데기인가)은
+     * **문서를 전제로 합니다.** JSON API·PDF·이미지에 들이대면 「글자가
+     * 적으니 죽었다」가 되어 멀쩡한 자료가 전부 `MOVED` 로 뒤집힙니다 —
+     * 실제로 `/api/health` 를 링크로 둔 검증이 그렇게 깨질 뻔했습니다.
+     * HTML 이 아니면 **200 은 그냥 200 입니다.**
+     */
+    const type = res.headers.get("content-type") ?? "";
+    if (!type.includes("text/html")) {
+      await res.body?.cancel().catch(() => {});
+      return { verdict: "OK", needsRender: false };
+    }
+
+    const html = await peek(res);
+
+    /*
+     * **200 인데 「없다」고 적혀 있는 페이지** — 이른바 soft 404.
+     * 문서 사이트가 개편되면 흔합니다. HTTP 만 보면 영영 `OK` 입니다.
+     */
+    if (SOFT_404.some((re) => re.test(titleOf(html)))) {
+      return { verdict: "MOVED", needsRender: false };
+    }
+
+    /*
+     * 글자가 거의 없으면 **아직 안 그려진 것**입니다. 여기서 `OK` 라고 하면
+     * 「HTTP 가 200 이었다」를 「자료가 살아 있다」로 번역하는 것입니다 —
+     * 그건 확인이 아닙니다. 브라우저로 한 번 더 봅니다.
+     */
+    return {
+      verdict: "OK",
+      needsRender: visibleTextLength(html) < PEEK_TEXT_MIN,
+    };
   } catch {
     /*
      * 타임아웃 · DNS 실패 · **SSRF 가드가 거부한 내부 주소**(`UnsafeUrlError`).
@@ -118,7 +248,48 @@ async function probe(url: string): Promise<"OK" | "MOVED" | "GONE"> {
      * 없는 것을 죽었다고 표시하면 멀쩡한 자료에 『원본 없음』이 붙고 되돌리는
      * 사람이 아무도 없다」고 적어 둔 그 원칙입니다.
      */
+    return { verdict: "MOVED", needsRender: false };
+  }
+}
+
+/**
+ * 2단계 — **그려 보고 판단합니다.**
+ *
+ * 1단계가 「200 인데 볼 것이 없다」고 한 주소만 옵니다. 브라우저 하나를
+ * **배치 전체가 나눠 씁니다** — 링크마다 띄우면 한 번에 1~2초씩 붙습니다.
+ */
+export async function probeRendered(
+  browser: Browser,
+  url: string
+): Promise<"OK" | "MOVED"> {
+  const ctx = await browser.newContext({ locale: "ko-KR" });
+  try {
+    const page = await ctx.newPage();
+    await page.goto(url, {
+      waitUntil: "domcontentloaded",
+      timeout: LINK_TIMEOUT_MS,
+    });
+    // 첫 페인트 뒤에 그리는 사이트가 있어 잠깐 기다립니다
+    await page.waitForTimeout(1500);
+
+    const title = await page.title();
+    if (SOFT_404.some((re) => re.test(title))) return "MOVED";
+
+    const text = (await page.locator("body").innerText().catch(() => "")).trim();
+    if (SOFT_404.some((re) => re.test(text.slice(0, 400)))) return "MOVED";
+
+    /*
+     * 다 그렸는데도 **사실상 아무것도 없으면** 확인하지 못한 것입니다.
+     * 「없다」가 아니라 「모르겠다」이고, 이 시스템에서 그건 `MOVED` 입니다.
+     *
+     * 문턱이 낮은 이유는 위 표에 있습니다 — 여기서 틀리면 멀쩡한 자료에
+     * 「확인 필요」가 붙고, 그걸 되돌리는 사람이 아무도 없습니다.
+     */
+    return text.length < RENDERED_TEXT_MIN ? "MOVED" : "OK";
+  } catch {
     return "MOVED";
+  } finally {
+    await ctx.close();
   }
 }
 
@@ -129,16 +300,43 @@ register("CHECK_LINK", async () => {
   });
 
   const counts = { OK: 0, MOVED: 0, GONE: 0 };
+  const toRender: { id: string; url: string }[] = [];
+
   for (const t of targets) {
-    const status = await probe(t.url!);
-    counts[status]++;
+    const { verdict, needsRender } = await probeHttp(t.url!);
+    if (needsRender) {
+      // 판정을 미룹니다 — 2단계가 끝나야 무엇인지 압니다
+      toRender.push({ id: t.id, url: t.url! });
+      continue;
+    }
+    counts[verdict]++;
     await db.resource.update({
       where: { id: t.id },
-      data: { sourceStatus: status, sourceCheckedAt: new Date() },
+      data: { sourceStatus: verdict, sourceCheckedAt: new Date() },
     });
   }
 
-  return { checked: targets.length, ...counts };
+  /*
+   * **브라우저는 필요할 때만 띄웁니다.** 대부분의 사이트는 1단계에서 끝납니다 —
+   * 한 건도 의심스럽지 않으면 크로미움은 아예 안 뜹니다.
+   */
+  if (toRender.length > 0) {
+    const browser = await chromium.launch({ headless: true });
+    try {
+      for (const t of toRender) {
+        const verdict = await probeRendered(browser, t.url);
+        counts[verdict]++;
+        await db.resource.update({
+          where: { id: t.id },
+          data: { sourceStatus: verdict, sourceCheckedAt: new Date() },
+        });
+      }
+    } finally {
+      await browser.close();
+    }
+  }
+
+  return { checked: targets.length, rendered: toRender.length, ...counts };
 });
 
 /* ── 일 1회: 30일 지난 휴지통 정리 ────────────────────────────────── */
