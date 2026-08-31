@@ -215,13 +215,25 @@ function NoteEditor({
         </DialogTitle>
       </DialogHeader>
 
+      {/*
+        **테두리는 지우되 여백은 남깁니다.**
+
+        처음에 `px-0` 로 두었더니 글자가 상자 끝에 붙어 「입력칸」으로 안
+        보였습니다. 테두리를 없앤 것은 킵처럼 «그냥 글을 쓰는» 느낌을 주려던
+        것이고, 그러려면 **여백이 더 필요합니다** — 테두리가 하던 일을
+        여백이 대신해야 합니다.
+
+        `focus-visible:ring-0` 도 함께 지웠었는데, 그건 **키보드로 쓰는
+        사람에게서 «지금 어디에 있는지»를 뺏는** 것입니다. 테두리가 없으니
+        더 그렇습니다. 링은 그대로 둡니다.
+      */}
       <Input
         aria-label="제목"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         maxLength={NOTE_TITLE_MAX}
         placeholder="제목"
-        className="border-0 px-0 text-base font-medium shadow-none focus-visible:ring-0"
+        className="h-auto border-0 px-3 py-2.5 text-base font-medium shadow-none"
         autoFocus
       />
       {errors.title?.[0] && (
@@ -235,7 +247,7 @@ function NoteEditor({
         maxLength={NOTE_BODY_MAX}
         rows={12}
         placeholder="메모를 적으세요."
-        className="resize-none border-0 px-0 shadow-none focus-visible:ring-0"
+        className="resize-none border-0 px-3 py-2.5 shadow-none"
       />
       {errors.body?.[0] && (
         <p className="text-destructive text-sm">{errors.body[0]}</p>
