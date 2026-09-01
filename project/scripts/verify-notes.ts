@@ -112,8 +112,8 @@ async function main() {
     )
   );
   check(
-    "남은 못 지운다",
-    await throwsNotFound(() => noteService.remove(made.id, other.id))
+    "남은 못 버린다",
+    await throwsNotFound(() => noteService.moveToTrash(made.id, other.id))
   );
   check(
     "남의 목록에 안 뜬다",
@@ -157,25 +157,108 @@ async function main() {
     (await noteService.titleFor(made.id, admin.id)) === null
   );
 
-  console.log("\n★ 지우면 끝이다 — 휴지통이 없다 (FR-NOTE-003)");
-  await noteService.remove(made.id, me.id);
-  check(
-    "지운 뒤에는 못 읽는다",
-    await throwsNotFound(() => noteService.get(made.id, me.id))
-  );
   /*
-   * **행이 남아 있으면 안 됩니다.** 자료는 `deleted_at` 으로 30일 남지만
-   * (`FR-RES-008`) 메모는 그러지 않기로 했습니다. 소프트 삭제로 바뀌는 날
-   * 이 검사가 잡습니다.
+   * ★ **휴지통** (`FR-NOTE-003`·`005`).
+   *
+   * 처음에는 「지우면 끝」이었습니다. 그러다 정리 스크립트의 조건 없는
+   * `deleteMany({})` 로 운영자가 쓴 메모가 사라졌고, **되돌릴 길이 하나도
+   * 없었습니다** — 휴지통도 없고 백업은 표가 생기기 전 것뿐이었습니다.
+   *
+   * 그래서 이 검사는 「지워졌는가」가 아니라 **「되살릴 수 있는가」**를 봅니다.
    */
-  const row = await db.note.findUnique({ where: { id: made.id } });
-  check("행 자체가 사라진다", row === null, "휴지통을 두지 않기로 했다");
+  console.log("\n★ 휴지통 — 지운 것을 되살릴 수 있다 (FR-NOTE-003·005)");
+  await noteService.moveToTrash(made.id, me.id);
+  check(
+    "버리면 목록에서 사라진다",
+    (await noteService.listFor(me.id)).every((n) => n.id !== made.id)
+  );
+  check(
+    "버린 것은 열리지 않는다",
+    await throwsNotFound(() => noteService.get(made.id, me.id)),
+    "되살린 뒤에 엽니다"
+  );
+  check(
+    "휴지통에는 있다",
+    (await noteService.listTrash(me.id)).some((n) => n.id === made.id)
+  );
+  check("휴지통 수를 센다", (await noteService.countTrash(me.id)) === 1);
+  check(
+    "본 목록 수에는 안 들어간다",
+    (await noteService.countFor(me.id)) === 0
+  );
+
+  // **행은 남아 있어야 합니다** — 이것이 휴지통의 전부입니다
+  const trashed = await db.note.findUnique({ where: { id: made.id } });
+  check("행은 남아 있다", trashed !== null && trashed.deletedAt !== null);
+
+  check(
+    "남은 남의 휴지통을 못 본다",
+    (await noteService.listTrash(other.id)).length === 0
+  );
+  check(
+    "남은 되살리지 못한다",
+    await throwsNotFound(() => noteService.restore(made.id, other.id))
+  );
+  check(
+    "관리자도 되살리지 못한다",
+    await throwsNotFound(() => noteService.restore(made.id, admin.id))
+  );
+
+  await noteService.restore(made.id, me.id);
+  check(
+    "되살리면 돌아온다",
+    (await noteService.get(made.id, me.id)).title === "고친 제목"
+  );
+  check("휴지통이 비었다", (await noteService.countTrash(me.id)) === 0);
+
+  /*
+   * **영구 삭제는 휴지통에서만** 합니다. 목록에서 바로 지우는 길을 두지
+   * 않는 것이 휴지통의 요점입니다 — 두면 없는 것과 같습니다.
+   */
+  check(
+    "살아 있는 메모는 영구 삭제되지 않는다",
+    await throwsNotFound(() => noteService.purge(made.id, me.id)),
+    "휴지통을 거쳐야 합니다"
+  );
+
+  await noteService.moveToTrash(made.id, me.id);
+  await noteService.purge(made.id, me.id);
+  check(
+    "휴지통에서 영구 삭제하면 행이 사라진다",
+    (await db.note.findUnique({ where: { id: made.id } })) === null
+  );
+
+  // 휴지통 비우기 — 내 것만
+  const mineA = await noteService.create(me.id, { title: "비울 것 1", body: "" });
+  const mineB = await noteService.create(me.id, { title: "비울 것 2", body: "" });
+  const theirs = await noteService.create(other.id, { title: "남의 것", body: "" });
+  await noteService.moveToTrash(mineA.id, me.id);
+  await noteService.moveToTrash(mineB.id, me.id);
+  await noteService.moveToTrash(theirs.id, other.id);
+  const purged = await noteService.emptyTrash(me.id);
+  check("휴지통 비우기가 «내 것만» 지운다", purged === 2, `${purged}건`);
+  check(
+    "남의 휴지통은 그대로다",
+    (await noteService.countTrash(other.id)) === 1,
+    "조건 없는 삭제가 이 기능이 생긴 이유입니다"
+  );
+  await noteService.emptyTrash(other.id);
 
   console.log("\n★ 탈퇴하면 함께 사라진다 (FR-NOTE-004)");
   const leaver = await mkUser("leaver");
   await noteService.create(leaver.id, { title: "탈퇴할 사람의 메모", body: "x" });
-  await noteService.create(leaver.id, { title: "두 번째", body: "y" });
-  check("탈퇴 전에는 2건", (await noteService.countFor(leaver.id)) === 2);
+  const willTrash = await noteService.create(leaver.id, {
+    title: "두 번째",
+    body: "y",
+  });
+  /*
+   * **휴지통에 있는 것도 함께 지워져야 합니다.** 「지운 것」이라 안 지우면
+   * 탈퇴한 사람의 메모가 표에 남습니다 — 소프트 삭제를 넣으면서 생기는
+   * 전형적인 구멍입니다.
+   */
+  await noteService.moveToTrash(willTrash.id, leaver.id);
+  check("탈퇴 전 — 본 목록 1건", (await noteService.countFor(leaver.id)) === 1);
+  check("탈퇴 전 — 휴지통 1건", (await noteService.countTrash(leaver.id)) === 1);
 
   await memberService.transition(
     { id: admin.id, role: "ADMIN", username: admin.username, via: "WEB" },
@@ -186,6 +269,11 @@ async function main() {
     "탈퇴하면 0건",
     (await noteService.countFor(leaver.id)) === 0,
     "컬렉션과 달리 «전부» 지웁니다 — 이어받을 사람이 없습니다"
+  );
+  check(
+    "휴지통에 있던 것도 지워진다",
+    (await db.note.count({ where: { ownerId: leaver.id } })) === 0,
+    "「지운 것」이라 안 지우면 표에 남습니다"
   );
 
   /*

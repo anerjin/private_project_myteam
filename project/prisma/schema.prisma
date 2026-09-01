@@ -533,14 +533,13 @@ model Bookmark {
   @@map("bookmarks")
 }
 
-/// 개인 메모 (`FR-NOTE-001`~`004`). **자료가 아닙니다.**
+/// 개인 메모 (`FR-NOTE-001`~`005`). **자료가 아닙니다.**
 ///
 /// `resources` 와 나란히 두지 않은 이유: 자료는 팀 카탈로그이고, 초안조차
 /// `EDITOR` 이상이 전부 봅니다(`draftScope`). 「나만 보는」을 그 위에 얹으면
 /// 규칙이 둘이 되고, 언젠가 한쪽만 고칩니다.
 ///
-/// 그래서 검색·분류·태그·감사 로그·휴지통에 **아무 연결도 없습니다.**
-/// 지우면 그 순간 사라지고, 탈퇴하면 함께 사라집니다.
+/// 검색·분류·태그·감사 로그에는 **아무 연결도 없습니다.**
 model Note {
   id        String   @id @default(cuid())
   ownerId   String   @map("owner_id")
@@ -548,12 +547,19 @@ model Note {
   body      String
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  /// 휴지통 (`FR-NOTE-005`). **처음에는 없었습니다** — 「지우면 끝」으로
+  /// 정했다가, 실수로 지운 메모를 되돌릴 길이 없어 겪고 나서 넣었습니다.
+  ///
+  /// 자료(`FR-RES-008`)와 달리 **자동으로 비우지 않습니다.** 30일 뒤 조용히
+  /// 사라지는 것이 바로 이 기능이 생긴 이유이기 때문입니다. 비우는 것은
+  /// 사람이 합니다.
+  deletedAt DateTime? @map("deleted_at")
 
   /// 계정 행이 지워지면 메모도 함께. 다만 탈퇴는 «행 삭제»가 아니라
   /// 상태 전이라, 실제 삭제는 `member.service` 의 `WITHDRAW` 가 합니다
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
-  /// 목록은 언제나 «내 것을 최근 수정순». 그 한 가지 질의만 있습니다
+  /// 목록은 «내 것을 최근 수정순». 휴지통도 같은 표를 봅니다
   @@index([ownerId, updatedAt(sort: Desc)])
   @@map("notes")
 }

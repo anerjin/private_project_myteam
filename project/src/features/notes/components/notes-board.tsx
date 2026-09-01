@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { NotebookPen, Plus, Trash2 } from "lucide-react";
+import { NotebookPen, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -31,6 +31,9 @@ import type { Note, NoteSummary } from "@/server/services/note.service";
 import {
   createNoteAction,
   deleteNoteAction,
+  emptyTrashAction,
+  purgeNoteAction,
+  restoreNoteAction,
   updateNoteAction,
 } from "@/server/actions/note.actions";
 
@@ -55,15 +58,19 @@ export function NotesBoard({
   notes,
   selected,
   missing,
+  trash,
 }: {
   notes: NoteSummary[];
   /** `?note=` 가 가리키는 «내» 메모. 없으면 `null` */
   selected: Note | null;
   /** `?note=` 는 있는데 내 것이 아니거나 없는 경우 */
   missing: boolean;
+  /** 휴지통을 보고 있는가 */
+  trash: boolean;
 }) {
   const router = useRouter();
   const params = useSearchParams();
+  const [pendingTrash, startTrash] = useTransition();
 
   /** `true` = 새로 쓰기 레이어가 열려 있다 */
   const [composing, setComposing] = useState(false);
@@ -81,16 +88,69 @@ export function NotesBoard({
     <>
       {/*
         **맨 위의 «메모 작성…»** — 구글 킵과 같은 자리입니다. 새 화면으로
-        보내지 않고 같은 레이어를 엽니다.
+        보내지 않고 같은 레이어를 엽니다. 휴지통에서는 안 보입니다 — 거기서
+        새 메모를 쓸 일이 없습니다.
       */}
-      <button
-        type="button"
-        onClick={() => setComposing(true)}
-        className="bg-card hover:bg-muted/60 text-muted-foreground mx-auto flex w-full max-w-xl items-center gap-2 rounded-lg border px-4 py-3 text-left text-sm shadow-sm"
-      >
-        <Plus className="size-4" />
-        메모 작성…
-      </button>
+      {!trash && (
+        <button
+          type="button"
+          onClick={() => setComposing(true)}
+          className="bg-card hover:bg-muted/60 text-muted-foreground mx-auto flex w-full max-w-xl items-center gap-2 rounded-lg border px-4 py-3 text-left text-sm shadow-sm"
+        >
+          <Plus className="size-4" />
+          메모 작성…
+        </button>
+      )}
+
+      {trash && notes.length > 0 && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-muted-foreground text-sm">
+            버린 메모입니다. <b>자동으로 지워지지 않습니다</b> — 되살리거나
+            직접 비우십시오.
+          </p>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" disabled={pendingTrash}>
+                <Trash2 className="size-4" />
+                휴지통 비우기
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  휴지통의 {notes.length}건을 지울까요?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  <b>되돌릴 수 없습니다.</b> 되살릴 것이 있으면 먼저
+                  되살리십시오.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={pendingTrash}>
+                  그만두기
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={pendingTrash}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    startTrash(async () => {
+                      const r = await emptyTrashAction();
+                      if (!r.ok) {
+                        toast.error(r.message ?? "비우지 못했습니다.");
+                        return;
+                      }
+                      toast.success(`${r.data.purged}건을 지웠습니다.`);
+                      router.refresh();
+                    });
+                  }}
+                >
+                  비웁니다
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      )}
 
       {missing && (
         <p className="text-muted-foreground text-center text-sm">
@@ -101,8 +161,22 @@ export function NotesBoard({
       {notes.length === 0 ? (
         <div className="text-muted-foreground flex flex-col items-center gap-2 py-16 text-sm">
           <NotebookPen className="size-8" />
-          <p>아직 노트가 없습니다</p>
-          <p className="text-xs">떠오른 것을 적어 두세요. 팀에는 보이지 않습니다.</p>
+          <p>{trash ? "휴지통이 비어 있습니다" : "아직 노트가 없습니다"}</p>
+          {!trash && (
+            <p className="text-xs">
+              떠오른 것을 적어 두세요. 팀에는 보이지 않습니다.
+            </p>
+          )}
+        </div>
+      ) : trash ? (
+        /*
+          **휴지통 카드는 «누르면 열리지» 않습니다.** 버린 메모를 고치는 것은
+          말이 안 되고, 여기서 할 수 있는 일은 되살리기와 영구 삭제 둘뿐입니다.
+        */
+        <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
+          {notes.map((n) => (
+            <TrashCard key={n.id} note={n} />
+          ))}
         </div>
       ) : (
         /*
@@ -153,6 +227,89 @@ export function NotesBoard({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** 휴지통의 카드 — 되살리기와 영구 삭제만 있습니다 */
+function TrashCard({ note }: { note: NoteSummary }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  return (
+    <div className="bg-muted/40 mb-4 break-inside-avoid rounded-lg border p-4">
+      <p className="font-medium">{note.title}</p>
+      {note.excerpt && (
+        <p className="text-muted-foreground mt-1.5 line-clamp-4 text-sm">
+          {note.excerpt}
+        </p>
+      )}
+      <p className="text-muted-foreground mt-3 text-xs tabular-nums">
+        {note.deletedAt?.slice(0, 10)} 버림
+      </p>
+      <div className="mt-3 flex gap-1">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              const r = await restoreNoteAction(note.id);
+              if (!r.ok) {
+                toast.error(r.message ?? "되살리지 못했습니다.");
+                return;
+              }
+              toast.success("되살렸습니다.");
+              router.refresh();
+            })
+          }
+        >
+          <RotateCcw className="size-4" />
+          되살리기
+        </Button>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              disabled={pending}
+            >
+              <Trash2 className="size-4" />
+              영구 삭제
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>「{note.title}」을 지울까요?</AlertDialogTitle>
+              <AlertDialogDescription>
+                <b>되돌릴 수 없습니다.</b> 휴지통에서도 사라집니다.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={pending}>그만두기</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={pending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  start(async () => {
+                    const r = await purgeNoteAction(note.id);
+                    if (!r.ok) {
+                      toast.error(r.message ?? "지우지 못했습니다.");
+                      return;
+                    }
+                    toast.success("지웠습니다.");
+                    router.refresh();
+                  });
+                }}
+              >
+                지웁니다
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </div>
   );
 }
 
@@ -278,12 +435,16 @@ function NoteEditor({
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>
-                    「{note.title}」을 지울까요?
+                    「{note.title}」을 휴지통으로 보낼까요?
                   </AlertDialogTitle>
                   <AlertDialogDescription>
-                    {/* 자료와 달리 휴지통이 없습니다 — 문구를 베껴 오면 거짓말이 됩니다 */}
-                    <b>되돌릴 수 없습니다.</b> 메모에는 휴지통이 없어서, 지우면
-                    그대로 사라집니다.
+                    {/*
+                      **전에는 「되돌릴 수 없습니다」였습니다.** 휴지통이
+                      생겼으니 그 문장은 이제 거짓입니다 — 기능을 바꾸면
+                      그것을 설명하던 문장도 함께 바뀌어야 합니다.
+                    */}
+                    휴지통에서 되살릴 수 있습니다. <b>자동으로 지워지지
+                    않습니다</b> — 비우는 것은 직접 하십시오.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -297,7 +458,7 @@ function NoteEditor({
                       remove();
                     }}
                   >
-                    지웁니다
+                    휴지통으로
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

@@ -71,10 +71,13 @@ const REQ = path.resolve(ROOT, "../_docs/01.요구사항/03_기능_요구사항.
  * 「대장이 바뀌었다」를 사람이 알아차리는 자리입니다.
  */
 /*
- * `105 → 109`. **`FR-NOTE-001`~`004` 를 더했습니다** — 나의 노트(개인 메모).
+ * `105 → 110`. **`FR-NOTE-001`~`005` 를 더했습니다** — 나의 노트(개인 메모).
  * 운영자가 새로 요청한 기능이고, 요구사항 대장에 없던 항목입니다.
+ *
+ * `005`(휴지통)는 **뒤늦게 붙었습니다.** 처음에는 「지우면 끝」이었는데,
+ * 실수로 지운 메모를 되돌릴 길이 없는 것을 겪고 넣었습니다.
  */
-const EXPECTED_REQUIREMENTS = 109;
+const EXPECTED_REQUIREMENTS = 110;
 
 function loadRequirements() {
   const src = readFileSync(REQ, "utf8");

@@ -58,7 +58,7 @@ export async function updateNoteAction(
   });
 }
 
-/** **되돌릴 수 없습니다.** 휴지통이 없으므로 화면이 먼저 확인을 받습니다 */
+/** 휴지통으로 보냅니다 (`FR-NOTE-003`) — **지우지 않습니다** */
 export async function deleteNoteAction(
   id: unknown
 ): Promise<ActionResult<void>> {
@@ -67,8 +67,54 @@ export async function deleteNoteAction(
     const parsed = idSchema.safeParse(id);
     if (!parsed.success) return validationError(parsed.error);
 
-    await noteService.remove(parsed.data, actor.id);
+    await noteService.moveToTrash(parsed.data, actor.id);
     revalidatePath("/notes");
     return ok(undefined);
+  });
+}
+
+/** 휴지통에서 되살립니다 (`FR-NOTE-005`) */
+export async function restoreNoteAction(
+  id: unknown
+): Promise<ActionResult<void>> {
+  return guard(async () => {
+    const actor = await requireActor();
+    const parsed = idSchema.safeParse(id);
+    if (!parsed.success) return validationError(parsed.error);
+
+    await noteService.restore(parsed.data, actor.id);
+    revalidatePath("/notes");
+    return ok(undefined);
+  });
+}
+
+/**
+ * 영구 삭제 (`FR-NOTE-005`) — **되돌릴 수 없습니다.**
+ *
+ * 휴지통에 있는 것만 지웁니다. 화면이 먼저 확인을 받습니다.
+ */
+export async function purgeNoteAction(
+  id: unknown
+): Promise<ActionResult<void>> {
+  return guard(async () => {
+    const actor = await requireActor();
+    const parsed = idSchema.safeParse(id);
+    if (!parsed.success) return validationError(parsed.error);
+
+    await noteService.purge(parsed.data, actor.id);
+    revalidatePath("/notes");
+    return ok(undefined);
+  });
+}
+
+/** 휴지통 비우기 — 몇 건을 지웠는지 화면에 말해 줍니다 */
+export async function emptyTrashAction(): Promise<
+  ActionResult<{ purged: number }>
+> {
+  return guard(async () => {
+    const actor = await requireActor();
+    const purged = await noteService.emptyTrash(actor.id);
+    revalidatePath("/notes");
+    return ok({ purged });
   });
 }

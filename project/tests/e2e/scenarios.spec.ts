@@ -708,23 +708,55 @@ test("⑧ 내 노트를 쓰고 고치고 지운다 — 남에게는 안 보인�
   await expect(page.getByText("E2E 개인 메모")).toHaveCount(0);
   await expect(page.getByText("나만 보는 내용입니다.")).toHaveCount(0);
 
-  // ── 지운다 — 되돌릴 수 없다 ──
+  /*
+   * ── 지운다 → **휴지통** → 되살린다 ──
+   *
+   * 처음에는 「지우면 끝」이었습니다. 그러다 실수로 지운 메모를 되돌릴 길이
+   * 하나도 없는 것을 겪고 휴지통을 넣었습니다. 그래서 이 검사의 요점은
+   * 「지워졌는가」가 아니라 **「되살릴 수 있는가」**입니다.
+   */
   await page.context().clearCookies();
   await signIn(page, me.username);
   await page.goto(`/notes?note=${noteId}`);
   await expect(layer).toBeVisible({ timeout: 15_000 });
   await layer.getByRole("button", { name: "삭제" }).click();
-  /*
-   * 문구가 「휴지통으로 옮깁니다」면 **거짓말**입니다 — 메모에는 휴지통이
-   * 없습니다. 자료 쪽 문구를 복사해 오는 날 이 검사가 잡습니다.
-   */
-  await expect(page.getByText("되돌릴 수 없습니다")).toBeVisible();
-  await page.getByRole("button", { name: "지웁니다" }).click();
+  // 문구가 「되돌릴 수 없습니다」면 **거짓말**입니다 — 휴지통이 있습니다
+  await expect(page.getByText("휴지통에서 되살릴 수 있습니다")).toBeVisible();
+  await page.getByRole("button", { name: "휴지통으로" }).click();
 
   await expect(page.getByText("아직 노트가 없습니다")).toBeVisible({
     timeout: 20_000,
   });
+  // **행은 남아 있어야 합니다** — 그것이 휴지통입니다
+  expect(await db.note.count({ where: { id: noteId } })).toBe(1);
 
-  // 행 자체가 사라졌는가 — 화면에서 안 보이는 것과 다른 사실입니다
+  // 휴지통에 있고, 되살려집니다
+  await page.goto("/notes?trash=1");
+  await expect(
+    page.getByText("E2E 개인 메모 (고침)").first()
+  ).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: "되살리기" }).click();
+  await expect(page.getByText("휴지통이 비어 있습니다")).toBeVisible({
+    timeout: 20_000,
+  });
+
+  await page.goto("/notes");
+  await expect(
+    page.getByRole("button", { name: /E2E 개인 메모 \(고침\)/ })
+  ).toBeVisible({ timeout: 15_000 });
+
+  // ── 영구 삭제는 휴지통에서만 ──
+  await page.goto(`/notes?note=${noteId}`);
+  await layer.getByRole("button", { name: "삭제" }).click();
+  await page.getByRole("button", { name: "휴지통으로" }).click();
+  await page.goto("/notes?trash=1");
+  await page.getByRole("button", { name: "영구 삭제" }).click();
+  await expect(page.getByText("되돌릴 수 없습니다")).toBeVisible();
+  await page.getByRole("button", { name: "지웁니다" }).click();
+
+  await expect(page.getByText("휴지통이 비어 있습니다")).toBeVisible({
+    timeout: 20_000,
+  });
+  // 이제야 행이 사라집니다 — 화면에서 안 보이는 것과 다른 사실입니다
   expect(await db.note.count({ where: { id: noteId } })).toBe(0);
 });
