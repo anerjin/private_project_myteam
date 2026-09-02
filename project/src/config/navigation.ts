@@ -1,5 +1,6 @@
 import {
   BookMarked,
+  CircleUserRound,
   Database,
   FolderTree,
   LayoutDashboard,
@@ -44,6 +45,11 @@ export const serviceLibraryGroup: NavGroup = {
      * 펜입니다.
      */
     { title: "나의 노트", href: "/notes", icon: NotebookPen },
+    /*
+     * **만들어 둔 캐릭터를 모아 두는 자리** (`features/avatars/catalog.ts`).
+     * 자료도 메모도 아니라 «내 것으로 고를 그림」이라 아이콘도 사람 모양입니다.
+     */
+    { title: "아바타", href: "/avatars", icon: CircleUserRound },
   ],
 };
 
@@ -88,6 +94,7 @@ export const SEGMENT_LABEL: Record<string, string> = {
   collections: "컬렉션",
   bookmarks: "북마크",
   notes: "나의 노트",
+  avatars: "아바타",
   search: "검색",
   me: "마이페이지",
   admin: "관리자",

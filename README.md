@@ -28,13 +28,19 @@ npx prisma db seed         # 분류·설정 시드 (여러 번 돌려도 안전)
 npm run dev                # http://localhost:3100
 ```
 
+> 서버를 **계속 띄워 두려면** `npm run dev` 대신 `npm run serve` 입니다 —
+> VS Code 를 꺼도 삽니다 ([`OPS-01 · 1장`](_docs/04.운영/01_운영_안내.md)).
+
 `http://localhost:3100/api/health` 가 `db`·`redis`·`storage`·`disk` 모두 `ok` 면 준비 끝입니다.
 
 ## 자주 쓰는 명령
 
 | 명령 | 하는 일 |
 | --- | --- |
-| `npm run dev` | 개발 서버 (**포트 3100 고정** — `DEC-028`) |
+| `npm run dev` | 개발 서버 (**포트 3100 고정** — `DEC-028`). 터미널을 닫으면 함께 죽습니다 |
+| `npm run serve` | **편집기를 꺼도 사는 서버** — 작업 스케줄러에 맡깁니다 (`OPS-01 · 1장`) |
+| `npm run serve:status` / `serve:logs` / `serve:stop` | 살아 있는가 · 로그 · 내리기 |
+| `npm run serve:install` | 이 PC 에 로그인하면 자동으로 뜨게 |
 | `npm run verify` | typecheck · lint · **check:deps** · build. **페이즈 완료 기준** |
 | `npm run check:deps` | 의존 방향 검사 (`DEV-06 · 6.9절`). 위반 0건이어야 한다 |
 | `npm run check:guards` | **page 인가 가드 누락 검사** (`DEC-035`). 레이아웃이 아니라 page 가 막는다 |

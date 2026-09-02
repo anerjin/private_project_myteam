@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="꼬리를 흔들며 깡충거리는 노란 강아지">
+  <!--
+    QueenBee 아바타 001 — 강아지.
+
+    `ip-as-logo` 스킬의 형태 규칙을 따르되 **배경을 두지 않습니다**:
+    스킬은 「정사각형을 배경색으로 꽉 채우라」고 하지만, 그러면 아바타가
+    «색 원판 안에 든 그림»이 됩니다. 여기서 원하는 것은 **강아지 모양 자체**라
+    배경을 비우고 실루엣만 남겼습니다. 나머지 규칙은 그대로입니다 —
+    큰 도형 여덟(꼬리 · 앞발 둘 · 몸 · 귀 둘 · 머리 · 주둥이)에
+    얼굴 표시 셋(눈 둘 · 코), 색은 둘(꿀 계열 · 갈색 계열),
+    선(stroke)과 뾰족한 끝은 없습니다.
+
+    **배경이 없으므로 밝은 화면과 어두운 화면에서 모두 읽혀야 합니다.**
+    귀를 새까맣게 두지 않고 중간 갈색으로 올린 것이 그 때문입니다.
+    움직여도 밖으로 나가지 않도록 여백을 두고 배치했습니다.
+
+    ## 움직임은 파일 «안»에 있습니다
+
+    `<img>` 로 불러도 그대로 돕니다 — 화면 쪽에 애니메이션을 두면 이 그림을
+    다른 데 쓸 때 움직임이 따라오지 않습니다.
+
+    넷뿐입니다: 몸이 깡충 뛰고 · 귀가 늦게 따라오고 · 꼬리를 흔들고 ·
+    가끔 눈을 깜빡입니다. 이유 없이 움직이는 것은 넣지 않았습니다.
+
+    **어지러움을 타는 사람은 멈춰야 합니다** — `prefers-reduced-motion`
+    을 켜 둔 사람에게는 전부 정지합니다 (`NFR-A11Y`). 그때도 그림은
+    «가만히 서 있는 강아지»로 온전합니다.
+  -->
+  <style>
+    .dog { animation: bob 2.6s ease-in-out infinite; }
+    .ear-l { transform-box: fill-box; transform-origin: 50% 8%; animation: sway-l 2.6s ease-in-out infinite; }
+    .ear-r { transform-box: fill-box; transform-origin: 50% 8%; animation: sway-r 2.6s ease-in-out infinite; }
+    /*
+      꼬리의 회전축은 **몸 안**에 있어야 합니다. 밖에 두면 흔들 때마다 몸에서
+      떨어져 나가 «떠다니는 조각»이 됩니다 — 멈춘 상태에서 특히 눈에 띕니다.
+    */
+    .tail { transform-box: fill-box; transform-origin: 50% 100%; animation: wag 0.42s ease-in-out infinite alternate; }
+    .eyes { transform-box: fill-box; transform-origin: 50% 50%; animation: blink 5.4s infinite; }
+
+    /* 깡충 — 착지가 빠르고 떠 있는 시간이 짧아야 «뛰는» 것으로 보입니다 */
+    @keyframes bob {
+      0%, 100% { transform: translateY(0); }
+      45% { transform: translateY(-14px); }
+      70% { transform: translateY(0); }
+    }
+
+    /* 귀는 몸보다 **늦게** 따라옵니다. 같이 움직이면 통짜로 보입니다 */
+    @keyframes sway-l {
+      0%, 100% { transform: rotate(-14deg); }
+      55% { transform: rotate(-25deg); }
+    }
+    @keyframes sway-r {
+      0%, 100% { transform: rotate(14deg); }
+      55% { transform: rotate(25deg); }
+    }
+
+    /* 꼬리는 몸과 박자를 맞추지 않습니다 — 그래야 «스스로» 흔드는 것으로 보입니다 */
+    @keyframes wag {
+      from { transform: rotate(24deg); }
+      to { transform: rotate(48deg); }
+    }
+
+    /* 깜빡임은 «가끔»이라 눈에 띕니다. 눈을 감는 순간만 짧게 */
+    @keyframes blink {
+      0%, 92%, 100% { transform: scaleY(1); }
+      95% { transform: scaleY(0.1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dog, .ear-l, .ear-r, .tail, .eyes { animation: none; }
+      .ear-l { transform: rotate(-14deg); }
+      .ear-r { transform: rotate(14deg); }
+      .tail { transform: rotate(36deg); }
+    }
+  </style>
+
+  <g class="dog">
+    <!-- 꼬리 — 몸 뒤에 깔아 뿌리를 감춥니다 -->
+    <ellipse class="tail" cx="386" cy="352" rx="22" ry="52" fill="#F0B849" />
+
+    <!--
+      앞발 둘 — 앉은 자세를 만듭니다. 몸 아래로 **충분히 내려와야** 합니다:
+      처음에는 몸에 거의 다 가려 그림자처럼 보였는데, 그런 조각은 작게 줄이면
+      노이즈가 됩니다(스킬: 「알아보는 데 기여하지 않는 도형은 지우거나 키운다」).
+    -->
+    <ellipse cx="188" cy="482" rx="44" ry="26" fill="#FBE0A8" />
+    <ellipse cx="324" cy="482" rx="44" ry="26" fill="#FBE0A8" />
+
+    <!-- 몸 -->
+    <ellipse cx="256" cy="392" rx="138" ry="90" fill="#F0B849" />
+
+    <!-- 귀 — 머리 뒤에 깔아 늘어뜨립니다. 끝이 둥근 타원이라 뾰족한 곳이 없습니다 -->
+    <ellipse class="ear-l" cx="112" cy="228" rx="52" ry="102" fill="#8A5A33" />
+    <ellipse class="ear-r" cx="400" cy="228" rx="52" ry="102" fill="#8A5A33" />
+
+    <!-- 머리 — 하나의 큰 덩어리 -->
+    <circle cx="256" cy="196" r="146" fill="#F0B849" />
+
+    <!-- 주둥이 -->
+    <ellipse cx="256" cy="262" rx="102" ry="76" fill="#FBE0A8" />
+
+    <!-- 눈 둘 — 멀찍이 떨어뜨려 아기 같은 인상을 만듭니다 -->
+    <g class="eyes">
+      <circle cx="196" cy="166" r="20" fill="#4A3524" />
+      <circle cx="316" cy="166" r="20" fill="#4A3524" />
+    </g>
+
+    <!-- 코 -->
+    <ellipse cx="256" cy="232" rx="30" ry="22" fill="#4A3524" />
+  </g>
+</svg>
