@@ -1,11 +1,15 @@
 ﻿"use client";
 
 import {
+  AudioLines,
   Eraser,
   MessageSquare,
+  MessageSquareText,
+  Moon,
   PanelRightClose,
   Send,
   Sparkles,
+  Sun,
   Undo2,
 } from "lucide-react";
 import Link from "next/link";
@@ -17,7 +21,9 @@ import { MarkdownViewer } from "@/components/common/markdown-viewer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ASSISTANT } from "@/features/chat/assistant";
+import { VoiceBar, VoiceStage } from "@/features/chat/components/voice-mode";
 import { describePage } from "@/features/chat/page-context";
+import { useVoice } from "@/features/chat/voice/use-voice";
 import { cn } from "@/lib/utils";
 import { askChatAction, chatStatusAction } from "@/server/actions/chat.actions";
 import { deleteResourceAction } from "@/server/actions/resource.actions";
@@ -59,6 +65,69 @@ interface Turn {
 }
 
 const STORAGE_KEY = "qb.chat.open";
+
+/**
+ * 패널의 밝기 — **앱 테마와 따로 놉니다.**
+ *
+ * 도우미는 원래 언제나 어두웠습니다(상자에 `.dark` 를 박아 두었습니다). 밝은
+ * 화면에서 그 대비가 「여기는 다른 것」이라고 말해 주지만, 하루 종일 밝게 쓰는
+ * 사람에게는 그냥 눈에 걸립니다. 그래서 **고를 수 있게** 합니다.
+ *
+ * 헤더의 테마 단추(`components/layout/theme-toggle`)는 앱 전체를 바꿉니다.
+ * 여기 것은 **이 상자만** 바꿉니다 — 어두운 앱 안에서 도우미만 밝게 두는 것도
+ * 됩니다(그 조합을 `globals.css` 의 `dark` 변형이 받쳐 줍니다).
+ *
+ * 열림 여부(`qb.chat.open`)와 같은 성질이라 **같은 방식으로** 둡니다 — 이
+ * 브라우저에만 남고 사람마다 나뉘지 않습니다. 사람마다 나눠야 하는 것은
+ * 대화 내용이지(`historyKey`) 「패널이 어떻게 보이는가」가 아닙니다.
+ */
+const THEME_KEY = "qb.chat.theme";
+
+type PanelTheme = "dark" | "light";
+
+/**
+ * 글로 묻는가, 말로 묻는가.
+ *
+ * **디오는 하나입니다.** 음성 모드는 입력 방식과 겉모습(캐릭터)만 바꾸고,
+ * 말은 채팅과 **같은 `send`** 를 지나 같은 대화 기록에 쌓입니다. 밝기와 같은
+ * 성질이라 같은 방식으로 이 브라우저에 남깁니다.
+ */
+const MODE_KEY = "qb.chat.mode";
+
+type PanelMode = "chat" | "voice";
+
+/**
+ * 패널 너비 — **경계를 끌어서** 정합니다.
+ *
+ * ## 변수 하나가 둘을 움직입니다
+ *
+ * 패널의 폭도(`md:w-[var(--chat-width)]`) 본문 열이 밀리는 양도
+ * (`globals.css` 의 `padding-right`) **같은 `--chat-width`** 를 봅니다. 그래서
+ * 끌 때 고칠 것은 그 변수 하나뿐이고, 둘이 어긋날 자리가 없습니다 — 폭을
+ * 두 곳에 적었으면 끄는 동안 본문 밑에 패널이 겹쳐 들어갔을 것입니다.
+ *
+ * 값은 `<html>` 에 인라인으로 씁니다. 인라인이 스타일시트를 이기므로
+ * `:root` 의 기본값도, 1024px 에서 커지는 규칙도 함께 덮습니다 — **끌고 난
+ * 뒤에는 그 사람이 정한 폭이 정본**입니다.
+ *
+ * ## 한계는 창이 정합니다
+ *
+ * 위쪽 한계를 720px 로 두지만, 좁은 창에서는 그보다 먼저 **본문에 360px 는
+ * 남겨야** 합니다. 안 그러면 패널을 넓히다 본문이 사라집니다. 창 크기가 바뀌면
+ * 다시 재 봅니다 — 안 그러면 창을 줄인 순간 패널이 화면보다 넓어집니다.
+ */
+const WIDTH_KEY = "qb.chat.width";
+const MIN_WIDTH = 280;
+const MAX_WIDTH = 720;
+/** 본문에 남겨 두는 최소 폭 */
+const KEEP_FOR_MAIN = 360;
+/** 화살표 한 번에 움직이는 양 */
+const NUDGE = 16;
+
+function clampWidth(px: number): number {
+  const max = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, window.innerWidth - KEEP_FOR_MAIN));
+  return Math.round(Math.min(max, Math.max(MIN_WIDTH, px)));
+}
 
 /**
  * 나눈 이야기를 **이 브라우저에** 남깁니다 (`localStorage`).
@@ -135,6 +204,28 @@ export function ChatPanel({ userId }: { userId: string }) {
   const page = describePage(pathname, searchParams.get("q") ?? undefined);
 
   const [open, setOpen] = useState(false);
+  /*
+   * **첫 렌더는 언제나 「어둡게」입니다.** 저장된 값을 `useState` 초기값으로
+   * 읽으면 서버 렌더와 어긋납니다 — `open` 과 같은 이유이고, 같은 타이밍에
+   * 되살립니다.
+   */
+  const [theme, setTheme] = useState<PanelTheme>("dark");
+  const [mode, setMode] = useState<PanelMode>("chat");
+  /**
+   * `null` 이면 **CSS 기본값 그대로**입니다 — 아직 아무도 안 끌었다는 뜻이고,
+   * 그동안은 화면 크기에 따라 20rem·24rem 이 그대로 삽니다.
+   */
+  const [width, setWidth] = useState<number | null>(null);
+  const asideRef = useRef<HTMLElement>(null);
+  /** 끄는 «동안»의 최신값. 상태는 다음 렌더에 오므로 놓는 순간에는 늦습니다 */
+  const widthRef = useRef<number | null>(null);
+  /**
+   * **사람이 «원한» 폭.** `width` 는 창에 맞춰 줄어든 «지금» 값이라 둘이
+   * 갈립니다 — 창을 줄였다 다시 넓혔을 때 원래대로 돌아오려면 원한 값을
+   * 따로 들고 있어야 합니다. 이것이 없으면 한 번 좁아진 폭이 영영 그대로입니다.
+   */
+  const desiredRef = useRef<number | null>(null);
+  const dragging = useRef(false);
   const [status, setStatus] = useState<{
     available: boolean;
     tools: boolean;
@@ -163,8 +254,21 @@ export function ChatPanel({ userId }: { userId: string }) {
     const timer = setTimeout(() => {
       try {
         setOpen(window.localStorage.getItem(STORAGE_KEY) === "1");
+        // 저장해 둔 값이 «밝게»일 때만 바꿉니다 — 없으면 원래대로 어둡습니다
+        if (window.localStorage.getItem(THEME_KEY) === "light") {
+          setTheme("light");
+        }
+        if (window.localStorage.getItem(MODE_KEY) === "voice") {
+          setMode("voice");
+        }
+        const savedWidth = Number(window.localStorage.getItem(WIDTH_KEY));
+        // 끈 적이 없으면 손대지 않습니다 — CSS 의 반응형 폭이 그대로 삽니다
+        if (Number.isFinite(savedWidth) && savedWidth > 0) {
+          desiredRef.current = savedWidth;
+          setWidth(clampWidth(savedWidth));
+        }
       } catch {
-        /* 저장소를 막아 둔 브라우저 — 닫힌 채로 시작합니다 */
+        /* 저장소를 막아 둔 브라우저 — 닫힌 채로 어둡게 시작합니다 */
       }
       // 나눈 이야기도 같은 타이밍에 되살립니다 (하이드레이션 뒤)
       const saved = load(userId);
@@ -206,6 +310,15 @@ export function ChatPanel({ userId }: { userId: string }) {
   }, [turns, pending]);
 
   /*
+   * 음성은 **`send` 를 그대로 씁니다.** 패널을 닫거나 채팅 모드로 돌아가면
+   * `enabled` 가 꺼지고 훅이 듣기·말하기를 그 자리에서 멈춥니다.
+   */
+  const voice = useVoice({
+    enabled: open && mode === "voice",
+    onSend: (text) => send(text),
+  });
+
+  /*
    * **열림 여부를 `<html>` 에 답니다.**
    *
    * 패널은 고정 위치라 본문 위에 뜹니다. 본문 열을 그만큼 밀어야 가려지지
@@ -222,6 +335,34 @@ export function ChatPanel({ userId }: { userId: string }) {
     };
   }, [open]);
 
+  /*
+   * **정한 폭도 `<html>` 에 답니다.** 패널과 본문 열이 같은 변수를 보므로
+   * 여기 한 번 쓰면 둘이 함께 움직입니다 (`WIDTH_KEY` 주석).
+   */
+  useEffect(() => {
+    const root = document.documentElement;
+    widthRef.current = width;
+    if (width === null) return;
+    root.style.setProperty("--chat-width", `${width}px`);
+    return () => {
+      root.style.removeProperty("--chat-width");
+    };
+  }, [width]);
+
+  /*
+   * **창이 바뀌면 다시 잽니다.**
+   *
+   * 줄일 때는 넓게 잡아 둔 폭이 화면보다 넓어지는 것을 막고(본문이 통째로
+   * 패널 밑으로 들어갑니다), 넓힐 때는 **원래 원했던 폭으로 되돌립니다** —
+   * 지금 값으로 다시 재면 한 번 좁아진 폭이 영영 그대로입니다.
+   */
+  useEffect(() => {
+    const onResize = () =>
+      setWidth((w) => (w === null ? w : clampWidth(desiredRef.current ?? w)));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   function toggle(next: boolean) {
     setOpen(next);
     try {
@@ -231,10 +372,104 @@ export function ChatPanel({ userId }: { userId: string }) {
     }
   }
 
-  async function send() {
-    const text = draft.trim();
-    if (!text || pending) return;
-    setDraft("");
+  /**
+   * 지금 폭. 아직 안 끌었으면 **재 봅니다** — 화면 크기에 따라 20rem 일 수도
+   * 24rem 일 수도 있어서, 여기서 상수를 적으면 첫 한 번이 튑니다.
+   */
+  function currentWidth(): number {
+    return (
+      width ?? asideRef.current?.getBoundingClientRect().width ?? MIN_WIDTH
+    );
+  }
+
+  function remember(px: number) {
+    try {
+      window.localStorage.setItem(WIDTH_KEY, String(px));
+    } catch {
+      /* 못 저장해도 이번 세션에서는 그대로 넓습니다 */
+    }
+  }
+
+  /*
+   * **포인터를 «잡습니다»** (`setPointerCapture`).
+   *
+   * 안 잡으면 빨리 끌 때 커서가 손잡이를 앞질러 나가고, 그 순간부터 움직임이
+   * 안 옵니다 — 「끌다가 멈춘다」가 됩니다. 잡아 두면 포인터가 어디에 있든
+   * 이 요소가 계속 받고, 창 밖에서 손을 떼도 `pointerup` 이 옵니다.
+   */
+  function startResize(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragging.current = true;
+    // 끄는 동안 글자가 잡히지 않게 — 규칙은 `globals.css` 한 곳에 있습니다
+    document.documentElement.dataset.chatResizing = "";
+  }
+
+  function moveResize(e: React.PointerEvent<HTMLDivElement>) {
+    if (!dragging.current) return;
+    // 패널은 오른쪽에 붙어 있으므로 «창 너비 − 커서» 가 곧 폭입니다
+    const next = clampWidth(window.innerWidth - e.clientX);
+    widthRef.current = next;
+    desiredRef.current = next;
+    setWidth(next);
+  }
+
+  function endResize(e: React.PointerEvent<HTMLDivElement>) {
+    if (!dragging.current) return;
+    dragging.current = false;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    delete document.documentElement.dataset.chatResizing;
+    // 저장은 **놓을 때 한 번**. 움직일 때마다 쓰면 초당 수십 번이 됩니다
+    if (widthRef.current !== null) remember(widthRef.current);
+  }
+
+  /** 마우스 없이도 조절할 수 있어야 합니다 (`NFR-A11Y-002`) */
+  function nudge(e: React.KeyboardEvent<HTMLDivElement>) {
+    const max = Math.max(
+      MIN_WIDTH,
+      Math.min(MAX_WIDTH, window.innerWidth - KEEP_FOR_MAIN)
+    );
+    // 패널이 오른쪽이라 **왼쪽 화살표가 넓히는 쪽**입니다
+    const next =
+      e.key === "ArrowLeft"
+        ? currentWidth() + NUDGE
+        : e.key === "ArrowRight"
+          ? currentWidth() - NUDGE
+          : e.key === "Home"
+            ? max
+            : e.key === "End"
+              ? MIN_WIDTH
+              : null;
+    if (next === null) return;
+    e.preventDefault();
+    const w = clampWidth(next);
+    widthRef.current = w;
+    desiredRef.current = w;
+    setWidth(w);
+    remember(w);
+  }
+
+  /** 이 상자만 밝게·어둡게. **앱 테마는 건드리지 않습니다** */
+  function toggleTheme() {
+    const next: PanelTheme = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    try {
+      window.localStorage.setItem(THEME_KEY, next);
+    } catch {
+      /* 못 저장해도 이번 세션에서는 그대로 바뀝니다 */
+    }
+  }
+
+  /**
+   * 묻고 답을 받습니다 — 글로든 말로든 **이 하나**를 지납니다.
+   *
+   * 답 글을 돌려주는 이유는 음성 모드가 그것을 **읽어 주기** 때문입니다.
+   * 말풍선을 뒤져서 «마지막 bot» 을 찾게 하면 오류 말풍선까지 읽습니다.
+   */
+  async function send(spoken?: string): Promise<string | null> {
+    const text = (spoken ?? draft).trim();
+    if (!text || pending) return null;
+    if (spoken === undefined) setDraft("");
     setTurns((t) => [...t, { role: "me", text }]);
     setPending(true);
 
@@ -251,7 +486,7 @@ export function ChatPanel({ userId }: { userId: string }) {
         ...t,
         { role: "bot", text: r.message ?? "대답을 받지 못했습니다." },
       ]);
-      return;
+      return null;
     }
     setSessionId(r.data.sessionId);
     /*
@@ -272,6 +507,18 @@ export function ChatPanel({ userId }: { userId: string }) {
       },
     ]);
     if (r.data.created) router.refresh();
+    return r.data.reply;
+  }
+
+  /** 글 ↔ 말. 밝기 단추와 같은 결 — **누르면 되는 것**을 아이콘으로 보여 줍니다 */
+  function toggleMode() {
+    const next: PanelMode = mode === "chat" ? "voice" : "chat";
+    setMode(next);
+    try {
+      window.localStorage.setItem(MODE_KEY, next);
+    } catch {
+      /* 못 저장해도 이번 세션에서는 그대로 바뀝니다 */
+    }
   }
 
   /** 나눈 이야기를 지웁니다 — 남는 곳이 생겼으니 **비울 자리**도 있어야 합니다 */
@@ -306,8 +553,11 @@ export function ChatPanel({ userId }: { userId: string }) {
     return (
       <Button
         size="icon"
-        // 닫혀 있을 때의 단추도 같은 색 계열로 — 도우미는 언제나 어둡습니다
-        className="dark bg-sidebar text-foreground hover:bg-sidebar-accent fixed right-4 bottom-4 z-30 size-11 rounded-full border shadow-lg"
+        // 닫혀 있을 때의 단추도 **패널과 같은 밝기**로 — 열었을 때 색이 안 바뀝니다
+        className={cn(
+          theme,
+          "bg-sidebar text-foreground hover:bg-sidebar-accent fixed right-4 bottom-4 z-30 size-11 rounded-full border shadow-lg"
+        )}
         aria-label={`${ASSISTANT} 열기`}
         onClick={() => toggle(true)}
       >
@@ -318,22 +568,26 @@ export function ChatPanel({ userId }: { userId: string }) {
 
   return (
     <aside
+      ref={asideRef}
       // 이름만으로는 «무엇인지» 모릅니다 — 랜드마크에는 역할을 함께 답니다
       aria-label={`${ASSISTANT} 도우미`}
       className={cn(
         /*
-         * **언제나 어두운 색입니다.**
+         * **밝기를 이 상자가 «스스로» 정합니다.**
          *
-         * `.dark` 를 여기 걸면 `globals.css` 의 다크 토큰이 이 상자와 그
-         * 자손에게 적용됩니다 — 앱 테마가 밝든 어둡든 도우미만 어둡습니다.
+         * `dark`·`light` 중 하나를 여기 걸면 `globals.css` 의 그 토큰이 이
+         * 상자와 자손에게 적용됩니다 — 앱 테마가 무엇이든 도우미는 고른 대로
+         * 보입니다. 기본은 어둡고(`theme` 초기값), 고른 값은 이 브라우저에
+         * 남습니다.
          *
          * **`text-foreground` 를 다시 거는 이유**: `body` 가 이미
-         * `color: var(--foreground)` 를 «밝은 값으로 계산해» 상속시킵니다.
+         * `color: var(--foreground)` 를 «그때의 값으로 계산해» 상속시킵니다.
          * 커스텀 속성은 쓰이는 그 자리에서 치환되므로, 여기서 한 번 더
-         * 써 줘야 다크 값으로 다시 계산됩니다. 안 그러면 어두운 바탕에
-         * 밝은 테마의 검은 글씨가 얹힙니다.
+         * 써 줘야 이 상자의 값으로 다시 계산됩니다. 안 그러면 바탕만 바뀌고
+         * 글씨는 바깥 테마의 색으로 얹힙니다.
          */
-        "dark bg-sidebar text-foreground z-40 flex flex-col border-l",
+        theme,
+        "bg-sidebar text-foreground z-40 flex flex-col border-l",
         /*
          * **뷰포트에 고정입니다.** 헤더·사이드바·본문 «전체» 오른쪽에 서고,
          * 본문 열은 `globals.css` 가 `--chat-width` 만큼 밀어 줍니다.
@@ -347,6 +601,40 @@ export function ChatPanel({ userId }: { userId: string }) {
         "left-0 md:left-auto md:w-[var(--chat-width)]"
       )}
     >
+      {/*
+        **왼쪽 경계를 끌어 폭을 정합니다.**
+
+        상자 왼쪽에 걸치게 둡니다(`-left-1`) — 경계 «위»에 커서를 올려야 잡히는데,
+        안쪽에만 두면 그 8px 이 패널 내용과 겹쳐 스크롤바 근처에서 헷갈립니다.
+
+        좁은 화면에서는 패널이 **화면을 통째로 덮으므로** 조절할 것이 없습니다.
+        그래서 `md` 부터만 답니다 — 폭을 미는 규칙(`globals.css`)도 같은 경계입니다.
+
+        `role="separator"` + `tabindex` 는 «움직일 수 있는 칸막이»입니다.
+        마우스가 없어도 화살표로 조절되어야 합니다.
+      */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="도우미 너비 조절"
+        aria-valuemin={MIN_WIDTH}
+        aria-valuemax={MAX_WIDTH}
+        {...(width !== null ? { "aria-valuenow": width } : {})}
+        tabIndex={0}
+        onPointerDown={startResize}
+        onPointerMove={moveResize}
+        onPointerUp={endResize}
+        onPointerCancel={endResize}
+        onKeyDown={nudge}
+        className={cn(
+          "absolute inset-y-0 -left-1 z-10 hidden w-2 md:block",
+          "cursor-col-resize touch-none",
+          // 평소엔 안 보이다가 손이 가면 드러납니다 — 늘 보이면 선이 하나 더 생깁니다
+          "hover:bg-primary/40 focus-visible:bg-primary/40 transition-colors",
+          "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
+        )}
+      />
+
       {/* 머리·맥락·입력은 `shrink-0` — **스크롤은 말풍선 영역만** 합니다 */}
       <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3">
         <Sparkles className="text-muted-foreground size-4" />
@@ -356,11 +644,53 @@ export function ChatPanel({ userId }: { userId: string }) {
           대화가 브라우저에 남으므로 **비울 자리**가 있어야 합니다.
           없으면 지난주 이야기를 계속 이고 다니게 됩니다.
         */}
+        {/*
+          **패널만의 밝기입니다.** 헤더의 테마 단추는 앱 전체를 바꾸고,
+          이것은 이 상자만 바꿉니다. 그래서 아이콘도 «지금»이 아니라
+          **누르면 되는 것**을 보여 줍니다 — 어두울 때 해, 밝을 때 달.
+          한 자리에 두 뜻이 겹치면 아무도 안 누릅니다.
+
+          `ml-auto` 는 **언제나 있는 이 단추**가 답니다. 「대화 지우기」에
+          달아 두면 대화가 없는 동안 단추들이 제목에 붙어 버립니다.
+        */}
+        {/*
+          **글 ↔ 말.** 음성 모드는 «실험»입니다 — 브라우저 내장 음성 인식과
+          three.js 캐릭터. 머리는 같고 입력만 다릅니다(`MODE_KEY` 주석).
+        */}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="ml-auto"
+          aria-label={mode === "chat" ? "말로 묻기" : "글로 묻기"}
+          aria-pressed={mode === "voice"}
+          title={mode === "chat" ? "말로 묻기 (실험)" : "글로 묻기"}
+          onClick={toggleMode}
+        >
+          {mode === "chat" ? (
+            <AudioLines className="size-4" />
+          ) : (
+            <MessageSquareText className="size-4" />
+          )}
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          aria-label={
+            theme === "dark" ? `${ASSISTANT} 밝게 보기` : `${ASSISTANT} 어둡게 보기`
+          }
+          title={theme === "dark" ? "밝게 보기" : "어둡게 보기"}
+          onClick={toggleTheme}
+        >
+          {theme === "dark" ? (
+            <Sun className="size-4" />
+          ) : (
+            <Moon className="size-4" />
+          )}
+        </Button>
         {turns.length > 0 && (
           <Button
             size="icon"
             variant="ghost"
-            className="ml-auto"
             aria-label="대화 지우기"
             title="나눈 이야기를 지웁니다"
             onClick={clearHistory}
@@ -371,7 +701,6 @@ export function ChatPanel({ userId }: { userId: string }) {
         <Button
           size="icon"
           variant="ghost"
-          className={turns.length > 0 ? undefined : "ml-auto"}
           aria-label={`${ASSISTANT} 닫기`}
           onClick={() => toggle(false)}
         >
@@ -386,6 +715,9 @@ export function ChatPanel({ userId }: { userId: string }) {
           {page.label}
         </p>
       </div>
+
+      {/* 음성 모드면 캐릭터가 말풍선 «위»에 섭니다. 말풍선은 두 모드가 같은 것을 씁니다 */}
+      {mode === "voice" && <VoiceStage voice={voice} />}
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         {status && !status.available && (
@@ -492,9 +824,22 @@ export function ChatPanel({ userId }: { userId: string }) {
         <div ref={endRef} />
       </div>
 
+      {mode === "voice" ? (
+        <VoiceBar voice={voice} disabled={status?.available === false} />
+      ) : (
       <div className="shrink-0 border-t p-3">
+        {/*
+          **`rows` 는 안 먹습니다.** `Textarea` 에 `field-sizing-content` 가
+          걸려 있어 내용 높이를 따릅니다 — `rows={2}` 가 적혀 있었지만 실제
+          높이는 `min-h-16`(64px)이었습니다. 메모 내용칸이 같은 자리에서
+          한 번 걸렸습니다 (`notes-board`).
+
+          높이를 정하는 것은 `min-h` 입니다. 위는 `max-h` 로 막습니다 —
+          안 막으면 긴 질문에서 입력칸이 자라 **말풍선 영역을 밀어냅니다**
+          (입력 묶음이 `shrink-0` 이라 밀리는 쪽은 대화입니다).
+        */}
         <Textarea
-          rows={2}
+          className="max-h-[40vh] min-h-28 overflow-y-auto"
           value={draft}
           placeholder="무엇을 도와드릴까요?"
           aria-label={`${ASSISTANT}에게 보낼 말`}
@@ -517,6 +862,7 @@ export function ChatPanel({ userId }: { userId: string }) {
           {pending ? "기다리는 중…" : "보내기"}
         </Button>
       </div>
+      )}
     </aside>
   );
 }

@@ -169,6 +169,19 @@ const envSchema = z.object({
     .optional()
     .transform((v) => (v ? Number(v) : 3101))
     .pipe(z.number().int().min(1024).max(65535)),
+
+  /**
+   * 디오의 **목소리** — Supertonic 모델 폴더 (`DEC-072`).
+   *
+   * `npm run tts:model` 이 내려받아 주는 폴더를 그대로 적습니다. 비워 두면
+   * 서버 목소리가 없고, 음성 모드는 **브라우저 내장 목소리**로 물러납니다
+   * (그 사실을 설정 창이 말합니다). 모델은 이 PC 안에서만 돕니다 — 밖으로
+   * 나가는 것이 없습니다.
+   */
+  TTS_MODEL_DIR: z
+    .string()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
 });
 
 export type Env = z.infer<typeof envSchema>;

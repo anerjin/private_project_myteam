@@ -64,6 +64,13 @@ const nextConfig: NextConfig = {
    */
   poweredByHeader: false,
   allowedDevOrigins: devOrigins(),
+  /*
+   * **네이티브 애드온은 번들하지 않습니다.** `sherpa-onnx-node` 는 `.node`
+   * 바이너리와 DLL 을 `require` 로 찾습니다 — 번들러가 그 경로를 바꾸면
+   * 「모듈을 찾을 수 없다」로 죽습니다. 서버에서 그대로 `require` 하게 둡니다
+   * (`tts.service`).
+   */
+  serverExternalPackages: ["sherpa-onnx-node"],
 };
 
 export default nextConfig;

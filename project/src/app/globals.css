@@ -5,7 +5,29 @@
 /* 마크다운 본문 스타일 (DEV-04 · 4.6절) */
 @plugin "@tailwindcss/typography";
 
-@custom-variant dark (&:is(.dark *));
+/*
+ * **어두운 것 «안»에 밝은 것이 들어올 수 있습니다.**
+ *
+ * 도우미 패널이 그렇습니다(`features/chat/components/chat-panel.tsx`). 앱은
+ * 어두운데 패널만 밝게 보고 싶을 수 있고, 그러려면 「가까운 쪽이 이긴다」가
+ * 되어야 합니다.
+ *
+ * 원래 규칙은 `&:is(.dark *)` 하나였습니다. 그러면 `html.dark > aside.light`
+ * 안에서 **토큰만 밝아지고 `dark:` 유틸리티는 그대로 살아납니다** — 말풍선의
+ * `dark:prose-invert`(`markdown-viewer`)가 흰 바탕에 흰 글씨를 만듭니다.
+ * 토큰을 되돌리는 것만으로는 절반입니다.
+ *
+ * | 바깥 | 안 | 되어야 하는 것 | 무엇이 잡는가 |
+ * | --- | --- | --- | --- |
+ * | `html.light` | — | 밝게 | 둘 다 안 맞습니다 |
+ * | `html.dark` | — | 어둡게 | 앞: `.light` 조상이 없습니다 |
+ * | `html.light` | `aside.dark` | 어둡게 | 뒤: `.light .dark *` |
+ * | `html.dark` | `aside.light` | 밝게 | 앞을 `:not(.light *)` 가 걸러냅니다 |
+ *
+ * `:not()` 안의 후손 선택자는 Selectors 4 입니다(Chrome 88·Firefox 84·
+ * Safari 16.4). 사내 전용이라 이 정도면 충분합니다 (`DEC-017`).
+ */
+@custom-variant dark (&:is(:is(.dark *):not(.light *), .light .dark *));
 
 @theme inline {
   --color-background: var(--background);
@@ -51,7 +73,17 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root {
+/*
+ * **`.light` 는 `:root` 와 «같은» 값을 씁니다.** 베끼지 않고 선택자만 늘립니다 —
+ * 두 벌이 되면 한쪽만 고치는 날이 오고, 그때 틀리는 쪽은 덜 보이는 쪽입니다.
+ *
+ * 이 선택자가 필요한 이유는 하나입니다: 어두운 조상 «안»에서 밝은 값으로
+ * 되돌릴 자리가 있어야 도우미 패널의 「밝게 보기」가 성립합니다.
+ * `next-themes` 가 밝은 테마에서 `<html>` 에 붙이는 `light` 와도 같은 값이라
+ * 겹쳐도 달라지는 것이 없습니다.
+ */
+:root,
+.light {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -151,6 +183,10 @@
  * 하던 조회가 전부 클라이언트로 밀립니다.
  *
  * 좁은 화면에서는 패널이 통째로 덮으므로 밀지 않습니다.
+ *
+ * **아래 값은 «기본값»입니다.** 경계를 끌면 패널이 `<html>` 에 인라인으로
+ * `--chat-width` 를 씁니다(인라인이 이깁니다) — 패널의 폭과 본문이 밀리는 양이
+ * **같은 변수 하나**를 보므로, 끌 때 고칠 곳도 하나입니다.
  */
 :root {
   --chat-width: 20rem;
@@ -166,4 +202,19 @@
   html[data-chat="open"] [data-slot="sidebar-inset"] {
     padding-right: var(--chat-width);
   }
+}
+
+/*
+ * **경계를 끄는 «동안»** (`chat-panel` 의 손잡이).
+ *
+ * 끌면 커서가 글자 위를 지나가고, 그러면 브라우저가 **글자를 선택합니다** —
+ * 폭을 조절했는데 화면 절반이 파랗게 칠해집니다. 끄는 동안만 막습니다.
+ *
+ * `user-select` 는 상속되므로 `<html>` 한 곳이면 충분합니다. 커서는 상속이
+ * 아니라서, 자기 커서를 가진 것들(단추의 `pointer`)은 지나갈 때 잠깐 그 모양이
+ * 됩니다 — 끄는 중에만이고, `*` 에 `!important` 를 뿌릴 값은 아닙니다.
+ */
+html[data-chat-resizing] {
+  cursor: col-resize;
+  user-select: none;
 }
