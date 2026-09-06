@@ -5,6 +5,7 @@ import { decodeSegment } from "@/lib/path-segment";
 import { PATHNAME_HEADER } from "@/lib/request-headers";
 import * as collectionService from "@/server/services/collection.service";
 import * as memberService from "@/server/services/member.service";
+import * as projectService from "@/server/services/project.service";
 import * as resourceService from "@/server/services/resource.service";
 
 /**
@@ -76,6 +77,19 @@ export async function serviceBreadcrumbLabels(): Promise<
     const slug = segments[1]!;
     const name = await collectionService.nameBySlug(slug);
     if (name) labels[slug] = name;
+  } else if (segments[0] === "projects" && segments.length >= 2) {
+    /*
+     * `/projects/{slug}[/docs/{section}|/tasks]` — 동적인 것은 **slug 하나**입니다.
+     * 구획(`plan`·`design`·`dev`)은 상수라 `SEGMENT_LABEL` 이 맡습니다.
+     *
+     * `my-tasks` 도 이 자리에 오지만 프로젝트 slug 가 아닙니다 — 못 찾으면
+     * 아무것도 안 넣고, 빵부스러기는 `SEGMENT_LABEL` 의 「내 할 일」을 씁니다.
+     */
+    const slug = segments[1]!;
+    if (slug !== "my-tasks") {
+      const name = await projectService.nameBySlug(slug);
+      if (name) labels[slug] = name;
+    }
   }
   /*
    * **노트에는 동적 세그먼트가 없습니다.** 상세를 화면이 아니라 **가운데

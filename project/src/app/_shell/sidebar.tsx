@@ -7,6 +7,7 @@ import {
   adminNav,
   serviceHomeGroup,
   serviceLibraryGroup,
+  serviceProjectGroup,
 } from "@/config/navigation";
 import { buildResourceNavGroup, type NavType } from "@/features/resources/nav";
 
@@ -36,6 +37,8 @@ export function ServiceSidebar({
   const groups = [
     serviceHomeGroup,
     buildResourceNavGroup(navTypes),
+    // 모아 둔 자료와 내 것 «사이» — 팀이 지금 하는 일입니다 (`DEC-069`)
+    serviceProjectGroup,
     serviceLibraryGroup,
   ];
 

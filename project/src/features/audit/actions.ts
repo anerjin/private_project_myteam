@@ -49,6 +49,20 @@ export const AUDIT_ACTIONS = [
    * 감사 로그에 남는 유일한 흔적입니다 — 「왜 작년 기록이 없느냐」의 답이
    * 여기 있습니다. 보존 배치(`maintenance.service`)가 쓰던 방식과 같습니다.
    */
+  /*
+   * 프로젝트 (`FR-PROJ-*`).
+   *
+   * **그릇만 기록하고 안의 글은 기록하지 않습니다.** 프로젝트를 만들고 지우는
+   * 것은 팀 모두에게 보이는 구조 변경입니다 — 특히 삭제는 남의 문서와 일정을
+   * 함께 감춥니다. 반면 문서를 고치고 할 일을 옮기는 것은 **글쓰기**이고,
+   * 남기면 관리자 화면에 「누가 몇 번 고쳤는지」가 흐릅니다(개인 메모를
+   * 기록하지 않는 것과 같은 선). 문서의 판은 `project_doc_versions` 가,
+   * 프로젝트 안의 활동은 `FR-PROJ-020` 이 따로 봅니다.
+   */
+  "PROJECT_CREATE",
+  "PROJECT_UPDATE",
+  "PROJECT_DELETE",
+  "PROJECT_RESTORE",
   "JOB_PURGE",
   "AUDIT_PURGE",
 ] as const;
@@ -89,6 +103,10 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   FILE_DELETE: "파일 삭제",
   ARCHIVE_RUN: "아카이브 실행",
   SETTING_UPDATE: "설정 변경",
+  PROJECT_CREATE: "프로젝트 생성",
+  PROJECT_UPDATE: "프로젝트 수정",
+  PROJECT_DELETE: "프로젝트 삭제",
+  PROJECT_RESTORE: "프로젝트 복구",
   JOB_PURGE: "작업 기록 정리",
   AUDIT_PURGE: "감사 로그 정리",
 };
@@ -103,6 +121,7 @@ export const AUDIT_GROUPS = [
   "계정",
   "API 키",
   "자료·파일",
+  "프로젝트",
   "설정",
   "운영",
 ] as const;
@@ -111,6 +130,7 @@ export function groupOf(action: AuditAction): (typeof AUDIT_GROUPS)[number] {
   if (action.startsWith("APIKEY_")) return "API 키";
   if (action.startsWith("USER_")) return "계정";
   if (action === "SETTING_UPDATE") return "설정";
+  if (action.startsWith("PROJECT_")) return "프로젝트";
   /*
    * **`RESOURCE_PURGE` 보다 먼저 걸러지면 안 됩니다.** 접두사로 봅니다 —
    * `_PURGE` 로 끝나는 것을 뭉뚱그리면 자료 영구 삭제가 「운영」으로 갑니다.

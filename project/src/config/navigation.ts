@@ -2,7 +2,9 @@ import {
   BookMarked,
   CircleUserRound,
   Database,
+  FolderKanban,
   FolderTree,
+  GanttChartSquare,
   LayoutDashboard,
   ListChecks,
   NotebookPen,
@@ -32,6 +34,25 @@ export interface NavGroup {
  */
 export const serviceHomeGroup: NavGroup = {
   items: [{ title: "대시보드", href: "/dashboard", icon: LayoutDashboard }],
+};
+
+/**
+ * 프로젝트 (`FR-PROJ-*` · `DEC-069`).
+ *
+ * **자료 메뉴와 내 서재 «사이»에 둡니다.** 위는 모아 둔 자료이고 아래는 내
+ * 것인데, 프로젝트는 **팀이 지금 하는 일**이라 성격이 다릅니다 — 자료 타입
+ * 목록에 섞으면 「프로젝트도 자료의 한 종류」로 읽힙니다. 그게 정확히
+ * `DEC-069` 가 아니라고 말한 것입니다.
+ *
+ * 자료 메뉴와 달리 **레지스트리에서 만들지 않습니다.** 콘텐츠 타입이 아니라
+ * 늘어나지 않는 고정 메뉴입니다.
+ */
+export const serviceProjectGroup: NavGroup = {
+  label: "프로젝트",
+  items: [
+    { title: "전체 프로젝트", href: "/projects", icon: FolderKanban },
+    { title: "내 할 일", href: "/projects/my-tasks", icon: GanttChartSquare },
+  ],
 };
 
 export const serviceLibraryGroup: NavGroup = {
@@ -94,6 +115,13 @@ export const SEGMENT_LABEL: Record<string, string> = {
   collections: "컬렉션",
   bookmarks: "북마크",
   notes: "나의 노트",
+  projects: "프로젝트",
+  "my-tasks": "내 할 일",
+  plan: "기획",
+  design: "디자인",
+  dev: "개발",
+  tasks: "일정",
+  docs: "문서",
   avatars: "아바타",
   search: "검색",
   me: "마이페이지",

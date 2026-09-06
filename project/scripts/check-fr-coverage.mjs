@@ -77,7 +77,15 @@ const REQ = path.resolve(ROOT, "../_docs/01.요구사항/03_기능_요구사항.
  * `005`(휴지통)는 **뒤늦게 붙었습니다.** 처음에는 「지우면 끝」이었는데,
  * 실수로 지운 메모를 되돌릴 길이 없는 것을 겪고 넣었습니다.
  */
-const EXPECTED_REQUIREMENTS = 110;
+/*
+ * `110 → 130`. **`FR-PROJ-001`~`020` 을 더했습니다** — 프로젝트(문서 + 일정).
+ * 운영자 요청이고 대장에 없던 도메인입니다 (`DEC-069` · 로드맵 `M7`).
+ *
+ * 이때 `REQ-03` 3.1 요약표가 **105 에서 멈춰 있던 것**도 함께 드러났습니다 —
+ * `NOTE` 다섯이 대장에는 있는데 요약에서 빠져 있었고, 이 검사는 대장 행을
+ * 세므로 110 을 보고 있었습니다. **사람이 보는 표만 거짓이었습니다.**
+ */
+const EXPECTED_REQUIREMENTS = 130;
 
 function loadRequirements() {
   const src = readFileSync(REQ, "utf8");
@@ -284,8 +292,15 @@ const FIXTURE = {
 /** 페이즈 목록 표(7.11)와 같은 사실이므로 여기 적지 않고 문서에서 읽는다 */
 function phasesByMilestone(doc) {
   const map = new Map();
-  // `**P5** ✅` 처럼 뒤에 표시가 붙을 수 있다 — 칸 끝까지 허용한다
-  const re = /^\|\s*\*\*(P\d)\*\*[^|]*\|([^|]*)\|\s*`(M[\d.]+)`\s*\|/gm;
+  /*
+   * `**P5** ✅` 처럼 뒤에 표시가 붙을 수 있다 — 칸 끝까지 허용한다.
+   *
+   * **`P\d` 가 아니라 `P\d+` 입니다.** 한 자리로 두면 `P10` 행이 통째로
+   * 안 읽히고, 그 마일스톤은 **페이즈 이름 없이** 보고됩니다 — 아무도
+   * 틀렸다고 말해 주지 않는 조용한 실패입니다. `P10`(프로젝트)을 더하면서
+   * 실제로 걸린 자리입니다.
+   */
+  const re = /^\|\s*\*\*(P\d+)\*\*[^|]*\|([^|]*)\|\s*`(M[\d.]+)`\s*\|/gm;
   for (const m of doc.matchAll(re)) {
     const [, phase, name, milestone] = m;
     if (!map.has(milestone)) map.set(milestone, []);
