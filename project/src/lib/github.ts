@@ -32,7 +32,7 @@ const API = "https://api.github.com";
 const HEADERS = {
   accept: "application/vnd.github+json",
   "x-github-api-version": "2022-11-28",
-  "user-agent": "Neowave Work",
+  "user-agent": "NeowaveWork",
 };
 
 export interface RepoMeta {

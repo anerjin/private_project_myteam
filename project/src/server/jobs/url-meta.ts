@@ -70,7 +70,7 @@ async function readMeta(browser: Browser, url: string): Promise<PageMeta> {
      */
     userAgent:
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-      "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Neowave Work/1.0",
+      "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 NeowaveWork/1.0",
   });
   try {
     const page = await ctx.newPage();

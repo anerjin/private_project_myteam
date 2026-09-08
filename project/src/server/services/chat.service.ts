@@ -642,7 +642,7 @@ function mcpConfig(): string {
   const servers: Record<string, unknown> = {};
 
   if (toolsConfigured()) {
-    servers.neowave-work = {
+    servers["neowave-work"] = {
       command: process.execPath,
       args: [path.join(process.cwd(), "packages/mcp-server/dist/index.js")],
       env: {

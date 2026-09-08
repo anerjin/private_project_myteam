@@ -490,7 +490,9 @@ async function run() {
       );
       check(
         "본문 글자가 담겼다",
-        buf.toString("utf8").includes("Neowave Work"),
+        // 두 단어를 찾으면 quoted-printable soft line break(`=\r\n`)나
+        // HTML 공백 접힘에 쪼개져 헛짚는다. 쪼개지지 않는 한 토큰으로 본다.
+        buf.toString("utf8").includes("Neowave"),
         "빈 껍데기를 저장하면 보관이 아니다"
       );
 

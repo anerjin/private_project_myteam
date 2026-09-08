@@ -188,7 +188,9 @@ function prune(): string[] {
   const weekSeen = new Set<string>();
   const monthSeen = new Set<string>();
   for (const f of files) {
-    const m = /^neowave-work-(\d{4})-(\d{2})-(\d{2})-/.exec(f);
+    // `DEC-073` 이름 변경 전에 만든 `queenbee-*` 백업도 잡는다. 안 그러면
+    // 옛 백업이 영원히 prune 되지 않고 디스크에 남는다.
+    const m = /^(?:neowave-work|queenbee)-(\d{4})-(\d{2})-(\d{2})-/.exec(f);
     if (!m) continue;
     const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     const week = `${d.getFullYear()}-W${Math.ceil(((+d - +new Date(d.getFullYear(), 0, 1)) / 86400000 + 1) / 7)}`;

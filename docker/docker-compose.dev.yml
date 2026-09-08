@@ -22,7 +22,7 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     ports:
       # 호스트 5433 → 컨테이너 5432. 이 PC의 다른 프로젝트(JIDO)가 5432 를 쓰고 있어
-      # Neowave Work 가 비켜갑니다 (DEC-033 — 포트 3000→3100 과 같은 이유).
+      # Neowave Work 이 비켜갑니다 (DEC-033 — 포트 3000→3100 과 같은 이유).
       - "5433:5432"
     volumes:
       # named volume 을 쓴다. 프로젝트 폴더에 바인드 마운트하면

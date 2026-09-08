@@ -52,7 +52,7 @@ async function main(): Promise<void> {
     { name: "neowave-work", version: "0.1.0" },
     {
       instructions:
-        "Neowave Work 는 사내 AI 개발 자료 지식 베이스다. 자료를 등록하기 전에 nwwork_list_content_types 로 타입별 필드를 확인하고 nwwork_check_duplicate 로 중복을 확인한다. 등록 실패는 자동으로 재시도하지 않는다.",
+        "Neowave Work 은 사내 AI 개발 자료 지식 베이스다. 자료를 등록하기 전에 nwwork_list_content_types 로 타입별 필드를 확인하고 nwwork_check_duplicate 로 중복을 확인한다. 등록 실패는 자동으로 재시도하지 않는다.",
     }
   );
 

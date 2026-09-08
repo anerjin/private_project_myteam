@@ -5,7 +5,7 @@ description: 웹에서 AI·개발 자료를 찾아 Neowave Work 지식 베이스
 
 # Neowave Work 자료 수집
 
-Neowave Work는 사내 AI 개발 자료 지식 베이스입니다. 이 Skill은 **무엇을 채워야 하는지**가 아니라
+Neowave Work은 사내 AI 개발 자료 지식 베이스입니다. 이 Skill은 **무엇을 채워야 하는지**가 아니라
 **어떻게 채워야 좋은지**를 정합니다. 필드 목록은 `nwwork_list_content_types` 가 알려 줍니다.
 
 ## 왜 절차가 있는가
