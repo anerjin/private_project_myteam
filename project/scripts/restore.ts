@@ -21,7 +21,7 @@
  * | 덤프가 **읽힌다** | 0바이트·잘린 파일을 거른다 |
  * | 스키마가 **선다** | 마이그레이션과 덤프가 어긋나면 여기서 걸린다 |
  * | 행이 **들어온다** | 「복구했는데 비어 있다」를 막는다 |
- * | 관리자 계정이 **있다** | 복구해도 못 들어가면 복구가 아니다 |
+ * | 들어올 수 있는 계정이 **있다** | 복구해도 못 들어가면 복구가 아니다 |
  *
  * ## 파일은 별도입니다
  *
@@ -196,7 +196,7 @@ async function restoreAndCheck(
   );
 
   let users = 0;
-  let admins = 0;
+  let active = 0;
   let resources = 0;
   let categories = 0;
 
@@ -208,10 +208,16 @@ async function restoreAndCheck(
     const count = (table: string) =>
       Number(psql(target, `SELECT count(*) FROM ${table}`, user).trim());
     users = count("users");
-    admins = Number(
+    /*
+     * 🔄 `WHERE role='ADMIN' AND status='ACTIVE'` 였습니다. `DEC-077` 로
+     *    `users.role` 컬럼이 사라져 **그 SQL 은 이제 죽습니다** — 조건이
+     *    `status` 하나로 줄었고, 묻는 것은 그대로입니다: 「복구한 뒤 들어올 수
+     *    있는 사람이 있는가」.
+     */
+    active = Number(
       psql(
         target,
-        "SELECT count(*) FROM users WHERE role='ADMIN' AND status='ACTIVE'",
+        "SELECT count(*) FROM users WHERE status='ACTIVE'",
         user
       ).trim()
     );
@@ -220,18 +226,18 @@ async function restoreAndCheck(
 
     if (users === 0) problems.push("계정이 0명입니다");
     /*
-     * **관리자가 없으면 복구가 아닙니다.** 데이터가 다 돌아와도 아무도 못
-     * 들어가면 서비스는 멈춘 것입니다.
+     * **들어올 수 있는 계정이 없으면 복구가 아닙니다.** 데이터가 다 돌아와도
+     * 아무도 못 들어가면 서비스는 멈춘 것입니다.
      */
-    if (admins === 0)
-      problems.push("활성 관리자가 0명입니다 — 복구해도 못 들어갑니다");
+    if (active === 0)
+      problems.push("활성 계정이 0개입니다 — 복구해도 못 들어갑니다");
     if (categories === 0)
       problems.push("카테고리가 0개입니다 — 분류가 통째로 비었습니다");
   }
 
   console.log("\n  들어온 것");
   console.log(
-    `    테이블 ${tables} · 계정 ${users} · 자료 ${resources} · 카테고리 ${categories}`
+    `    테이블 ${tables} · 계정 ${users}(활성 ${active}) · 자료 ${resources} · 카테고리 ${categories}`
   );
 
   if (problems.length > 0) {

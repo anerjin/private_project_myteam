@@ -25,8 +25,10 @@ export const AUDIT_ACTIONS = [
    * **기록을 지우는 것은 기록을 고치는 것입니다.** 감사 로그는 「그때 실제로
    * 있었던 일」이고, 기능이 없어졌다고 과거가 없어지지 않습니다.
    *
-   * 반대로 `USER_REJECT`·`USER_REOPEN` 은 **뺐습니다** — 그 둘은 실제로 한 번도
-   * 일어난 적이 없어(0행) 남길 역사가 없습니다.
+   * 반대로 `USER_REJECT`·`USER_REOPEN`·`USER_ROLE_CHANGE` 는 **뺐습니다** —
+   * 셋 다 실제로 한 번도 일어난 적이 없어(0행) 남길 역사가 없습니다.
+   * (역할 변경은 `DEC-077` 로 기능 자체가 사라졌고, 같은 시점에 세어 보니
+   *  `audit_logs` 에 `USER_ROLE_CHANGE` 행이 0이었습니다.)
    */
   "USER_SIGNUP",
   "USER_APPROVE",
@@ -37,7 +39,6 @@ export const AUDIT_ACTIONS = [
   "USER_SIGNOUT",
   "USER_SUSPEND",
   "USER_REACTIVATE",
-  "USER_ROLE_CHANGE",
   "USER_PASSWORD_CHANGE",
   "USER_PASSWORD_RESET",
   "USER_WITHDRAW",
@@ -105,10 +106,10 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /**
  * 사람이 읽는 이름.
  *
- * 표에는 `USER_ROLE_CHANGE` 를 그대로 보여줍니다 — 관리자가 기계 이름으로
- * 검색하는 일이 있고, 요약 칸이 이미 사람 말을 합니다. 이 표는 **필터의
- * 선택지**를 위한 것입니다: 드롭다운에 대문자 스물다섯 개가 있으면 아무도
- * 못 고릅니다.
+ * 표에 없는 행위(옛 백업을 되돌려 들어온 것 등)는 **대문자 코드 그대로**
+ * 보입니다 — 관리자가 기계 이름으로 검색하는 일이 있고, 요약 칸이 이미
+ * 사람 말을 합니다. 이 표는 **필터의 선택지**를 위한 것입니다: 드롭다운에
+ * 대문자 스물다섯 개가 있으면 아무도 못 고릅니다.
  */
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   // 역사 전용 — 만드는 코드는 없습니다 (`DEC-077`, 위 배열 주석)
@@ -120,7 +121,6 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   USER_SIGNOUT: "로그아웃",
   USER_SUSPEND: "정지",
   USER_REACTIVATE: "정지 해제",
-  USER_ROLE_CHANGE: "역할 변경",
   USER_PASSWORD_CHANGE: "비밀번호 변경",
   USER_PASSWORD_RESET: "비밀번호 초기화",
   USER_WITHDRAW: "탈퇴",

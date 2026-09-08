@@ -601,7 +601,11 @@ async function run() {
   console.log("\n★ 시스템 설정 — 바꾼 값이 «읽는 쪽»에 닿는다 (FR-ADM-015)");
   {
     const rows = await settingsService.getAll();
-    check("네 항목이 온다", rows.length === 4, `${rows.length}개`);
+    /*
+     * **넷에서 셋이 됐습니다** (`DEC-077`). 「신규 가입 허용」이 없어졌습니다 —
+     * 가입 절차 자체가 사라졌으므로 켜고 끌 것이 없습니다.
+     */
+    check("세 항목이 온다", rows.length === 3, `${rows.length}개`);
 
     const upload = rows.find((r) => r.key === "upload.maxMb")!;
     check("건드리기 전에는 기본값이라고 말한다", upload.overridden === false);

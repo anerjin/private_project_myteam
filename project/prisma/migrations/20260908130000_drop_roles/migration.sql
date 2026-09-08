@@ -22,7 +22,10 @@ ALTER TABLE "users" DROP COLUMN "role";
 DROP TYPE "Role";
 
 -- ── 감사 로그는 손대지 않습니다 ──────────────────────
--- audit_logs 의 USER_ROLE_CHANGE 행과 diff 의 {"role":{"before":…,"after":…}} 는
--- 그대로 둡니다. action 은 text, diff 는 jsonb 라 이 타입에 매여 있지 않고,
--- **그때 실제로 있었던 일**입니다. 기록을 지우는 것은 기록을 고치는 것입니다.
--- features/audit/actions.ts 가 USER_ROLE_CHANGE 라벨을 남겨 둔 이유가 이것입니다.
+-- action 은 text, diff 는 jsonb 라 이 타입에 매여 있지 않습니다. 지운 컬럼 때문에
+-- 과거 행이 안 읽히는 일은 없습니다 — 기록을 지우는 것은 기록을 고치는 것입니다.
+--
+-- 적용 시점에 세어 봤습니다: audit_logs 에 USER_ROLE_CHANGE 행 **0건**.
+-- 그래서 features/audit/actions.ts 의 목록에서도 뺐습니다(남길 역사가 없습니다).
+-- 나중에 그 행이 있는 백업을 되돌리면 필터 드롭다운에서 빠지고 표에는 대문자
+-- 코드가 그대로 뜹니다 — 읽히기는 읽힙니다.

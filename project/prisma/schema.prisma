@@ -28,8 +28,9 @@ datasource db {
 /// 스코프**가 합니다 (`api_keys.scopes`). 역할이 스코프를 «제한»하던 것이
 /// 없어졌을 뿐, 키마다 스코프를 «고르는» 것은 남습니다.
 ///
-/// 과거 감사 로그의 `USER_ROLE_CHANGE` 행과 `diff.role` 은 그대로 읽힙니다 —
-/// `audit_logs.action` 은 `String`, `diff` 는 `Json` 이라 이 타입에 매여 있지 않습니다.
+/// 감사 로그는 이 타입에 매여 있지 않습니다 — `audit_logs.action` 은 `String`,
+/// `diff` 는 `Json` 입니다. 적용 시점에 `USER_ROLE_CHANGE` 행은 0건이었고,
+/// 그래서 `features/audit/actions.ts` 의 목록에서도 뺐습니다.
 
 /// 계정이 «지금 쓸 수 있는가». 가입 신청·승인 절차를 걷어내면서
 /// `PENDING`·`REJECTED` 가 사라졌습니다 (`DEC-077`) — 신청이 없으니 대기도 거부도

@@ -93,8 +93,9 @@ async function messageOf(fn: () => Promise<unknown>): Promise<string> {
 async function run() {
   hash = await hashPassword(PASSWORD);
 
-  const admin = await makeUser("admin", "ACTIVE", "ADMIN");
-  const admin2 = await makeUser("admin2", "ACTIVE", "ADMIN"); // 마지막 관리자 보호 회피용
+  const admin = await makeUser("admin", "ACTIVE");
+  // 마지막 «활성 계정» 보호 회피용 (`DEC-077` 로 「마지막 관리자」가 이렇게 바뀌었습니다)
+  const admin2 = await makeUser("admin2", "ACTIVE");
   const adminActor = actorOf(admin);
   const adminCookie = await cookieFor(admin.id);
 

@@ -74,8 +74,9 @@ export async function reactivateMemberAction(
 
 /*
  * `changeRoleAction` (API-065) 이 여기 있었습니다. **지웠습니다** (`DEC-077`) —
- * 바꿀 등급이 없습니다. 옛 감사 로그의 `USER_ROLE_CHANGE` 행은 그대로 남고,
- * `features/audit/actions.ts` 가 그 라벨을 **읽기 위해** 들고 있습니다.
+ * 바꿀 등급이 없습니다. `USER_ROLE_CHANGE` 감사 행위도 함께 뺐습니다:
+ * `audit_logs` 를 세어 보니 그 행이 **0건**이라 남길 역사가 없었습니다
+ * (`features/audit/actions.ts` 머리말).
  */
 
 /**
