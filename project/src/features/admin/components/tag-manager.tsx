@@ -63,11 +63,9 @@ export interface TagRow {
 export function TagManager({
   tags,
   unusedCount,
-  canEdit,
 }: {
   tags: TagRow[];
   unusedCount: number;
-  canEdit: boolean;
 }) {
   const router = useRouter();
   const [busy, startTransition] = useTransition();
@@ -91,7 +89,10 @@ export function TagManager({
     );
   }, [tags, q]);
 
-  function run(fn: () => Promise<{ ok: boolean; message?: string }>, done: string) {
+  function run(
+    fn: () => Promise<{ ok: boolean; message?: string }>,
+    done: string
+  ) {
     startTransition(async () => {
       const r = await fn();
       if (!r.ok) {
@@ -116,45 +117,42 @@ export function TagManager({
           {filtered.length} / {tags.length}개
         </span>
 
-        {canEdit && (
-          <div className="ml-auto flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() =>
-                startTransition(async () => {
-                  const r = await recountTagsAction();
-                  if (!r.ok) {
-                    toast.error(r.message ?? "처리하지 못했습니다.");
-                    return;
-                  }
-                  toast.success(
-                    r.data.fixed === 0
-                      ? "사용 수가 모두 맞습니다."
-                      : `${r.data.fixed}개를 정정했습니다.`
-                  );
-                  router.refresh();
-                })
-              }
-            >
-              <Calculator className="size-4" />
-              사용 수 다시 세기
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy || unusedCount === 0}
-              onClick={() => setCleaning(true)}
-            >
-              <Trash2 className="size-4" />
-              안 쓰는 태그 정리
-              <span className="text-muted-foreground text-xs">
-                ({unusedCount})
-              </span>
-            </Button>
-          </div>
-        )}
+        <div className="ml-auto flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() =>
+              startTransition(async () => {
+                const r = await recountTagsAction();
+                if (!r.ok) {
+                  toast.error(r.message ?? "처리하지 못했습니다.");
+                  return;
+                }
+                toast.success(
+                  r.data.fixed === 0
+                    ? "사용 수가 모두 맞습니다."
+                    : `${r.data.fixed}개를 정정했습니다.`
+                );
+                router.refresh();
+              })
+            }
+          >
+            <Calculator className="size-4" />
+            사용 수 다시 세기
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy || unusedCount === 0}
+            onClick={() => setCleaning(true)}
+          >
+            <Trash2 className="size-4" />안 쓰는 태그 정리
+            <span className="text-muted-foreground text-xs">
+              ({unusedCount})
+            </span>
+          </Button>
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -183,30 +181,28 @@ export function TagManager({
               >
                 {t.count === 0 ? "안 쓰임" : `${t.count}건`}
               </span>
-              {canEdit && (
-                <div className="flex gap-0.5">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="size-7"
-                    aria-label="이름 변경"
-                    disabled={busy}
-                    onClick={() => setRenaming(t)}
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="size-7"
-                    aria-label="병합"
-                    disabled={busy || tags.length < 2}
-                    onClick={() => setMerging(t)}
-                  >
-                    <Merge className="size-4" />
-                  </Button>
-                </div>
-              )}
+              <div className="flex gap-0.5">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  aria-label="이름 변경"
+                  disabled={busy}
+                  onClick={() => setRenaming(t)}
+                >
+                  <Pencil className="size-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  aria-label="병합"
+                  disabled={busy || tags.length < 2}
+                  onClick={() => setMerging(t)}
+                >
+                  <Merge className="size-4" />
+                </Button>
+              </div>
             </li>
           ))}
         </ul>

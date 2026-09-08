@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 
-import {
-  RoleBadge,
-  UserStatusBadge,
-} from "@/features/members/components/badges";
+import { UserStatusBadge } from "@/features/members/components/badges";
 import {
   Card,
   CardContent,
@@ -101,8 +98,6 @@ export default async function MePage() {
               revokedAt: k.revokedAt?.toISOString() ?? null,
               createdAt: k.createdAt.toISOString(),
             }))}
-            // 선택 가능 스코프도 서버가 계산해서 준다 (DEC-037)
-            allowedScopes={[...apiKeyService.scopesAllowedFor(me.role)]}
             appUrl={env.APP_URL}
           />
 
@@ -160,13 +155,8 @@ export default async function MePage() {
             <CardContent className="divide-y">
               {[
                 {
-                  label: "가입 신청 알림",
-                  hint: "관리자에게만 해당",
-                  on: true,
-                },
-                {
-                  label: "승인·거부 결과",
-                  hint: "내 계정 상태가 바뀔 때",
+                  label: "계정 상태 변경",
+                  hint: "정지 해제·비밀번호 초기화 등",
                   on: true,
                 },
                 {
@@ -230,10 +220,6 @@ export default async function MePage() {
               <CardTitle className="text-base">계정 정보</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">역할</span>
-                <RoleBadge role={me.role} />
-              </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">상태</span>
                 <UserStatusBadge status={me.status} />

@@ -40,18 +40,16 @@ async function mkUser(tag: string) {
       passwordHash: await hashPassword("Verify!12345"),
       name: `P4검증-${tag}`,
       status: "ACTIVE",
-      role: "MEMBER",
     },
-    select: { id: true, username: true, role: true },
+    select: { id: true, username: true },
   });
   made.push(u.id);
   return u;
 }
 
-const actorOf = (u: { id: string; username: string; role: string }): Actor => ({
+const actorOf = (u: { id: string; username: string }): Actor => ({
   id: u.id,
   username: u.username,
-  role: u.role as Actor["role"],
   via: "WEB",
 });
 
@@ -265,7 +263,7 @@ async function run() {
     );
   }
 
-  console.log("\n★ 수정 — 타입은 못 바꾸고, 남의 자료는 못 고친다");
+  console.log("\n★ 수정 — 타입은 못 바꾼다 (남의 자료는 이제 고칠 수 있다)");
   {
     const id = madeResources[0];
     const edit = parseResourceInput(
@@ -311,11 +309,21 @@ async function run() {
       withKind.ok ? "" : JSON.stringify(withKind.fieldErrors)
     );
 
+    /*
+     * 🔄 **「남의 자료는 못 고친다」**였습니다 — `MEMBER` 는 자기 것만 고쳤습니다.
+     *    `DEC-077` 로 등급이 사라져 **로그인한 사람이면 남의 자료도 고칩니다.**
+     *    남은 제약은 바로 위의 「타입은 못 바꾼다」이고, 그건 권한이 아니라
+     *    상세 테이블이 갈리는 문제입니다.
+     */
     const stranger = await mkUser("stranger");
-    const denied = await msg(() =>
+    const byStranger = await msg(() =>
       resourceWrite.update(actorOf(stranger), id, edit.data)
     );
-    check("남의 자료는 못 고친다", denied.includes("권한이 없습니다"), denied);
+    check(
+      "남의 자료도 고친다 (DEC-077)",
+      byStranger === "(오류 없음)",
+      byStranger
+    );
   }
 
   console.log("\n★ 북마크 — 정본은 bookmarks 행, 카운트는 세어서 쓴다");
@@ -456,11 +464,18 @@ async function run() {
       ).viewCount;
 
     // 이전 실행의 흔적을 지운다 — TTL 6시간이라 남아 있으면 첫 조회가 안 세어진다
-    await redis.del(`view:${viewer.id}:${target}`, `view:${other.id}:${target}`);
+    await redis.del(
+      `view:${viewer.id}:${target}`,
+      `view:${other.id}:${target}`
+    );
 
     const base = await countOf();
     await resourceService.countView(target, viewer.id);
-    check("처음 보면 는다", (await countOf()) === base + 1, `${base} → ${await countOf()}`);
+    check(
+      "처음 보면 는다",
+      (await countOf()) === base + 1,
+      `${base} → ${await countOf()}`
+    );
 
     await resourceService.countView(target, viewer.id);
     await resourceService.countView(target, viewer.id);
@@ -610,7 +625,7 @@ async function run() {
     }
   }
 
-  console.log("\n★ 초안은 작성자·EDITOR 만 본다 (M3)");
+  console.log("\n★ 초안은 로그인한 사람만 본다 (M3 → DEC-077)");
   {
     const draftAuthor = await mkUser("draft");
     const stranger = await mkUser("draft-stranger");
@@ -624,11 +639,7 @@ async function run() {
     });
     const row = await db.resource.findUniqueOrThrow({ where: { id: d.id } });
 
-    const asAuthor = await resourceService.getBySlug(
-      row.slug,
-      draftAuthor.id,
-      "MEMBER"
-    );
+    const asAuthor = await resourceService.getBySlug(row.slug, draftAuthor.id);
     check("작성자는 자기 초안을 본다", asAuthor.id === d.id);
     check(
       "DTO 가 실제 status 를 싣는다",
@@ -636,20 +647,22 @@ async function run() {
       asAuthor.status
     );
 
-    const denied = await msg(() =>
-      resourceService.getBySlug(row.slug, stranger.id, "MEMBER")
-    );
+    /*
+     * 🔄 여기서 「남은 초안을 URL 로도 못 연다」·「`EDITOR` 는 본다」를 봤습니다.
+     *    `DEC-077` 로 그 두 갈래가 사라지고 **「보는 사람이 있는가」 하나**가
+     *    남았습니다 — 로그인한 사람은 전부 보고, 세션 없는 호출은 못 봅니다.
+     *    뒤쪽이 중요합니다: 각 화면의 `generateMetadata` 가 세션 없이 부르므로
+     *    안 막으면 **초안 제목이 로그인 전에 `<title>` 로 새어 나갑니다.**
+     */
+    const asStranger = await resourceService.getBySlug(row.slug, stranger.id);
+    check("남도 초안을 본다 (DEC-077)", asStranger.id === d.id);
+
+    const anon = await msg(() => resourceService.getBySlug(row.slug));
     check(
-      "남은 초안을 URL 로도 못 연다",
-      denied.includes("찾을 수 없습니다"),
-      denied
+      "세션 없는 호출은 초안을 못 연다",
+      anon.includes("찾을 수 없습니다"),
+      anon
     );
-    const asEditor = await resourceService.getBySlug(
-      row.slug,
-      stranger.id,
-      "EDITOR"
-    );
-    check("EDITOR 는 초안을 본다", asEditor.id === d.id);
   }
 
   console.log("\n★ 동시 실행 — 단일 스레드 검증이 놓쳤던 것들");

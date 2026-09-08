@@ -34,26 +34,22 @@ import * as maintenanceService from "@/server/services/maintenance.service";
  * 배치를 «누가» 돌렸는가.
  *
  * **가짜 사람을 만들지 않습니다.** 시드 관리자를 빌려 쓰면 감사 로그에
- * 「그 사람이 새벽 4시에 200건을 지웠다」로 남습니다. 실제 `ADMIN` 계정 중
- * 하나를 쓰되 **요약 문구가 배치임을 말하게** 합니다.
+ * 「그 사람이 새벽 4시에 200건을 지웠다」로 남습니다. 실제 계정 중 하나를 쓰되
+ * **요약 문구가 배치임을 말하게** 합니다.
+ *
+ * 🔄 `role: "ADMIN"` 으로 골랐습니다. `DEC-077` 로 등급이 사라져 조건이
+ *    `status: "ACTIVE"` 하나가 됐습니다.
  */
 async function batchActor(): Promise<Actor> {
   const admin = await db.user.findFirst({
-    where: { role: "ADMIN", status: "ACTIVE" },
+    where: { status: "ACTIVE" },
     orderBy: { createdAt: "asc" },
-    select: { id: true, username: true, role: true },
+    select: { id: true, username: true },
   });
   if (!admin) {
-    throw new Error(
-      "ACTIVE 인 ADMIN 계정이 없습니다. 배치가 남길 행위자가 없습니다."
-    );
+    throw new Error("ACTIVE 계정이 없습니다. 배치가 남길 행위자가 없습니다.");
   }
-  return {
-    id: admin.id,
-    username: admin.username,
-    role: admin.role,
-    via: "WEB",
-  };
+  return { id: admin.id, username: admin.username, via: "WEB" };
 }
 
 async function main() {

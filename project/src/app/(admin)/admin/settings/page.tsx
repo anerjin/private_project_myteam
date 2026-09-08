@@ -12,7 +12,7 @@ import {
 import { SystemSettings } from "@/features/admin/components/system-settings";
 import { env } from "@/lib/env";
 import { humanBytes } from "@/lib/storage";
-import { requireRole } from "@/server/auth/guards";
+import { requireActiveUser } from "@/server/auth/guards";
 import * as settingsService from "@/server/services/settings.service";
 import * as storageService from "@/server/services/storage.service";
 
@@ -41,7 +41,7 @@ export const metadata: Metadata = { title: "시스템 설정" };
  */
 export default async function AdminSettingsPage() {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
-  await requireRole("ADMIN");
+  await requireActiveUser();
 
   const [settings, storage] = await Promise.all([
     settingsService.getAll(),
@@ -127,8 +127,8 @@ export default async function AdminSettingsPage() {
         <CardContent className="text-sm">
           {hasToken ? (
             <p>
-              토큰이 설정돼 있습니다 — API 한도 <b>시간당 5,000회</b>,
-              최신 릴리스 정보도 함께 수집합니다.
+              토큰이 설정돼 있습니다 — API 한도 <b>시간당 5,000회</b>, 최신
+              릴리스 정보도 함께 수집합니다.
             </p>
           ) : (
             <p className="text-muted-foreground">

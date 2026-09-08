@@ -5,7 +5,7 @@ import {
   MemberTable,
   type MemberRow,
 } from "@/features/members/components/member-table";
-import { requireRole } from "@/server/auth/guards";
+import { requireActiveUser } from "@/server/auth/guards";
 import * as memberRepo from "@/server/repositories/member.repository";
 
 export const metadata: Metadata = { title: "회원 관리" };
@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "회원 관리" };
 /** SCR-211 회원 관리 */
 export default async function AdminMembersPage() {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
-  await requireRole("ADMIN");
+  await requireActiveUser();
 
   const members = await memberRepo.list();
 
@@ -24,9 +24,7 @@ export default async function AdminMembersPage() {
     username: m.username,
     name: m.name,
     department: m.department,
-    role: m.role,
     status: m.status,
-    signupReason: m.signupReason,
     createdAt: m.createdAt.toISOString(),
   }));
 
@@ -34,7 +32,7 @@ export default async function AdminMembersPage() {
     <>
       <PageHeader
         title="회원 관리"
-        description="가입 신청을 승인하고 역할·상태를 관리합니다. 모든 처리는 감사 로그에 남습니다."
+        description="계정 상태를 관리합니다. 모든 처리는 감사 로그에 남습니다."
         count={rows.length}
       />
       <MemberTable members={rows} />

@@ -9,7 +9,6 @@ import { AppError } from "@/lib/errors";
 import { readSessionToken } from "@/server/auth/cookie";
 import { resolve, type SessionUser } from "@/server/auth/session";
 import type { Actor } from "@/server/auth/actor";
-import { isEditor } from "@/server/auth/actor";
 
 /**
  * 인가의 정본 — DAL (DEC-035).
@@ -35,37 +34,30 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
 /**
  * 화면용 — 로그인 안 했으면 로그인으로 (REQ-02 · 2.9절).
  *
- * **`PENDING` 은 유효한 세션이지만 서비스에 들어올 수 없습니다** (`DEC-040`).
- * 세션 계층은 「누구인지」만 알고, 「무엇을 할 수 있는지」는 여기서 판정합니다.
+ * **세션 계층과 여기의 분업은 그대로입니다** — 세션은 「누구인지」만 알고,
+ * 「무엇을 할 수 있는지」는 여기서 판정합니다. 다만 지금 남은 판정은
+ * `mustChangePassword` 하나입니다: 가입 승인 절차가 사라지면서(`DEC-077`)
+ * 「로그인은 됐는데 아직 못 들어오는」 상태가 없어졌고, 나머지 상태
+ * (`SUSPENDED`·`WITHDRAWN`)는 세션 계층이 즉사시킵니다 (`DEC-040`).
  */
 export async function requireActiveUser(): Promise<SessionUser> {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.status === "PENDING") redirect("/pending");
   if (session.mustChangePassword) redirect("/change-password");
   return session;
 }
 
-/** `/pending` 전용 — 승인 대기 중인 본인만 볼 수 있다 (FR-AUTH-007) */
-export async function requirePendingUser(): Promise<SessionUser> {
-  const session = await getSession();
-  if (!session) redirect("/login");
-  // 이미 승인된 사람이 주소를 직접 치고 들어온 경우
-  if (session.status !== "PENDING") redirect("/dashboard");
-  return session;
-}
-
-export async function requireRole(
-  role: "EDITOR" | "ADMIN"
-): Promise<SessionUser> {
-  const session = await requireActiveUser();
-  const allowed =
-    role === "ADMIN"
-      ? session.role === "ADMIN"
-      : isEditor(await toActor(session));
-  if (!allowed) redirect("/403");
-  return session;
-}
+/*
+ * `requireRole("EDITOR" | "ADMIN")` 이 여기 있었습니다. **지웠습니다** (`DEC-077`).
+ *
+ * 등급이 하나뿐이면 「이 등급인가」는 「로그인했는가」와 같은 질문입니다.
+ * 그래서 `(admin)` 그룹의 각 `page.tsx` 도 이제 `requireActiveUser()` 를 부릅니다 —
+ * **가드가 사라진 것이 아니라 물어보는 것이 하나 줄었습니다.**
+ * `scripts/check-page-guards.mjs` 가 그 호출이 페이지마다 있는지 계속 셉니다.
+ *
+ * 등급이 아니라 **소유권**으로 갈리던 자리는 그대로입니다 — 그건 역할이
+ * 아니었습니다 (`server/auth/actor.ts` 머리말).
+ */
 
 /**
  * 액션·핸들러용 — 리다이렉트가 아니라 **예외**를 던집니다.
@@ -83,24 +75,10 @@ export async function requireActor(): Promise<Actor> {
    *
    * 예외는 `changePasswordAction` 하나이고, 그 액션은 이 함수를 쓰지 않습니다.
    */
-  if (session.status === "PENDING") {
-    throw new AppError(
-      "ACCOUNT_PENDING",
-      "승인 대기 중입니다. 관리자 승인 후 이용할 수 있습니다."
-    );
-  }
   if (session.mustChangePassword) {
     throw new AppError("FORBIDDEN", "비밀번호를 먼저 변경해 주세요.");
   }
   return await toActor(session);
-}
-
-export async function requireAdminActor(): Promise<Actor> {
-  const actor = await requireActor();
-  if (actor.role !== "ADMIN") {
-    throw new AppError("FORBIDDEN", "권한이 없습니다.");
-  }
-  return actor;
 }
 
 /**
@@ -121,23 +99,10 @@ export async function toActor(session: SessionUser): Promise<Actor> {
   return {
     id: session.userId,
     username: session.username,
-    role: session.role,
     via: "WEB",
     ip: env.TRUST_PROXY
       ? (h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined)
       : undefined,
     userAgent: h.get("user-agent") ?? undefined,
   };
-}
-
-/**
- * 자료 수정 권한 (REQ-02 · 2.5절).
- *
- * 목 세션에 있던 판정을 그대로 옮겼습니다 — **이건 목이 아니라 실제 정책**이고
- * `NFR-MAINT-004` 가 요구하는 「인가 판정 단위 테스트」의 대상입니다.
- */
-export function assertCanEditResource(actor: Actor, authorId: string): void {
-  if (!isEditor(actor) && actor.id !== authorId) {
-    throw new AppError("FORBIDDEN", "이 자료를 수정할 권한이 없습니다.");
-  }
 }

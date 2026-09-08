@@ -276,7 +276,10 @@ export function AvatarPlayground({
       className={cn(
         "absolute top-0 left-0 will-change-transform",
         full
-          ? cn("pointer-events-auto", dragging ? "cursor-grabbing" : "cursor-grab")
+          ? cn(
+              "pointer-events-auto",
+              dragging ? "cursor-grabbing" : "cursor-grab"
+            )
           : "pointer-events-none"
       )}
       style={{ width: size, height: size }}
@@ -326,7 +329,7 @@ export function AvatarPlayground({
           >
             {dogImage}
 
-            <div className="pointer-events-auto bg-background/90 fixed bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border p-1 shadow-lg backdrop-blur">
+            <div className="bg-background/90 pointer-events-auto fixed bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border p-1 shadow-lg backdrop-blur">
               <Button variant="ghost" size="sm" onClick={reset}>
                 제자리로
               </Button>

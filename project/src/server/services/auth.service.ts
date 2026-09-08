@@ -18,8 +18,6 @@ import {
 } from "@/server/auth/session";
 import * as userRepo from "@/server/repositories/user.repository";
 import * as audit from "@/server/services/audit.service";
-import * as notify from "@/server/services/notification.service";
-import * as settingsService from "@/server/services/settings.service";
 
 /**
  * 인증 비즈니스 규칙 (REQ-02 · 2.6절).
@@ -37,45 +35,35 @@ export interface SignInResult {
   token: string;
   expires: Date;
   mustChangePassword: boolean;
-  /** 승인 대기 중이면 `/pending` 으로 보낸다 (DEC-040) */
-  isPending: boolean;
 }
 
 /**
  * 로그인 자체를 막는 상태 (`DEC-040`).
  *
- * **`PENDING` 은 여기 없습니다.** 승인 대기자는 로그인해서 `/pending` 안내 화면을
- * 봐야 하고, 그 화면은 신청일시·아이디를 보여줘야 합니다 (`FR-AUTH-007`).
- * 세션 없이는 채울 수 없는 값들입니다.
+ * 가입 신청·승인이 없어지면서(`DEC-077`) 「로그인은 되는데 아직 못 들어오는」
+ * 상태가 사라졌습니다 — `ACTIVE` 가 아니면 로그인 자체가 막힙니다.
+ * `session.ts` 의 같은 이름 집합과 **같은 값**이어야 합니다: 그쪽은 이미 발급된
+ * 세션을 죽이고 여기는 새 세션을 안 내줍니다.
  */
-const BLOCKED_STATUSES = new Set<UserStatus>([
-  "REJECTED",
-  "SUSPENDED",
-  "WITHDRAWN",
-]);
+const BLOCKED_STATUSES = new Set<UserStatus>(["SUSPENDED", "WITHDRAWN"]);
 
 /**
- * 차단 안내 문구 — **여기가 사유 전달의 정본입니다** (`DEC-041`, `FR-AUTH-007`).
+ * 차단 안내 문구 — **여기가 사유 전달의 정본입니다** (`DEC-041`).
  *
- * 거부·정지된 사람은 로그인 자체가 막혀(`DEC-040`) **알림함에 도달할 수 없습니다.**
- * 알림 행을 만들어 봐야 아무도 읽지 못하므로, `FR-ADM-004` 의 「사유가 신청자에게
- * 그대로 전달된다」를 지킬 수 있는 곳은 이 화면뿐입니다.
+ * 차단된 사람은 로그인 자체가 막혀(`DEC-040`) **알림함에 도달할 수 없습니다.**
+ * 알림 행을 만들어 봐야 아무도 읽지 못하므로, 그 사람에게 닿을 수 있는 지점은
+ * 이 화면뿐입니다.
  *
- * - `REJECTED` — **거부 사유를 그대로 싣습니다.**
  * - `SUSPENDED` — 문의 안내만. 규격이 사유를 요구하지 않고, 정지는 조사 중일 수 있습니다.
  * - `WITHDRAWN` — **「존재하지 않는 계정」.** 「탈퇴한 계정입니다」는 *이 아이디가 있었다*를
  *   알려 주는 계정 열거입니다. 실패 메시지를 통일하고(`REQ-02 · 2.6`) 타이밍까지
  *   평준화해 놓고 여기서 흘리면 그 모든 것이 무의미해집니다 (`NFR-SEC-016`).
  *
- * 사유는 **비밀번호 검증을 통과한 뒤에만** 보입니다 — 자격 증명을 가진 본인에게만
+ * 판정은 **비밀번호 검증을 통과한 뒤에만** 합니다 — 자격 증명을 가진 본인에게만
  * 도달하므로 계정 열거에 쓰이지 않습니다.
  */
-function blockedMessage(status: UserStatus, reason: string | null): string {
+function blockedMessage(status: UserStatus): string {
   switch (status) {
-    case "REJECTED":
-      return reason
-        ? `가입이 거부되었습니다. 사유: ${reason}`
-        : "가입이 거부되었습니다. 관리자에게 문의해 주세요.";
     case "SUSPENDED":
       return "이용이 정지된 계정입니다. 관리자에게 문의해 주세요.";
     case "WITHDRAWN":
@@ -139,8 +127,7 @@ export async function signIn(
     );
   }
 
-  // 상태 차단은 **인증 성공 후**에 판정한다 — 그래야 상태별 안내를 줄 수 있다.
-  // `PENDING` 은 차단하지 않는다 — 세션을 발급하고 `/pending` 으로 보낸다 (DEC-040).
+  // 상태 차단은 **인증 성공 후**에 판정한다 — 그래야 상태별 안내를 줄 수 있다 (DEC-040)
   if (BLOCKED_STATUSES.has(user.status)) {
     // **비밀번호는 맞았다.** 정지된 계정에 올바른 자격 증명으로 들어오려는 시도는
     // 「퇴사자 자격 증명이 유출됐다」의 신호라 반드시 남긴다 (FR-AUDIT-001).
@@ -148,7 +135,6 @@ export async function signIn(
       {
         id: user.id,
         username: user.username,
-        role: user.role,
         via: "WEB",
         ...meta,
       },
@@ -159,10 +145,7 @@ export async function signIn(
         summary: `상태 차단 로그인 시도 — ${user.username} (${user.status})`,
       }
     );
-    throw new AppError(
-      "ACCOUNT_BLOCKED",
-      blockedMessage(user.status, user.statusReason)
-    );
+    throw new AppError("ACCOUNT_BLOCKED", blockedMessage(user.status));
   }
 
   // 성공했으니 실패 카운터를 지운다
@@ -185,87 +168,13 @@ export async function signIn(
     {
       id: user.id,
       username: user.username,
-      role: user.role,
       via: "WEB",
       ...meta,
     },
     { action: "USER_SIGNIN", summary: `로그인 — ${user.username}` }
   );
 
-  return {
-    token,
-    expires,
-    mustChangePassword: user.mustChangePassword,
-    isPending: user.status === "PENDING",
-  };
-}
-
-/**
- * 가입 신청 (`FR-AUTH-001`).
- *
- * **필수·선택이 요구사항과 뒤집혀 있었습니다** — 소속이 선택, 가입 사유가
- * 필수였습니다. 요구사항은 그 반대입니다(`features/auth/schema.ts` 주석).
- * 여기 타입도 그에 맞춰 뒤집습니다 — 한쪽만 고치면 컴파일이 잡아 줍니다.
- */
-export async function signUp(input: {
-  username: string;
-  password: string;
-  name: string;
-  department: string;
-  signupReason?: string;
-}): Promise<{ id: string }> {
-  // 관리자가 가입을 닫아 두면 받지 않는다 (FR-ADM-015, system_settings)
-  if (!(await settingsService.isSignupEnabled())) {
-    throw new AppError("FORBIDDEN", "현재 신규 가입을 받지 않습니다.");
-  }
-
-  // users 와 reserved_usernames 를 **모두** 본다 (DEC-021, FR-AUTH-002)
-  if (await userRepo.isUsernameTaken(input.username)) {
-    throw new AppError("DUPLICATE", "이미 사용 중인 아이디입니다.", {
-      username: ["이미 사용 중인 아이디입니다."],
-    });
-  }
-
-  const user = await userRepo.create({
-    username: input.username,
-    passwordHash: await hashPassword(input.password),
-    name: input.name,
-    department: input.department,
-    signupReason: input.signupReason,
-    // 관리자 승인 전까지 PENDING (DEC-014)
-    status: "PENDING",
-    role: "MEMBER",
-  });
-
-  await audit.logAnonymous({
-    action: "USER_SIGNUP",
-    attemptedUsername: user.username,
-    targetType: "user",
-    targetId: user.id,
-    summary: `가입 신청 — ${user.username} (${user.name})`,
-  });
-
-  /*
-   * 관리자 알림 (`FR-NOTI-001`).
-   *
-   * **`P3` 에서 미뤘던 것이고, 미룬 조건이 채워져서 지금 넣습니다** —
-   * 그때 근거는 「읽는 화면이 없는 곳에 쓰지 않는다」였고, `P4` 에서 헤더 벨이
-   * 실데이터를 읽게 됐습니다. 규칙을 버린 것이 아니라 조건이 채워진 것입니다.
-   *
-   * 액션이 아니라 **service** 에 둡니다 (`DEC-038`) — 가입은 웹 외 경로가
-   * 생길 수 있고, 진입부에 두면 그 경로가 알림 없이 같은 일을 합니다.
-   *
-   * 실패해도 가입을 되돌리지 않습니다: 알림은 트랜잭션 밖입니다(`DEC-038`).
-   * 관리자는 **사이드바 배지**로도 압니다 — 그쪽이 「지금의 사실」이라 더 확실합니다.
-   */
-  await notify.notifyAdmins({
-    type: "SIGNUP_REQUEST",
-    title: "새 가입 신청",
-    body: `${user.name} (@${user.username})`,
-    linkUrl: "/admin/members",
-  });
-
-  return { id: user.id };
+  return { token, expires, mustChangePassword: user.mustChangePassword };
 }
 
 /**
@@ -364,7 +273,6 @@ export async function changePassword(
       {
         id: user.id,
         username: user.username,
-        role: user.role,
         via: "WEB",
         ...meta,
       },

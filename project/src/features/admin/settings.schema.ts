@@ -17,7 +17,6 @@ import { z } from "zod";
  */
 
 export const SETTING_KEYS = [
-  "signup.enabled",
   "upload.maxMb",
   "archive.maxMb",
   "disk.minFreeGb",
@@ -33,7 +32,6 @@ export type SettingKey = (typeof SETTING_KEYS)[number];
  * 실수로 디스크를 채우는 것을 막는 자리입니다.
  */
 export const SETTING_SCHEMA = {
-  "signup.enabled": z.boolean(),
   "upload.maxMb": z.number().int().min(1).max(500),
   "archive.maxMb": z.number().int().min(1).max(2000),
   "disk.minFreeGb": z.number().int().min(1).max(1000),
@@ -46,15 +44,9 @@ export interface SettingMeta {
 }
 
 export const SETTING_META: Record<SettingKey, SettingMeta> = {
-  "signup.enabled": {
-    label: "신규 가입 허용",
-    description:
-      "끄면 가입 신청 자체를 받지 않습니다. 이미 신청한 건은 그대로 남습니다.",
-  },
   "upload.maxMb": {
     label: "첨부 파일 최대 크기",
-    description:
-      "한 파일의 상한입니다. 넘는 파일은 받기 전에 거절합니다.",
+    description: "한 파일의 상한입니다. 넘는 파일은 받기 전에 거절합니다.",
     unit: "MB",
   },
   "archive.maxMb": {

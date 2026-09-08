@@ -360,7 +360,12 @@ async function runClaimed(jobId: string): Promise<void> {
  * 남겼다고 성공한 아카이브를 실패로 만들 이유가 없습니다.
  */
 async function announce(
-  job: { id: string; type: JobType; resourceId: string | null; requestedById: string | null },
+  job: {
+    id: string;
+    type: JobType;
+    resourceId: string | null;
+    requestedById: string | null;
+  },
   status: "DONE" | "FAILED",
   error?: string
 ): Promise<void> {
@@ -369,7 +374,7 @@ async function announce(
   if (!job.requestedById) {
     // 사람이 시키지 않은 배치 — **실패했을 때만** 관리자에게
     if (status === "FAILED") {
-      await notify.notifyAdmins({
+      await notify.notifyEveryone({
         type: "JOB_FAILED",
         title: `${label} 작업이 실패했습니다`,
         body: error?.slice(0, 200),

@@ -24,13 +24,9 @@ import { buildResourceNavGroup, type NavType } from "@/features/resources/nav";
  */
 export function ServiceSidebar({
   user,
-  isAdmin,
-  pendingCount,
   navTypes,
 }: {
   user: NavUserData;
-  isAdmin: boolean;
-  pendingCount: number;
   /** 노출 여부·순서는 서버가 판정해서 넘긴다 (`DEC-032`) */
   navTypes: NavType[];
 }) {
@@ -47,7 +43,9 @@ export function ServiceSidebar({
       variant="service"
       groups={groups}
       user={user}
-      adminEntry={isAdmin ? { ...adminEntry, badge: pendingCount } : undefined}
+      /* 🔄 `isAdmin ? adminEntry : undefined` 였습니다. `DEC-077` 로 등급이
+         사라져 **관리 영역 입구가 항상 보입니다** — 들어가는 사람이 곧 관리자입니다. */
+      adminEntry={adminEntry}
     />
   );
 }
@@ -60,17 +58,12 @@ export function ServiceSidebar({
  * 뺐습니다: 아무것도 안 거르는 필터는 다음 사람에게 **등급별 메뉴가 있다**고
  * 믿게 합니다.
  */
-export function AdminSidebar({
-  user,
-  badges,
-}: {
-  user: NavUserData;
-  badges: Record<string, number>;
-}) {
-  const groups = adminNav.map((g) => ({
-    ...g,
-    items: g.items.map((i) => ({ ...i, badge: badges[i.href] || undefined })),
-  }));
-
-  return <AppSidebar variant="admin" groups={groups} user={user} />;
+export function AdminSidebar({ user }: { user: NavUserData }) {
+  /*
+   * **배지를 받지 않습니다** (`DEC-077`). 유일한 숫자가 「승인 대기 N건」이었고
+   * 가입 신청이 사라지면서 셀 것이 없어졌습니다. 「언젠가 쓸지 모르니」로
+   * `badges` 를 남겨 두면 항상 `{}` 를 넘기는 인자가 되고, 다음 사람은
+   * **어딘가 배지가 뜨는 줄** 압니다.
+   */
+  return <AppSidebar variant="admin" groups={adminNav} user={user} />;
 }

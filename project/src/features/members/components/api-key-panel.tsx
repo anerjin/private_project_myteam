@@ -41,6 +41,7 @@ import {
 import {
   MAX_KEYS_PER_USER,
   SCOPE_LABEL,
+  SCOPES,
   type Scope,
 } from "@/features/members/api-key.schema";
 import {
@@ -104,14 +105,20 @@ const isExpired = (k: ApiKeyRow) =>
 /** 「지금 쓸 수 있는」 키 — 발급 상한이 세는 것과 같은 정의여야 한다 (service 와 일치) */
 const isUsable = (k: ApiKeyRow) => !k.revokedAt && !isExpired(k);
 
+/*
+ * 🔄 `allowedScopes` 를 서버가 계산해서 넘겼습니다 — 「이 «역할»로 고를 수 있는
+ *    스코프」(`api-key.service.scopesAllowedFor`). `DEC-077` 로 역할이 사라져
+ *    그 함수가 없어졌고, 고를 수 있는 것은 **언제나 `SCOPES` 전부**입니다.
+ *
+ *    그래서 목록을 prop 으로 받지 않고 **스키마 파일에서 직접** 읽습니다 —
+ *    `MAX_KEYS_PER_USER`·`SCOPE_LABEL` 과 같은 파일이고, 서버(`issue`)도 같은
+ *    `SCOPES` 를 봅니다. 목록이 한 벌이면 화면과 서버가 어긋날 자리가 없습니다.
+ */
 export function ApiKeyPanel({
   keys,
-  allowedScopes,
   appUrl,
 }: {
   keys: ApiKeyRow[];
-  /** 이 역할로 선택할 수 있는 스코프 — 서버가 계산해서 준다 (DEC-037) */
-  allowedScopes: string[];
   appUrl: string;
 }) {
   const router = useRouter();
@@ -119,8 +126,13 @@ export function ApiKeyPanel({
   const [issued, setIssued] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  /*
+   * 기본 선택 — **아카이브만 빼 둡니다.** 500MB 를 받아 오는 동작이라 「달라고
+   * 하지 않은 키」에 들어 있으면 안 됩니다. 역할이 막던 자리가 아니라
+   * **기본값**이라 `DEC-077` 뒤에도 그대로입니다.
+   */
   const [scopes, setScopes] = useState<string[]>(
-    allowedScopes.filter((s) => s !== "archive:run")
+    SCOPES.filter((s) => s !== "archive:run")
   );
 
   // 만료된 키는 자리를 차지하지 않는다 — 서버의 상한 계산과 같은 정의다
@@ -163,8 +175,8 @@ export function ApiKeyPanel({
             API 키
           </CardTitle>
           <CardDescription>
-            Claude Code에서 Neowave Work에 자료를 등록하려면 API 키가 필요합니다.
-            키의 권한은 내 역할을 넘지 못합니다.
+            Claude Code에서 Neowave Work에 자료를 등록하려면 API 키가
+            필요합니다. 키의 권한은 내 역할을 넘지 못합니다.
           </CardDescription>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -205,7 +217,7 @@ export function ApiKeyPanel({
             </div>
             <div className="space-y-2">
               <Label>스코프</Label>
-              {allowedScopes.map((s) => (
+              {SCOPES.map((s) => (
                 <div key={s} className="flex items-center gap-2">
                   <Checkbox
                     id={s}

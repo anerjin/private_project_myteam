@@ -38,7 +38,6 @@ export function GithubPanel({
   archiveSizeBytes,
   archivedSha,
   isGone,
-  canEdit,
 }: {
   resourceId: string;
   archiveStatus: string;
@@ -47,7 +46,6 @@ export function GithubPanel({
   archivedSha?: string;
   /** 원본이 삭제·비공개로 바뀌었는가 (`FR-GH-007`) */
   isGone: boolean;
-  canEdit: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -132,24 +130,22 @@ export function GithubPanel({
             </Button>
           )}
 
-          {canEdit && (
-            <>
-              <Button
-              variant="outline"
-              size="sm"
-              disabled={pending}
-              onClick={() =>
-                run(
-                  () => refreshGithubMetaAction(resourceId),
-                  "메타 수집을 시작했습니다."
-                )
-              }
-            >
-              <RefreshCw className="size-4" />
-              메타 갱신
-            </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pending}
+            onClick={() =>
+              run(
+                () => refreshGithubMetaAction(resourceId),
+                "메타 수집을 시작했습니다."
+              )
+            }
+          >
+            <RefreshCw className="size-4" />
+            메타 갱신
+          </Button>
 
-            {/*
+          {/*
               > **`RUNNING` 에서 버튼을 잠그면 빠져나올 길이 없습니다.**
               > PC 가 꺼져 중단되면 자료가 영구히 「아카이브 진행 중」이고
               > 다시 받기도 내려받기도 안 됩니다 — 그 상태를 만든 것이
@@ -158,7 +154,7 @@ export function GithubPanel({
               > 만듭니다. `runNow` 가 「돌고 있는 것」을 두 번 안 집으므로
               > 살아 있는 실행과 겹치지 않습니다.
             */}
-            {/*
+          {/*
               **읽지 못하는 저장소는 아카이브도 못 받습니다.**
 
               그런데 버튼이 그대로 있어서, 운영자가 눌렀고 작업이
@@ -169,43 +165,35 @@ export function GithubPanel({
               이미 받아 둔 아카이브가 있으면 잠그지 않습니다 — 원본이 사라진
               뒤에도 다시 시도해 볼 이유가 있습니다.
             */}
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pending || (isGone && !done)}
-              title={
-                isGone && !done
-                  ? "저장소를 읽지 못해 아카이브를 받을 수 없습니다"
-                  : undefined
-              }
-              onClick={() =>
-                run(
-                  () => startArchiveAction(resourceId),
-                  "아카이브를 시작했습니다."
-                )
-              }
-            >
-              <Archive className="size-4" />
-              {running
-                ? "아카이브 다시 시도"
-                : done
-                  ? "아카이브 다시 받기"
-                  : "소스 아카이브"}
-            </Button>
-            {running && (
-              <span className="text-muted-foreground self-center text-xs">
-                진행 중입니다. 멈춰 있으면 다시 시도해 주세요.
-              </span>
-            )}
-            </>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pending || (isGone && !done)}
+            title={
+              isGone && !done
+                ? "저장소를 읽지 못해 아카이브를 받을 수 없습니다"
+                : undefined
+            }
+            onClick={() =>
+              run(
+                () => startArchiveAction(resourceId),
+                "아카이브를 시작했습니다."
+              )
+            }
+          >
+            <Archive className="size-4" />
+            {running
+              ? "아카이브 다시 시도"
+              : done
+                ? "아카이브 다시 받기"
+                : "소스 아카이브"}
+          </Button>
+          {running && (
+            <span className="text-muted-foreground self-center text-xs">
+              진행 중입니다. 멈춰 있으면 다시 시도해 주세요.
+            </span>
           )}
         </div>
-
-        {!done && !canEdit && (
-          <p className="text-muted-foreground text-xs">
-            아직 아카이브하지 않았습니다.
-          </p>
-        )}
       </CardContent>
     </Card>
   );

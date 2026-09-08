@@ -65,8 +65,9 @@ export function MaintenancePanel({
             스케줄 작업
           </CardTitle>
           <CardDescription>
-            평소에는 Windows 작업 스케줄러가 하루 한 번 <code>npm run
-            maintenance</code> 로 부릅니다. 여기 버튼은 같은 함수를 지납니다.
+            평소에는 Windows 작업 스케줄러가 하루 한 번{" "}
+            <code>npm run maintenance</code> 로 부릅니다. 여기 버튼은 같은
+            함수를 지납니다.
           </CardDescription>
         </div>
         <Button
@@ -105,7 +106,11 @@ export function MaintenancePanel({
           }
         >
           <Play className="size-4" />
-          {busy ? "실행 중…" : dueCount > 0 ? `지금 실행 (${dueCount})` : "지금 실행"}
+          {busy
+            ? "실행 중…"
+            : dueCount > 0
+              ? `지금 실행 (${dueCount})`
+              : "지금 실행"}
         </Button>
       </CardHeader>
 
@@ -135,14 +140,14 @@ export function MaintenancePanel({
         */}
         {retention.keysExpiringSoon > 0 && (
           <p className="text-xs text-amber-600 dark:text-amber-500">
-            API 키 {retention.keysExpiringSoon}개가 30일 안에 만료됩니다. 소유자에게
-            알려 주세요 — 만료되면 CLI 수집이 조용히 멈춥니다.
+            API 키 {retention.keysExpiringSoon}개가 30일 안에 만료됩니다.
+            소유자에게 알려 주세요 — 만료되면 CLI 수집이 조용히 멈춥니다.
           </p>
         )}
         {retention.githubTokenMissing && (
           <p className="text-muted-foreground text-xs">
-            <code>GITHUB_TOKEN</code> 이 없어 API 한도가 시간당 60회입니다. 저장소
-            메타 갱신이 저장소 수를 다 돌지 못할 수 있습니다.
+            <code>GITHUB_TOKEN</code> 이 없어 API 한도가 시간당 60회입니다.
+            저장소 메타 갱신이 저장소 수를 다 돌지 못할 수 있습니다.
           </p>
         )}
 

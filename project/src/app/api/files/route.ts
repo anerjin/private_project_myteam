@@ -76,7 +76,6 @@ function safeDecode(v: string): string {
 function errorResponse(e: unknown): Response {
   const STATUS: Record<string, number> = {
     UNAUTHENTICATED: 401,
-    ACCOUNT_PENDING: 403,
     ACCOUNT_BLOCKED: 403,
     FORBIDDEN: 403,
     NOT_FOUND: 404,
@@ -94,7 +93,12 @@ function errorResponse(e: unknown): Response {
     );
   }
   return Response.json(
-    { error: { code: "INTERNAL_ERROR", message: "처리 중 문제가 발생했습니다." } },
+    {
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "처리 중 문제가 발생했습니다.",
+      },
+    },
     { status: 500 }
   );
 }

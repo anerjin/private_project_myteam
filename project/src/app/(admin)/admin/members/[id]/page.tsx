@@ -20,12 +20,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { AUDIT_ACTION_LABEL } from "@/features/audit/actions";
-import {
-  RoleBadge,
-  UserStatusBadge,
-} from "@/features/members/components/badges";
+import { UserStatusBadge } from "@/features/members/components/badges";
 import { MemberActions } from "@/features/members/components/member-actions";
-import { requireRole } from "@/server/auth/guards";
+import { requireActiveUser } from "@/server/auth/guards";
 import { listFor as listSessionsFor } from "@/server/auth/session";
 import * as memberRepo from "@/server/repositories/member.repository";
 import * as apiKeyService from "@/server/services/api-key.service";
@@ -36,7 +33,7 @@ import * as memberService from "@/server/services/member.service";
  * **`generateStaticParams` 를 두지 않습니다.**
  *
  * 전에는 목 회원 id 목록을 빌드에 구워 넣고 있었는데, 같은 페이지가
- * `requireRole("ADMIN")`(→ `cookies()`)으로 어차피 동적이라 서로 모순이었습니다.
+ * `requireActiveUser()`(→ `cookies()`)로 어차피 동적이라 서로 모순이었습니다.
  * 그리고 실 DB 의 cuid 는 목 id 와 절대 일치하지 않아 **목록의 모든 링크가 404** 였습니다.
  */
 
@@ -128,7 +125,7 @@ export default async function AdminMemberDetailPage({
   params,
 }: PageProps<"/admin/members/[id]">) {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
-  await requireRole("ADMIN");
+  await requireActiveUser();
 
   const { id } = await params;
   const member = await memberRepo.findDetail(id);
@@ -168,7 +165,6 @@ export default async function AdminMemberDetailPage({
               id: member.id,
               name: member.name,
               username: member.username,
-              role: member.role,
               status: member.status,
               activeKeys: usableKeys.length,
             }}
@@ -186,12 +182,11 @@ export default async function AdminMemberDetailPage({
               label="아이디"
               value={<code className="text-xs">@{member.username}</code>}
             />
-            <Row label="역할" value={<RoleBadge role={member.role} />} />
             <Row
               label="상태"
               value={<UserStatusBadge status={member.status} />}
             />
-            <Row label="가입일" value={when(member.createdAt)} />
+            <Row label="등록일" value={when(member.createdAt)} />
             <Row label="최근 로그인" value={when(member.lastLoginAt, true)} />
             <Row label="상태 변경" value={when(member.statusChangedAt, true)} />
           </CardContent>
@@ -225,18 +220,6 @@ export default async function AdminMemberDetailPage({
             <Row label="쓸 수 있는 API 키" value={`${activity.apiKeys}개`} />
           </CardContent>
         </Card>
-
-        {member.signupReason && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">가입 사유</CardTitle>
-              <CardDescription>신청자가 직접 적은 내용입니다</CardDescription>
-            </CardHeader>
-            <CardContent className="text-sm whitespace-pre-wrap">
-              {member.signupReason}
-            </CardContent>
-          </Card>
-        )}
 
         {member.statusReason && (
           <Card>
@@ -272,7 +255,8 @@ export default async function AdminMemberDetailPage({
                   <li key={s.id} className="flex justify-between gap-3 py-2">
                     <span>{device(s.userAgent)}</span>
                     <span className="text-muted-foreground text-xs">
-                      {s.ip ?? "IP 미기록"} · {when(s.lastSeenAt ?? s.createdAt, true)}
+                      {s.ip ?? "IP 미기록"} ·{" "}
+                      {when(s.lastSeenAt ?? s.createdAt, true)}
                     </span>
                   </li>
                 ))}
@@ -302,9 +286,10 @@ export default async function AdminMemberDetailPage({
                       key={k.id}
                       className="flex items-center justify-between gap-3 py-2"
                     >
-                      <span className={state.usable ? "" : "text-muted-foreground"}>
-                        {k.name}{" "}
-                        <code className="text-xs">{k.keyPrefix}…</code>
+                      <span
+                        className={state.usable ? "" : "text-muted-foreground"}
+                      >
+                        {k.name} <code className="text-xs">{k.keyPrefix}…</code>
                       </span>
                       <span className="text-muted-foreground text-xs">
                         {state.label ?? `${when(k.lastUsedAt, true)} 사용`}

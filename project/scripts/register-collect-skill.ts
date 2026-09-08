@@ -42,9 +42,10 @@ async function main() {
    * 될 수 없습니다.
    */
   const owner = await db.user.findFirst({
-    where: { status: "ACTIVE", role: { in: ["ADMIN", "EDITOR"] } },
-    orderBy: [{ role: "asc" }, { createdAt: "asc" }],
-    select: { id: true, username: true, role: true, name: true },
+    // 🔄 `role: { in: ["ADMIN", "EDITOR"] }` 로 골랐습니다 (`DEC-077` 로 등급 없음)
+    where: { status: "ACTIVE" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, username: true, name: true },
   });
   if (!owner) {
     throw new Error(
@@ -54,7 +55,6 @@ async function main() {
   const actor: Actor = {
     id: owner.id,
     username: owner.username,
-    role: owner.role,
     via: "WEB",
   };
 
@@ -71,7 +71,8 @@ async function main() {
       "웹 검색 → 후보 선별 → 중복 확인 → 요약 → 분류 → 등록의 절차와, applicability 를 비워 두지 않는다·한 대화 10건 이하 같은 품질 규칙을 정의한다.",
     triggerCondition:
       "「○○ 관련 자료 찾아서 등록해줘」, 「이 저장소 Neowave Work 에 넣어줘」, 「applicability 비어 있는 자료 채워줘」 같은 요청을 받았을 때.",
-    usageExample: "MCP 서버 보안 관련 자료 최근 6개월 것으로 찾아서 Neowave Work에 등록해줘",
+    usageExample:
+      "MCP 서버 보안 관련 자료 최근 6개월 것으로 찾아서 Neowave Work에 등록해줘",
     targetClients: "Claude Code",
     usageStatus: "ADOPTED",
     version: "0.1.0",
@@ -88,7 +89,11 @@ async function main() {
   });
 
   if (existing) {
-    const r = await resourceWrite.update(actor, existing.resourceId, input.data);
+    const r = await resourceWrite.update(
+      actor,
+      existing.resourceId,
+      input.data
+    );
     console.log(`갱신했습니다 — /resources/skill/${r.slug}`);
   } else {
     const r = await resourceWrite.create(actor, input.data);

@@ -3,7 +3,7 @@ import "server-only";
 import { listOperational } from "@/features/resources/content-types/operational";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { isAdmin, type Actor } from "@/server/auth/actor";
+import type { Actor } from "@/server/auth/actor";
 import * as audit from "@/server/services/audit.service";
 import type { ResourceType } from "@/types";
 
@@ -110,17 +110,14 @@ export interface TypeSettingInput {
  * 순서가 뒤엉키고, 화면에서 본 것과 다른 결과가 남습니다
  * (`category.service.reorder` 와 같은 판단).
  *
- * **`ADMIN` 만 부릅니다.** 분류 정리는 `EDITOR` 도 하지만(`DEC-057`),
- * 타입을 끄면 등록 화면에서 **통째로 사라지고** 기존 자료가 목록에서 숨습니다.
+ * 🔄 **`ADMIN` 만**이었습니다 (`DEC-077` 로 등급이 사라져 검사를 지웠습니다).
+ *    타입을 끄면 등록 화면에서 **통째로 사라지고** 기존 자료가 목록에서 숨는다는
+ *    사실은 그대로입니다 — 그래서 아래 감사 로그가 무엇이 꺼졌는지 남깁니다.
  */
 export async function updateSettings(
   actor: Actor,
   items: TypeSettingInput[]
 ): Promise<void> {
-  if (!isAdmin(actor)) {
-    throw new AppError("FORBIDDEN", "콘텐츠 타입 설정은 관리자만 바꿀 수 있습니다.");
-  }
-
   const known = new Set(listOperational().map((t) => t.code));
   for (const it of items) {
     if (!known.has(it.code)) {
@@ -167,9 +164,7 @@ export async function updateSettings(
      */
     const changed = normalized.filter((it) => {
       const b = before.find((x) => x.code === it.code);
-      return (
-        !b || b.isActive !== it.isActive || b.showInNav !== it.showInNav
-      );
+      return !b || b.isActive !== it.isActive || b.showInNav !== it.showInNav;
     });
 
     await audit.log(
@@ -192,7 +187,9 @@ export async function updateSettings(
               return [
                 c.code,
                 {
-                  before: b ? `활성 ${b.isActive} · 메뉴 ${b.showInNav}` : "(기본값)",
+                  before: b
+                    ? `활성 ${b.isActive} · 메뉴 ${b.showInNav}`
+                    : "(기본값)",
                   after: `활성 ${c.isActive} · 메뉴 ${c.showInNav}`,
                 },
               ];

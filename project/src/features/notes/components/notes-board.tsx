@@ -105,8 +105,8 @@ export function NotesBoard({
       {trash && notes.length > 0 && (
         <div className="flex items-center justify-between gap-3">
           <p className="text-muted-foreground text-sm">
-            버린 메모입니다. <b>자동으로 지워지지 않습니다</b> — 되살리거나
-            직접 비우십시오.
+            버린 메모입니다. <b>자동으로 지워지지 않습니다</b> — 되살리거나 직접
+            비우십시오.
           </p>
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -443,8 +443,9 @@ function NoteEditor({
                       생겼으니 그 문장은 이제 거짓입니다 — 기능을 바꾸면
                       그것을 설명하던 문장도 함께 바뀌어야 합니다.
                     */}
-                    휴지통에서 되살릴 수 있습니다. <b>자동으로 지워지지
-                    않습니다</b> — 비우는 것은 직접 하십시오.
+                    휴지통에서 되살릴 수 있습니다.{" "}
+                    <b>자동으로 지워지지 않습니다</b> — 비우는 것은 직접
+                    하십시오.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

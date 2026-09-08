@@ -13,7 +13,7 @@ import type { Actor } from "@/server/auth/actor";
 import * as resourceRepo from "@/server/repositories/resource.repository";
 import * as audit from "@/server/services/audit.service";
 import { toResource } from "@/server/services/resource.mapper";
-import type { Resource, Role } from "@/types";
+import type { Resource } from "@/types";
 
 /**
  * 자료 조회·북마크·조회수·삭제 (`FR-RES-001`·`003`·`007`·`014`, `FR-COLL-001`·`002`).
@@ -85,12 +85,11 @@ async function bookmarkedIds(
  */
 export async function getById(
   id: string,
-  viewerId?: string,
-  viewerRole?: Role
+  viewerId?: string
 ): Promise<Resource> {
   const row = await resourceRepo.findById(id);
   if (!row) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
-  return getBySlug(row.slug, viewerId, viewerRole);
+  return getBySlug(row.slug, viewerId);
 }
 
 /**
@@ -221,29 +220,29 @@ export async function topTags(
 /**
  * 상세 (`FR-RES-003`). 없으면 `NOT_FOUND` — 화면이 `notFound()` 로 바꾼다.
  *
- * **초안은 작성자와 `EDITOR` 이상만 봅니다.** 전에는 `status` 를 아예 안 봐서
- * 목록에는 안 나오는 초안이 **URL 로는 열렸습니다.** 지금은 등록 경로가 없어
- * 잠복 상태지만, 폼의 「임시 저장」을 붙이는 순간 ① 작성자가 자기 초안을 목록에서
- * 못 보고 ② 남이 URL 로 읽고 ③ 화면은 「게시됨」이라고 말하게 됩니다.
+ * **초안은 로그인한 사람만 봅니다.** 전에는 `status` 를 아예 안 봐서 목록에는
+ * 안 나오는 초안이 **URL 로는 열렸습니다.** 폼의 「임시 저장」을 붙이는 순간
+ * ① 작성자가 자기 초안을 목록에서 못 보고 ② 남이 URL 로 읽고 ③ 화면은
+ * 「게시됨」이라고 말하게 됩니다.
+ *
+ * 🔄 조건이 「작성자 또는 `EDITOR` 이상」이었습니다. `DEC-077` 로 등급이 사라져
+ *    **「보는 사람이 있는가」** 하나가 됐습니다 — 로그인한 사람은 전부 봅니다.
+ *    `viewerId` 가 없는 호출이 남아 있으므로(각 화면의 `generateMetadata` 가
+ *    세션 없이 부릅니다) **그 경우는 계속 막힙니다** — 안 막으면 초안 제목이
+ *    로그인 전에 `<title>` 로 새어 나갑니다.
  *
  * 못 보는 경우 `FORBIDDEN` 이 아니라 **`NOT_FOUND`** 입니다 — 「권한이 없습니다」는
  * *그 slug 의 자료가 존재한다*를 알려 줍니다.
  */
 export async function getBySlug(
   slug: string,
-  viewerId?: string,
-  viewerRole?: Actor["role"]
+  viewerId?: string
 ): Promise<Resource> {
   const row = await resourceRepo.findBySlug(slug);
   if (!row) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
 
-  if (row.status !== "PUBLISHED") {
-    const isAuthor = viewerId !== undefined && row.author.id === viewerId;
-    const canSeeDrafts =
-      isAuthor || viewerRole === "EDITOR" || viewerRole === "ADMIN";
-    if (!canSeeDrafts) {
-      throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
-    }
+  if (row.status !== "PUBLISHED" && viewerId === undefined) {
+    throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
   }
 
   const marked = await bookmarkedIds(viewerId, [row.id]);
@@ -461,10 +460,11 @@ export async function remove(actor: Actor, id: string): Promise<void> {
     });
     if (!target) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
 
-    // 소유권 판정은 service 에서 (actor.ts)
-    if (actor.role === "MEMBER" && target.authorId !== actor.id) {
-      throw new AppError("FORBIDDEN", "이 자료를 삭제할 권한이 없습니다.");
-    }
+    /*
+     * 🔄 「`MEMBER` 는 남의 자료를 못 지운다」가 여기 있었습니다. `DEC-077` 로
+     *    등급이 사라져 조건이 통째로 참이 됐습니다 — 지금은 **로그인한 사람이면
+     *    누구나** 지웁니다. 되돌릴 수 있게 만든 것(30일 유예)이 그 대가입니다.
+     */
 
     await tx.resource.update({
       where: { id },
@@ -501,9 +501,9 @@ export async function remove(actor: Actor, id: string): Promise<void> {
  * 그래서 되살리기가 유니크 위반을 낼 일은 없습니다 — 그 자리는 애초에
  * 비지 않았습니다. 확인 없이 넘어가지 않으려고 여기 적어 둡니다.
  *
- * 권한은 **삭제와 같은 규칙**입니다. 자기 자료는 본인이, 남의 것은
- * `EDITOR` 이상이 되살립니다 — 되살리기가 삭제보다 느슨하면
- * 「내가 지운 것을 남이 되살린다」가 됩니다.
+ * 권한은 **삭제와 같은 규칙**입니다 — 되살리기가 삭제와 어긋나면 「내가 지운 것을
+ * 남이 되살린다」거나 그 반대가 됩니다. 🔄 그 규칙이 `DEC-077` 로 「로그인한 사람」이
+ * 됐고, **양쪽을 함께** 바꿨습니다.
  */
 export async function restore(actor: Actor, id: string): Promise<void> {
   await db.$transaction(async (tx) => {
@@ -518,10 +518,6 @@ export async function restore(actor: Actor, id: string): Promise<void> {
      */
     if (!target) {
       throw new AppError("NOT_FOUND", "휴지통에서 자료를 찾을 수 없습니다.");
-    }
-
-    if (actor.role === "MEMBER" && target.authorId !== actor.id) {
-      throw new AppError("FORBIDDEN", "이 자료를 되살릴 권한이 없습니다.");
     }
 
     await tx.resource.update({ where: { id }, data: { deletedAt: null } });
@@ -542,11 +538,17 @@ export async function restore(actor: Actor, id: string): Promise<void> {
 /**
  * 영구 삭제 (`FR-RES-009`, `FR-ADM-011`).
  *
- * ## **되돌릴 수 없습니다.** 그래서 `ADMIN` 만 부릅니다
+ * ## **되돌릴 수 없습니다** — 그런데 이제 문이 하나뿐입니다 (`DEC-077`)
  *
- * 소프트 삭제는 등록자도 할 수 있지만(`FR-RES-007`) 이것은 다릅니다 —
- * 30일 유예가 있는 이유가 「실수로 지웠다」를 되돌리기 위해서인데,
- * 그 유예를 없애는 동작을 같은 권한에 두면 유예가 없는 것과 같습니다.
+ * 🔴 전에는 `ADMIN` 만 불렀습니다. 근거는 *"30일 유예가 있는 이유가 「실수로
+ *    지웠다」를 되돌리기 위해서인데, 그 유예를 없애는 동작을 «소프트 삭제와 같은
+ *    권한»에 두면 유예가 없는 것과 같다"* 였습니다. 등급이 사라지면서 그 두
+ *    권한이 **실제로 같아졌습니다** — 근거가 겨눈 상태가 그대로 된 것입니다.
+ *
+ *    그래도 유예가 사라진 것은 아닙니다. 남은 차이는 **화면**입니다:
+ *    영구 삭제는 `/admin/resources` 의 휴지통 탭에서 «삭제된 자료»에만,
+ *    확인 다이얼로그를 지나야 눌립니다. 등급으로 막던 것을 **한 번 더 묻는
+ *    것**으로 바꾼 셈이고, 쓰는 사람이 한 명이면 그것이 정직한 방어선입니다.
  *
  * ## 감사 로그는 **행이 사라져도 남습니다**
  *
@@ -561,10 +563,6 @@ export async function restore(actor: Actor, id: string): Promise<void> {
  * 파일만 없는** 상태가 됩니다 — `P6` 의 아카이브 교체에서 같은 판단을 했습니다.
  */
 export async function purge(actor: Actor, id: string): Promise<void> {
-  if (actor.role !== "ADMIN") {
-    throw new AppError("FORBIDDEN", "영구 삭제는 관리자만 할 수 있습니다.");
-  }
-
   const staleKeys: string[] = [];
 
   await db.$transaction(async (tx) => {

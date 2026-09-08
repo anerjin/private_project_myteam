@@ -39,28 +39,23 @@ function check(label: string, ok: boolean, detail = "") {
 let hash: string;
 const made: string[] = [];
 
-async function mkUser(
-  tag: string,
-  role: "MEMBER" | "EDITOR" | "ADMIN" = "MEMBER"
-) {
+async function mkUser(tag: string) {
   const u = await db.user.create({
     data: {
       username: `vak_${tag}_${randomBytes(4).toString("hex")}`,
       passwordHash: hash,
       name: `키검증-${tag}`,
       status: "ACTIVE",
-      role,
     },
-    select: { id: true, username: true, role: true },
+    select: { id: true, username: true },
   });
   made.push(u.id);
   return u;
 }
 
-const actorOf = (u: { id: string; username: string; role: string }): Actor => ({
+const actorOf = (u: { id: string; username: string }): Actor => ({
   id: u.id,
   username: u.username,
-  role: u.role as Actor["role"],
   via: "WEB",
 });
 
@@ -80,7 +75,7 @@ async function run() {
     "\n★ M1 DoD — 정지하면 API 키도 무효화된다 (DEC-037: 폐기가 아니라 판정)"
   );
   {
-    const u = await mkUser("dod", "EDITOR");
+    const u = await mkUser("dod");
     const key = await apiKeyService.issue(actorOf(u), "DoD 키", [
       "resources:read",
       "archive:run",
@@ -93,13 +88,14 @@ async function run() {
       `via=${before.actor.via} scopes=${before.scopes.join(",")}`
     );
     check(
-      "EDITOR 는 archive:run 을 갖는다",
-      before.scopes.includes("archive:run")
+      "발급할 때 고른 스코프가 그대로 온다",
+      before.scopes.includes("archive:run"),
+      before.scopes.join(",")
     );
 
-    // 관리자가 정지시킨다 — 키를 «건드리지 않는다»
-    const admin = await mkUser("dod-admin", "ADMIN");
-    await mkUser("dod-admin2", "ADMIN"); // 마지막 관리자 보호 회피
+    // 다른 계정이 정지시킨다 — 키를 «건드리지 않는다»
+    const admin = await mkUser("dod-admin");
+    await mkUser("dod-admin2"); // 마지막 «활성 계정» 보호 회피
     await memberService.transition(actorOf(admin), u.id, {
       kind: "SUSPEND",
       reason: "M1 DoD 검증을 위한 정지입니다.",
@@ -130,48 +126,82 @@ async function run() {
     );
   }
 
-  console.log("\n★ NFR-SEC-017 — 키는 발급자의 역할을 넘지 못한다");
+  console.log(
+    "\n★ 스코프가 남은 유일한 권한 구분이다 (DEC-037 · DEC-077 · NFR-SEC-017)"
+  );
   {
-    const member = await mkUser("scope-member", "MEMBER");
+    /*
+     * 🔄 이 자리는 **「키는 발급자의 역할을 넘지 못한다」**였습니다 —
+     *    `MEMBER` 가 `archive:run` 키를 못 만들고, 발급 후 강등되면 그 스코프가
+     *    «빠지는» 것을 봤습니다. `DEC-077` 로 사람의 등급이 사라져 그 두 시나리오는
+     *    **재현할 수 없습니다.**
+     *
+     *    `NFR-SEC-017` 이 지키려던 것(「키가 그 주인이 못 하는 일을 하게 되지
+     *    않는다」)은 주인들 사이에 등급 차가 없어져 자동으로 성립합니다.
+     *    남은 것은 두 가지이고, 아래가 그 둘을 봅니다:
+     *
+     *    ① 목록에 없는 스코프로는 키를 못 만든다 (`issue`)
+     *    ② DB 에 남아 있는 «없어진» 스코프는 권한이 되지 않는다 (`effectiveScopes`)
+     *
+     *    ②가 이 파일에서 가장 중요한 줄입니다 — 스코프를 하나 없애는 날,
+     *    옛 키가 그것을 계속 행사하면 안 됩니다.
+     */
+    const u = await mkUser("scope");
     const denied = await msg(() =>
-      apiKeyService.issue(actorOf(member), "권한 초과 시도", ["archive:run"])
+      apiKeyService.issue(actorOf(u), "없는 스코프", ["repos:delete"])
     );
     check(
-      "MEMBER 는 archive:run 키를 못 만든다",
-      denied.includes("선택할 수 없는 스코프"),
+      "① 목록에 없는 스코프는 발급되지 않는다",
+      denied.includes("없는 스코프"),
       denied
     );
 
-    // 발급 후 강등되면 «지금» 역할로 좁혀진다 (키는 그대로)
-    const editor = await mkUser("scope-editor", "EDITOR");
-    const admin = await mkUser("scope-admin", "ADMIN");
-    await mkUser("scope-admin2", "ADMIN");
-    const key = await apiKeyService.issue(actorOf(editor), "강등 전 키", [
+    const key = await apiKeyService.issue(actorOf(u), "스코프 필터 확인", [
       "resources:read",
       "archive:run",
     ]);
+    const full = await verifyKey(key.plaintext);
     check(
-      "EDITOR 로 발급하면 archive:run 이 있다",
-      (await verifyKey(key.plaintext)).scopes.includes("archive:run")
+      "고른 스코프 둘이 다 온다",
+      full.scopes.includes("resources:read") &&
+        full.scopes.includes("archive:run"),
+      full.scopes.join(",")
     );
 
-    await memberService.transition(actorOf(admin), editor.id, {
-      kind: "CHANGE_ROLE",
-      role: "MEMBER",
+    /*
+     * **DB 에 직접 씁니다.** service 를 지나면 ①이 막으므로, 「스코프를 없앤
+     * 뒤 남은 옛 키」를 재현하는 길은 이것뿐입니다.
+     */
+    await db.apiKey.update({
+      where: { id: key.id },
+      data: { scopes: ["resources:read", "archive:run", "gone:scope"] },
     });
-    const narrowed = await verifyKey(key.plaintext);
+    const filtered = await verifyKey(key.plaintext);
     check(
-      "MEMBER 로 강등되면 archive:run 이 «빠진다»",
-      !narrowed.scopes.includes("archive:run"),
-      `scopes=${narrowed.scopes.join(",")}`
+      "② 목록에 없는 스코프는 걸러진다",
+      !(filtered.scopes as string[]).includes("gone:scope"),
+      filtered.scopes.join(",")
     );
     check(
       "남은 스코프는 그대로 쓸 수 있다",
-      narrowed.scopes.includes("resources:read")
+      filtered.scopes.includes("resources:read") &&
+        filtered.scopes.includes("archive:run")
     );
 
-    const scoped = await msg(async () => assertScope(narrowed, "archive:run"));
-    check("assertScope 가 막는다", scoped.includes("권한이 없습니다"), scoped);
+    const scoped = await msg(async () =>
+      assertScope(
+        {
+          ...filtered,
+          scopes: filtered.scopes.filter((x) => x !== "archive:run"),
+        },
+        "archive:run"
+      )
+    );
+    check(
+      "assertScope 가 없는 스코프를 막는다",
+      scoped.includes("권한이 없습니다"),
+      scoped
+    );
   }
 
   console.log("\n★ 폐기·만료 키는 통하지 않는다 (DEV-02 · 2.7 세 조건)");
@@ -220,35 +250,38 @@ async function run() {
     );
   }
 
-  console.log(
-    "\nH4 revokeAllKeysFor 인가 — 리뷰 재현: MEMBER 가 남의 키 폐기 성공"
-  );
+  console.log("\nH4 revokeAllKeysFor — 인가가 사라진 자리 (DEC-077)");
   {
     const victim = await mkUser("victim");
     const stranger = await mkUser("stranger");
     await apiKeyService.issue(actorOf(victim), "피해자 키", ["resources:read"]);
 
-    const m = await msg(() =>
-      apiKeyService.revokeAllKeysFor(actorOf(stranger), victim.id)
-    );
-    check("남의 MEMBER 는 막힌다", m.includes("권한이 없습니다"), m);
-
-    const survived = await db.apiKey.count({
-      where: { userId: victim.id, revokedAt: null },
-    });
-    check("피해자 키가 살아 있다", survived === 1, `${survived}개`);
-
-    // 본인은 된다 (P8 탈퇴가 쓸 경로)
-    const self = await apiKeyService.revokeAllKeysFor(
-      actorOf(victim),
+    /*
+     * 🔄 리뷰가 재현했던 결함은 **「`MEMBER` 가 남의 키를 폐기할 수 있다」**였고
+     *    그것을 막는 검사(「`ADMIN` 이거나 본인」)가 여기 있었습니다.
+     *    `DEC-077` 로 사람이 전부 관리자가 되면서 그 검사가 언제나 통과가 되어
+     *    지워졌습니다 — `FR-ADM-016`(강제 폐기)이 로그인한 사람 전부에게 열립니다.
+     *
+     *    **그래서 이 검증이 보는 것이 바뀝니다.** 막히는지가 아니라
+     *    **기록이 남는지**를 봅니다: 인가가 없어진 만큼 「누가 남의 키를
+     *    지웠나」의 답은 이제 감사 로그에만 있습니다.
+     */
+    const n = await apiKeyService.revokeAllKeysFor(
+      actorOf(stranger),
       victim.id
     );
-    check("본인은 자기 키를 전량 폐기할 수 있다", self === 1, `${self}개`);
+    check("남의 키도 폐기된다 (DEC-077)", n === 1, `${n}개`);
 
     const log = await db.auditLog.findFirst({
       where: { targetId: victim.id, action: "APIKEY_REVOKE" },
-      select: { diff: true },
+      orderBy: { createdAt: "desc" },
+      select: { actorId: true, diff: true },
     });
+    check(
+      "누가 지웠는지가 감사 로그에 남는다",
+      log?.actorId === stranger.id,
+      String(log?.actorId)
+    );
     const revoked = (log?.diff as { revoked?: { name: string }[] } | null)
       ?.revoked;
     check(
@@ -256,6 +289,16 @@ async function run() {
       Array.isArray(revoked) && revoked[0]?.name === "피해자 키",
       JSON.stringify(revoked)
     );
+
+    // 본인 경로도 그대로다 (P8 탈퇴가 쓴다)
+    await apiKeyService.issue(actorOf(victim), "본인 폐기용", [
+      "resources:read",
+    ]);
+    const self = await apiKeyService.revokeAllKeysFor(
+      actorOf(victim),
+      victim.id
+    );
+    check("본인은 자기 키를 전량 폐기할 수 있다", self === 1, `${self}개`);
   }
 
   console.log("\nM1 동시 폐기 이중 기록 — 리뷰 재현: 성공 2 · 로그 2건");

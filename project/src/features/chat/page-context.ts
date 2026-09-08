@@ -47,11 +47,13 @@ export function describePage(pathname: string, query?: string): PageContext {
   const segments = clean.split("/").filter(Boolean).map(decodeSegment);
 
   const q = query?.trim();
-  const withQuery = (base: string) =>
-    q ? `${base} — 검색어 «${q}»` : base;
+  const withQuery = (base: string) => (q ? `${base} — 검색어 «${q}»` : base);
 
   if (STATIC[clean]) {
-    return { label: STATIC[clean].split(" (")[0]!, detail: withQuery(STATIC[clean]) };
+    return {
+      label: STATIC[clean].split(" (")[0]!,
+      detail: withQuery(STATIC[clean]),
+    };
   }
 
   if (segments[0] === "resources" && segments[1]) {

@@ -63,8 +63,7 @@ export function uniq(tag: string): string {
 
 export async function makeUser(opts: {
   tag: string;
-  role?: "MEMBER" | "EDITOR" | "ADMIN";
-  status?: "PENDING" | "ACTIVE" | "SUSPENDED";
+  status?: "ACTIVE" | "SUSPENDED";
 }) {
   const username = uniq(opts.tag);
   const user = await db.user.create({
@@ -73,7 +72,6 @@ export async function makeUser(opts: {
       // 시드와 **같은 파라미터**여야 로그인이 됩니다 (`auth/password.ts`)
       passwordHash: await hash(TEST_PASSWORD, ARGON2),
       name: `E2E ${opts.tag}`,
-      role: opts.role ?? "MEMBER",
       status: opts.status ?? "ACTIVE",
     },
     select: { id: true, username: true, name: true },
@@ -98,8 +96,8 @@ export async function signIn(page: Page, username: string) {
    * 생기기 전에 떠나고, 그러면 `/login?next=…` 로 되돌아옵니다 — 실제로
    * 시나리오 ④가 그렇게 실패했고 **화면이 아니라 검사가 틀린** 것이었습니다.
    *
-   * 로그인 화면을 «벗어나는» 것으로 판정합니다. 목적지는 상태마다 다릅니다
-   * (`/dashboard`·`/pending`·`/change-password`) — 그걸 여기서 알 필요는 없습니다.
+   * 로그인 화면을 «벗어나는» 것으로 판정합니다. 목적지는 계정마다 다릅니다
+   * (`/dashboard`·`/change-password`) — 그걸 여기서 알 필요는 없습니다.
    */
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
     timeout: 30_000,

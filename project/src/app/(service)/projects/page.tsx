@@ -27,8 +27,12 @@ export const metadata: Metadata = { title: "프로젝트" };
 export default async function ProjectsPage({
   searchParams,
 }: PageProps<"/projects">) {
-  // 인가는 레이아웃이 아니라 page 가 한다 (`DEC-035`)
-  const session = await requireActiveUser();
+  /*
+   * 인가는 레이아웃이 아니라 page 가 한다 (`DEC-035`).
+   * **반환값을 안 씁니다** — 이 화면은 「누구인지」가 필요 없고 「들어와도 되는가」만
+   * 필요합니다. 그래도 호출은 남습니다: 지우면 문지기가 사라집니다.
+   */
+  await requireActiveUser();
   const sp = await searchParams;
   const trash = sp.trash === "1";
 
@@ -72,13 +76,7 @@ export default async function ProjectsPage({
         ))}
       </div>
 
-      <ProjectsView
-        projects={projects}
-        trash={trash}
-        today={todayYmd()}
-        viewerId={session.userId}
-        viewerIsAdmin={session.role === "ADMIN"}
-      />
+      <ProjectsView projects={projects} trash={trash} today={todayYmd()} />
     </>
   );
 }

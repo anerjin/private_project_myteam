@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { settingUpdateSchema } from "@/features/admin/settings.schema";
 import { guard, ok, validationError, type ActionResult } from "@/lib/result";
-import { requireActor, requireAdminActor } from "@/server/auth/guards";
+import { requireActor } from "@/server/auth/guards";
 import * as categoryService from "@/server/services/category.service";
 import * as contentTypeService from "@/server/services/content-type.service";
 import * as maintenanceService from "@/server/services/maintenance.service";
@@ -15,18 +15,18 @@ import * as tagService from "@/server/services/tag.service";
 /**
  * 분류 · 타입 · 시스템 설정 액션 (`FR-ADM-012`~`015`, `SCR-231`·`SCR-261`).
  *
- * ## 인가는 **service 가** 판정합니다
+ * ## 인가는 `requireActor()` 하나입니다 (`DEC-077`)
  *
- * 대부분의 액션이 `requireActor()`(로그인한 활성 계정인가)까지만 보고
- * 등급 판정은 service 에 맡깁니다 — 액션마다 등급을 적으면 그 표가
- * service 의 판정과 **두 벌**이 되고, 한쪽만 고치는 날이 옵니다.
+ * 🔄 전에는 액션이 `requireActor()` 까지만 보고 **등급 판정을 service 에** 맡겼습니다
+ *    (`categoryService.create` 가 `isAdmin` 을 직접 봤습니다). 사람의 등급이
+ *    사라지면서 그 두 번째 관문이 언제나 통과가 되어 **service 쪽 검사를 지웠습니다** —
+ *    남겨 두면 「분류는 관리자만」이라는, 지금은 아무도 못 지키는 약속이 됩니다.
  *
- * 화면은 `ADMIN` 전용이지만(`DEC-057`) 그것은 **page 의 `requireRole`** 이
- * 하는 일이고, 액션은 화면 없이도 불릴 수 있으므로 자기 방어선을 따로
- * 갖습니다 — `categoryService.create` 는 `isAdmin` 을 직접 봅니다.
+ * 액션은 화면 없이도 불립니다. 그래서 **`requireActor()` 는 액션마다 있어야 합니다** —
+ * 화면의 가드(`page` 의 `requireActiveUser()`)는 액션을 막지 못합니다.
  *
- * 예외는 `runMaintenanceAction` 입니다. 그쪽은 **호출 자체가 무거워서**
- * (저장소 수만큼 GitHub 호출 + 실제 삭제) 액션에서 먼저 막습니다.
+ * 그래서 이 파일의 액션은 **전부 같은 문 하나**를 지납니다 — 무거운
+ * `runMaintenanceAction` 도 예외가 아닙니다(전에는 그쪽만 `requireAdminActor` 였습니다).
  */
 
 /**
@@ -123,7 +123,11 @@ export async function deleteCategoryAction(
       .safeParse(input);
     if (!parsed.success) return validationError(parsed.error);
 
-    const r = await categoryService.remove(actor, parsed.data.slug, parsed.data.moveTo);
+    const r = await categoryService.remove(
+      actor,
+      parsed.data.slug,
+      parsed.data.moveTo
+    );
     revalidateTaxonomy();
     // 자료의 분류가 바뀌었으므로 목록도 다시 그립니다
     revalidatePath("/resources");
@@ -212,7 +216,10 @@ export async function suggestTagsAction(
       .safeParse(input);
     if (!parsed.success) return validationError(parsed.error);
 
-    const rows = await tagService.suggest(parsed.data.q, parsed.data.exclude ?? []);
+    const rows = await tagService.suggest(
+      parsed.data.q,
+      parsed.data.exclude ?? []
+    );
     return ok(rows);
   });
 }
@@ -268,8 +275,10 @@ export async function updateSettingAction(
 /**
  * 밀린 스케줄 작업 + 보존 배치를 지금 돌린다.
  *
- * **`ADMIN` 입니다.** 저장소 수만큼 GitHub 을 부르고 30일 지난 자료를 실제로
- * 지웁니다 — 「지금 실행」이 가벼운 버튼이 아닙니다.
+ * ⚠️ **가벼운 버튼이 아닙니다.** 저장소 수만큼 GitHub 을 부르고 30일 지난 자료를
+ * 실제로 지웁니다. 전에는 이 무게 때문에 액션이 `requireAdminActor()` 로 한 번 더
+ * 막았지만, `DEC-077` 로 그 등급이 사라져 지금 남은 문은 **로그인 하나**입니다 —
+ * 화면(`/admin/jobs`)의 확인 다이얼로그가 실질적인 마지막 관문입니다.
  *
  * 평소에는 Windows 작업 스케줄러가 `npm run maintenance` 로 부릅니다.
  * **같은 함수**를 지나므로 두 경로가 다른 판단을 하지 않습니다.
@@ -278,7 +287,7 @@ export async function runMaintenanceAction(): Promise<
   ActionResult<maintenanceService.MaintenanceResult>
 > {
   return guard(async () => {
-    const actor = await requireAdminActor();
+    const actor = await requireActor();
     const r = await maintenanceService.runDue(actor);
     revalidatePath("/admin/jobs");
     revalidatePath("/admin");

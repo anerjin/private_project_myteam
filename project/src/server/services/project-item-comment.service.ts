@@ -3,7 +3,7 @@ import "server-only";
 import type { ProjectItemCommentInput } from "@/features/projects/schema";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { isAdmin, type Actor } from "@/server/auth/actor";
+import type { Actor } from "@/server/auth/actor";
 import * as audit from "@/server/services/audit.service";
 
 /**
@@ -22,24 +22,31 @@ import * as audit from "@/server/services/audit.service";
  * 「참가자만 읽고 쓴다」가 성립했지만, **우리에게는 멤버십이 없습니다.**
  * 읽고 쓰는 판정에 멤버십을 흉내 내면 없는 개념을 하나 만드는 것이 됩니다.
  *
- * ## 누가 지우고 누가 고치는가 — **둘을 다르게 정했습니다**
+ * ## 누가 지우고 누가 고치는가 — **둘이 여전히 다릅니다** (`DEC-077`)
  *
  * | | 할 수 있는 사람 | 왜 |
  * | --- | --- | --- |
- * | 쓰기 | 승인 회원 전원 | `DEC-018`. 역할로 입력칸을 막지 않습니다 — `MEMBER` 는 자료를 못 고치는 것이지 **말을 못 하는 것이 아닙니다** |
- * | 고치기 | **작성자 본인만** | 남의 말을 그 사람 이름 아래에서 바꾸는 것은 조정이 아니라 **위조**입니다. `ADMIN` 도 못 합니다 |
- * | 지우기 | 작성자 · **프로젝트를 만든 사람** · `ADMIN` | 아래 |
+ * | 쓰기 | 로그인한 사람 전원 | `DEC-018` |
+ * | 고치기 | **작성자 본인만** | 남의 말을 그 사람 이름 아래에서 바꾸는 것은 조정이 아니라 **위조**입니다 |
+ * | 지우기 | 로그인한 사람 전원 | 아래 |
  *
- * 지우기의 짝을 「소유자 + `ADMIN`」으로 둔 것은 **이 저장소에 이미 있는 짝**을
- * 그대로 쓴 것입니다 — 프로젝트 삭제가 정확히 그 둘입니다
- * (`project.service.assertCanDelete` · `FR-PROJ-004`). 원본은 「소유자가 남의
- * 댓글을 지울 수 있다」로 신고·차단이 없는 자리를 메웠는데, 우리 쪽에서 그
- * 자리에 서 있는 사람이 프로젝트를 만든 사람과 관리자입니다.
+ * 🔄 **지우기는 「작성자 · 프로젝트를 만든 사람 · `ADMIN`」이었습니다.**
+ *    `DEC-077` 로 사람이 전부 관리자가 되면서 세 번째 항이 언제나 참이 되어
+ *    식 전체가 참이 됐고, `canDelete`/`assertCanDelete` 를 지웠습니다.
+ *    그 짝(`소유자 + ADMIN`)을 빌려 온 원래 자리인 `project.service.assertCanDelete`
+ *    도 **같은 커밋에서 함께** 사라졌습니다 — 한쪽만 남기면 이 머리말이 없는
+ *    규칙을 가리킵니다.
  *
- * **`EDITOR` 는 일부러 뺐습니다.** `isEditor`/`canEditResource` 는 «자료» 편집
- * 권한이고(`REQ-02 · 2.5`), 남의 «말»에 대한 권한이 아닙니다. 20명 팀에서
- * `EDITOR` 는 흔한 역할이라 여기 넣으면 사실상 「아무나 남의 댓글을 지운다」가
- * 됩니다.
+ * ⚠️ 전에 이 자리에는 *"`EDITOR` 를 일부러 뺐다 — 넣으면 사실상 「아무나 남의
+ *    댓글을 지운다」가 된다"* 고 적혀 있었습니다. **그 우려가 현실이 된 것처럼
+ *    보이지만 아닙니다.** 그 문장이 겨눈 것은 「20명 팀에서 흔한 등급」이었고,
+ *    지금 이 시스템을 쓰는 사람은 **한 명**입니다 — 「아무나」에 해당하는 남이
+ *    없습니다. 사람이 다시 여럿이 되는 날, 되살릴 것은 `EDITOR` 가 아니라
+ *    **「작성자 · 프로젝트를 만든 사람」** 두 항입니다(그 둘은 등급이 아니라
+ *    소유권이라 등급 없이도 성립합니다).
+ *
+ * **고치기는 안 건드렸습니다.** 그것은 등급 규칙이 아니라 「본인인가」였고,
+ * `ADMIN` 에게도 열려 있던 적이 없습니다 — 등급이 사라져도 그대로입니다.
  *
  * ## 감사 로그를 남깁니다 — 항목과 **반대**입니다
  *
@@ -83,8 +90,6 @@ export interface ItemComment {
    * 화면의 값은 「무엇을 그릴까」이고, 액션은 그것을 안 믿습니다.
    */
   mine: boolean;
-  /** 지우기 단추를 그릴 것인가. 위와 같이 **관문이 아닙니다** (`assertCanDelete`) */
-  canDelete: boolean;
 }
 
 const ROW = {
@@ -122,33 +127,11 @@ function wasEdited(createdAt: Date, updatedAt: Date): boolean {
 }
 
 /**
- * 지울 수 있는가 — 작성자 · 프로젝트를 만든 사람 · `ADMIN`.
- *
- * 판정을 **한 함수에 모읍니다.** 목록이 그리는 `canDelete` 와 실제로 막는
- * `assertCanDelete` 가 같은 식을 봐야 「단추는 있는데 눌러도 안 된다」와
- * 그 반대가 생기지 않습니다.
- */
-function canDelete(actor: Actor, authorId: string, ownerId: string): boolean {
-  return actor.id === authorId || actor.id === ownerId || isAdmin(actor);
-}
-
-function assertCanDelete(
-  actor: Actor,
-  authorId: string,
-  ownerId: string
-): void {
-  if (canDelete(actor, authorId, ownerId)) return;
-  throw new AppError(
-    "FORBIDDEN",
-    "댓글은 쓴 사람과 프로젝트를 만든 사람, 관리자만 지울 수 있습니다."
-  );
-}
-
-/**
  * 고칠 수 있는가 — **본인만**.
  *
- * `ADMIN` 도 아닙니다. 지우는 것은 「이 말을 여기 두지 않는다」이고, 고치는
- * 것은 「이 사람이 이렇게 말했다」를 바꾸는 것이라 성질이 다릅니다.
+ * 지우는 것은 「이 말을 여기 두지 않는다」이고, 고치는 것은 「이 사람이 이렇게
+ * 말했다」를 바꾸는 것이라 성질이 다릅니다. 그래서 지우기가 전원에게 열린 지금도
+ * (`DEC-077`) 이 문은 **닫혀 있습니다** — 이건 등급 규칙이었던 적이 없습니다.
  */
 function assertCanEdit(actor: Actor, authorId: string): void {
   if (actor.id === authorId) return;
@@ -156,23 +139,24 @@ function assertCanEdit(actor: Actor, authorId: string): void {
 }
 
 /**
- * 이 항목이 그 프로젝트의 것인가 — **그리고 프로젝트를 만든 사람은 누구인가.**
+ * 이 항목이 그 프로젝트의 것인가.
  *
  * 액션이 `itemId` 만 받으므로 여기서 봅니다(`project-item.service` 의
- * `belongsTo` 와 같은 이유). 소유자를 같은 질의에서 가져오는 것은 아래 권한
- * 판정이 그 값을 반드시 쓰기 때문입니다 — 따로 부르면 질의가 하나 더 늘고,
- * 빠뜨리면 「소유자인데 지우기 단추가 없다」가 됩니다.
+ * `belongsTo` 와 같은 이유). **주소의 프로젝트와 항목이 어긋나면 못 찾습니다.**
+ *
+ * 🔄 프로젝트 소유자를 같은 질의에서 함께 읽었습니다 — 지우기 권한이 그 값을
+ *    썼기 때문입니다. `DEC-077` 로 그 판정이 사라져 **`title` 만 남습니다.**
  */
 async function itemInProject(
   itemId: string,
   projectId: string
-): Promise<{ title: string; ownerId: string }> {
+): Promise<{ title: string }> {
   const row = await db.projectItem.findFirst({
     where: { id: itemId, projectId },
-    select: { title: true, project: { select: { ownerId: true } } },
+    select: { title: true },
   });
   if (!row) throw new AppError("NOT_FOUND", "항목을 찾을 수 없습니다.");
-  return { title: row.title, ownerId: row.project.ownerId };
+  return { title: row.title };
 }
 
 /**
@@ -188,13 +172,7 @@ async function commentInProject(id: string, projectId: string) {
       id: true,
       authorId: true,
       author: { select: { username: true } },
-      item: {
-        select: {
-          id: true,
-          title: true,
-          project: { select: { ownerId: true } },
-        },
-      },
+      item: { select: { id: true, title: true } },
     },
   });
   if (!row) throw new AppError("NOT_FOUND", "댓글을 찾을 수 없습니다.");
@@ -212,7 +190,12 @@ export async function listFor(
   projectId: string,
   itemId: string
 ): Promise<ItemComment[]> {
-  const item = await itemInProject(itemId, projectId);
+  /*
+   * **항목이 그 프로젝트의 것인지 먼저 확인합니다.** 반환값을 쓰지 않아도
+   * 부릅니다 — 남의 프로젝트 주소에 남의 항목 id 를 붙여 댓글을 읽는 길을
+   * 막는 것이 이 호출의 일입니다(`itemInProject` 머리말).
+   */
+  await itemInProject(itemId, projectId);
 
   const rows = await db.projectItemComment.findMany({
     where: { itemId, deletedAt: null },
@@ -227,7 +210,6 @@ export async function listFor(
     createdAt: r.createdAt.toISOString(),
     edited: wasEdited(r.createdAt, r.updatedAt),
     mine: r.authorId === actor.id,
-    canDelete: canDelete(actor, r.authorId, item.ownerId),
   }));
 }
 
@@ -315,7 +297,6 @@ export async function remove(
   id: string
 ): Promise<void> {
   const row = await commentInProject(id, projectId);
-  assertCanDelete(actor, row.authorId, row.item.project.ownerId);
 
   const mine = row.authorId === actor.id;
 

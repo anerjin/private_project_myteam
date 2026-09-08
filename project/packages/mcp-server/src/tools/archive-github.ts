@@ -13,9 +13,8 @@ interface Args {
  * 에이전트가 기다릴 일이 아닙니다. 진행 상황은 Neowave Work 관리 화면의
  * 「작업」에서 봅니다.
  *
- * `archive:run` 스코프가 필요합니다 — `EDITOR` 이상만 가질 수 있습니다
- * (`REQ-02 · 2.2`). 없으면 「권한이 없다」가 아니라 **무엇을 하면 되는지**가
- * 문구로 옵니다.
+ * `archive:run` 스코프가 필요합니다 — 키를 만들 때 줄지 말지 고릅니다.
+ * 없으면 「권한이 없다」가 아니라 **무엇을 하면 되는지**가 문구로 옵니다.
  */
 export const archiveGithub: ToolDef<Args> = {
   name: "nwwork_archive_github",

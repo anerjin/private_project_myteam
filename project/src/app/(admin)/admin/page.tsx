@@ -1,10 +1,4 @@
-import {
-  HardDrive,
-  Library,
-  TriangleAlert,
-  UserPlus,
-  Users,
-} from "lucide-react";
+import { HardDrive, Library, TriangleAlert, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -21,7 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { humanBytes } from "@/lib/storage";
-import { requireRole } from "@/server/auth/guards";
+import { requireActiveUser } from "@/server/auth/guards";
 import * as audit from "@/server/services/audit.service";
 import * as jobService from "@/server/services/job.service";
 import * as memberService from "@/server/services/member.service";
@@ -58,18 +52,15 @@ export const metadata: Metadata = { title: "관리자" };
  */
 export default async function AdminDashboardPage() {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
-  await requireRole("ADMIN");
+  await requireActiveUser();
 
-  const [pendingMembers, totalMembers, typeCounts, storage, recent, jobs] =
-    await Promise.all([
-      // 배지와 같은 출처를 본다 (DEC-038) — 두 곳에서 다른 숫자가 나오면 안 된다
-      memberService.countPending(),
-      memberService.countAll(),
-      resourceService.countByType(),
-      storageService.usage(),
-      audit.list({ page: 1, size: 5 }),
-      jobService.board(),
-    ]);
+  const [totalMembers, typeCounts, storage, recent, jobs] = await Promise.all([
+    memberService.countAll(),
+    resourceService.countByType(),
+    storageService.usage(),
+    audit.list({ page: 1, size: 5 }),
+    jobService.board(),
+  ]);
 
   const totalResources = Object.values(typeCounts).reduce((a, b) => a + b, 0);
   const disk = storage.disk;
@@ -79,22 +70,8 @@ export default async function AdminDashboardPage() {
     <>
       <PageHeader
         title="관리자 대시보드"
-        description="승인 대기 · 자료 · 디스크를 한 화면에서 봅니다."
+        description="회원 · 자료 · 디스크를 한 화면에서 봅니다."
       />
-
-      {/* 대기 건수가 0이면 알림 자체를 띄우지 않는다 — 「0건 대기」는 할 일이 아니다 */}
-      {pendingMembers > 0 && (
-        <Alert>
-          <UserPlus />
-          <AlertTitle>승인 대기 {pendingMembers}건</AlertTitle>
-          <AlertDescription className="flex items-center gap-3">
-            영업일 1일 안에 처리하는 것을 목표로 합니다.
-            <Button size="sm" variant="outline" asChild>
-              <Link href="/admin/members">처리하기</Link>
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
 
       {/*
         **실패한 작업은 배너로 말합니다.** 카드로 「0건」을 띄우면 워커가 없어서
@@ -105,8 +82,8 @@ export default async function AdminDashboardPage() {
           <TriangleAlert />
           <AlertTitle>실패한 작업 {failed}건</AlertTitle>
           <AlertDescription className="flex items-center gap-3">
-            메타 수집이나 아카이브가 끝내 실패했습니다. 원인을 보고 다시
-            실행할 수 있습니다.
+            메타 수집이나 아카이브가 끝내 실패했습니다. 원인을 보고 다시 실행할
+            수 있습니다.
             <Button size="sm" variant="outline" asChild>
               <Link href="/admin/jobs">작업 보기</Link>
             </Button>
@@ -118,10 +95,12 @@ export default async function AdminDashboardPage() {
       {!disk.ok && (
         <Alert variant="destructive">
           <HardDrive />
-          <AlertTitle>디스크 여유 부족 — {Math.round(disk.freeGb)}GB</AlertTitle>
+          <AlertTitle>
+            디스크 여유 부족 — {Math.round(disk.freeGb)}GB
+          </AlertTitle>
           <AlertDescription>
-            업로드와 아카이브가 거부됩니다. 오래된 아카이브를 정리하거나 디스크를
-            확보해 주세요.
+            업로드와 아카이브가 거부됩니다. 오래된 아카이브를 정리하거나
+            디스크를 확보해 주세요.
           </AlertDescription>
         </Alert>
       )}
@@ -132,12 +111,6 @@ export default async function AdminDashboardPage() {
           value={totalMembers}
           unit="명"
           icon={Users}
-        />
-        <StatCard
-          label="승인 대기"
-          value={pendingMembers}
-          unit="명"
-          icon={UserPlus}
         />
         <StatCard
           label="전체 자료"

@@ -45,10 +45,9 @@ export function explain(
       };
 
     /*
-     * **계정 상태는 재시도로 풀리지 않습니다.** 승인·정지 해제는 관리자가
-     * 하는 일이고, 에이전트가 할 수 있는 것은 사용자에게 말하는 것뿐입니다.
+     * **계정 상태는 재시도로 풀리지 않습니다.** 정지 해제는 관리자가 하는
+     * 일이고, 에이전트가 할 수 있는 것은 사용자에게 말하는 것뿐입니다.
      */
-    case "ACCOUNT_PENDING":
     case "ACCOUNT_BLOCKED":
       return { text: message, fixable: false };
 
@@ -100,7 +99,8 @@ export function explain(
     return { text: `인증에 실패했습니다. ${KEY_HINT}`, fixable: false };
   }
   return {
-    text: message || `Neowave Work 서버가 오류를 반환했습니다 (HTTP ${status}).`,
+    text:
+      message || `Neowave Work 서버가 오류를 반환했습니다 (HTTP ${status}).`,
     fixable: false,
   };
 }

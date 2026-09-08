@@ -31,11 +31,9 @@ export interface AttachmentItem {
 export function Attachments({
   resourceId,
   files,
-  canEdit,
 }: {
   resourceId: string;
   files: AttachmentItem[];
-  canEdit: boolean;
 }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
@@ -64,7 +62,9 @@ export function Attachments({
           const body = (await res.json().catch(() => null)) as {
             error?: { message?: string };
           } | null;
-          toast.error(`${file.name} — ${body?.error?.message ?? "올리지 못했습니다."}`);
+          toast.error(
+            `${file.name} — ${body?.error?.message ?? "올리지 못했습니다."}`
+          );
           continue;
         }
         toast.success(`${file.name} 첨부했습니다.`);
@@ -89,7 +89,10 @@ export function Attachments({
     });
   }
 
-  if (files.length === 0 && !canEdit) return null;
+  /*
+   * 🔄 `files.length === 0 && !canEdit` 였습니다. `DEC-077` 로 그 판정이 사라져
+   *    **첨부가 없어도 카드를 그립니다** — 올릴 수 있는 사람에게 보여 줄 자리입니다.
+   */
 
   return (
     <Card>
@@ -98,26 +101,24 @@ export function Attachments({
           <Paperclip className="size-4" />
           첨부 {files.length > 0 && `(${files.length})`}
         </CardTitle>
-        {canEdit && (
-          <div>
-            <input
-              ref={input}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => e.target.files && upload(e.target.files)}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy !== null}
-              onClick={() => input.current?.click()}
-            >
-              <Upload className="size-4" />
-              {busy ? `${busy} 올리는 중…` : "파일 추가"}
-            </Button>
-          </div>
-        )}
+        <div>
+          <input
+            ref={input}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => e.target.files && upload(e.target.files)}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy !== null}
+            onClick={() => input.current?.click()}
+          >
+            <Upload className="size-4" />
+            {busy ? `${busy} 올리는 중…` : "파일 추가"}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {files.length === 0 ? (
@@ -135,23 +136,26 @@ export function Attachments({
                 <span className="text-muted-foreground text-xs tabular-nums">
                   {formatSize(f.sizeBytes)}
                 </span>
-                <Button variant="ghost" size="icon" aria-label="내려받기" asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="내려받기"
+                  asChild
+                >
                   {/* 스트림 응답이므로 라우터가 아니라 브라우저에 맡깁니다 */}
                   <a href={`/api/files/${f.id}`}>
                     <Download className="size-4" />
                   </a>
                 </Button>
-                {canEdit && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="삭제"
-                    disabled={pending}
-                    onClick={() => remove(f.id, f.originalName)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="삭제"
+                  disabled={pending}
+                  onClick={() => remove(f.id, f.originalName)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
               </li>
             ))}
           </ul>

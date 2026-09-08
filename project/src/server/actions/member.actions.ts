@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { reasonSchema } from "@/features/members/schema";
 import { guard, ok, validationError, type ActionResult } from "@/lib/result";
-import { requireAdminActor } from "@/server/auth/guards";
+import { requireActor } from "@/server/auth/guards";
 import { hashPassword } from "@/server/auth/password";
 import * as apiKeyService from "@/server/services/api-key.service";
 import * as memberService from "@/server/services/member.service";
@@ -19,19 +19,11 @@ import * as memberService from "@/server/services/member.service";
  *
  * 상태·역할 변경은 전부 `member.service.transition` 하나를 지납니다 (`DEC-036`).
  * 여기서 `db.user.update` 를 부르면 `check-deps` 가 막습니다.
- */
-
-/**
- * **`max(BULK_LIMIT)` 를 여기 두지 않습니다** (`DEC-039`).
  *
- * `DEC-039` 의 상한은 «id 중복 제거 **후**» 50건입니다. 여기서 막으면 60건 중
- * 15건이 중복인 요청(실제 45건)을 서비스가 보기도 전에 거부합니다.
- * 「50건 규칙」의 출처는 `member.service.transitionMany` **한 곳**이고,
- * 여기 있는 상한은 그것과 다른 것 — **입력 크기 방어**입니다.
+ * **일괄 처리가 없습니다** (`DEC-077`). `DEC-039` 의 부분 성공 기계는 「일괄 승인」
+ * 하나를 위해 있었고, 가입 승인이 사라지면서 남은 처리는 전부 단건입니다 —
+ * 정지·탈퇴는 사유를 받아야 하고 역할 변경은 대상마다 값이 다릅니다.
  */
-const idsSchema = z.object({
-  ids: z.array(z.string().min(1)).min(1).max(500),
-});
 
 const withReasonSchema = z.object({
   id: z.string().min(1),
@@ -43,72 +35,12 @@ function revalidateMembers() {
   revalidatePath("/admin");
 }
 
-/** API-061 승인 (단건·일괄, 최대 50) */
-export async function approveMembersAction(
-  input: unknown
-): Promise<ActionResult<memberService.BulkResult>> {
-  return guard(async () => {
-    const actor = await requireAdminActor();
-    const parsed = idsSchema.safeParse(input);
-    if (!parsed.success) return validationError(parsed.error);
-
-    const result = await memberService.transitionMany(actor, parsed.data.ids, {
-      kind: "APPROVE",
-    });
-
-    revalidateMembers();
-    return ok(result);
-  });
-}
-
-/** API-062 거부 (사유 필수) */
-export async function rejectMemberAction(
-  input: unknown
-): Promise<ActionResult<memberService.TransitionResult>> {
-  return guard(async () => {
-    const actor = await requireAdminActor();
-    const parsed = withReasonSchema.safeParse(input);
-    if (!parsed.success) return validationError(parsed.error);
-
-    const result = await memberService.transition(actor, parsed.data.id, {
-      kind: "REJECT",
-      reason: parsed.data.reason,
-    });
-
-    revalidateMembers();
-    return ok(result);
-  });
-}
-
-/**
- * 거부 취소 — 재검토 대기로 되돌린다 (`DEC-042`, `REQ-02 · 2.4`).
- *
- * 이것이 없으면 오타 한 번으로 거부한 신청이 **영구 종착역**이 되고,
- * 아이디는 `DEC-021`(점유)로 영원히 잠깁니다.
- */
-export async function reopenMemberAction(
-  id: unknown
-): Promise<ActionResult<memberService.TransitionResult>> {
-  return guard(async () => {
-    const actor = await requireAdminActor();
-    const parsed = z.string().min(1).safeParse(id);
-    if (!parsed.success) return validationError(parsed.error);
-
-    const result = await memberService.transition(actor, parsed.data, {
-      kind: "REOPEN",
-    });
-
-    revalidateMembers();
-    return ok(result);
-  });
-}
-
 /** API-063 정지 (사유 필수) + 세션 전체 삭제 */
 export async function suspendMemberAction(
   input: unknown
 ): Promise<ActionResult<memberService.TransitionResult>> {
   return guard(async () => {
-    const actor = await requireAdminActor();
+    const actor = await requireActor();
     const parsed = withReasonSchema.safeParse(input);
     if (!parsed.success) return validationError(parsed.error);
 
@@ -127,7 +59,7 @@ export async function reactivateMemberAction(
   id: unknown
 ): Promise<ActionResult<memberService.TransitionResult>> {
   return guard(async () => {
-    const actor = await requireAdminActor();
+    const actor = await requireActor();
     const parsed = z.string().min(1).safeParse(id);
     if (!parsed.success) return validationError(parsed.error);
 
@@ -140,29 +72,11 @@ export async function reactivateMemberAction(
   });
 }
 
-/** API-065 역할 변경 + 세션 갱신 */
-export async function changeRoleAction(
-  input: unknown
-): Promise<ActionResult<memberService.TransitionResult>> {
-  return guard(async () => {
-    const actor = await requireAdminActor();
-    const parsed = z
-      .object({
-        id: z.string().min(1),
-        role: z.enum(["MEMBER", "EDITOR", "ADMIN"]),
-      })
-      .safeParse(input);
-    if (!parsed.success) return validationError(parsed.error);
-
-    const result = await memberService.transition(actor, parsed.data.id, {
-      kind: "CHANGE_ROLE",
-      role: parsed.data.role,
-    });
-
-    revalidateMembers();
-    return ok(result);
-  });
-}
+/*
+ * `changeRoleAction` (API-065) 이 여기 있었습니다. **지웠습니다** (`DEC-077`) —
+ * 바꿀 등급이 없습니다. 옛 감사 로그의 `USER_ROLE_CHANGE` 행은 그대로 남고,
+ * `features/audit/actions.ts` 가 그 라벨을 **읽기 위해** 들고 있습니다.
+ */
 
 /**
  * API-066 임시 비밀번호 발급 (FR-ADM-007).
@@ -175,7 +89,7 @@ export async function resetMemberPasswordAction(
   id: unknown
 ): Promise<ActionResult<{ username: string; temporaryPassword: string }>> {
   return guard(async () => {
-    const actor = await requireAdminActor();
+    const actor = await requireActor();
     const parsed = z.string().min(1).safeParse(id);
     if (!parsed.success) return validationError(parsed.error);
 
@@ -197,16 +111,14 @@ export async function resetMemberPasswordAction(
 /**
  * API-067 강제 탈퇴 (`FR-ADM-008`, 사유 필수).
  *
- * **되돌리는 액션이 없습니다.** `REJECT` 에는 `REOPEN` 이 있지만(`DEC-042`)
- * 탈퇴에는 없습니다 — 그래서 화면이 「되돌릴 수 없습니다」를 말해야 하고,
- * `TRANSITION_FROM.WITHDRAW` 가 되돌릴 길이 있는 상태(`PENDING`·`REJECTED`)를
- * 애초에 여기로 보내지 않습니다.
+ * **되돌리는 액션이 없습니다.** 그래서 화면이 「되돌릴 수 없습니다」를 말해야 합니다 —
+ * 정지에는 `REACTIVATE` 가 있지만 탈퇴에는 대응하는 전이가 없습니다.
  */
 export async function withdrawMemberAction(
   input: unknown
 ): Promise<ActionResult<memberService.TransitionResult>> {
   return guard(async () => {
-    const actor = await requireAdminActor();
+    const actor = await requireActor();
     const parsed = withReasonSchema.safeParse(input);
     if (!parsed.success) return validationError(parsed.error);
 
@@ -236,7 +148,7 @@ export async function revokeMemberKeysAction(
   id: unknown
 ): Promise<ActionResult<{ revoked: number }>> {
   return guard(async () => {
-    const actor = await requireAdminActor();
+    const actor = await requireActor();
     const parsed = z.string().min(1).safeParse(id);
     if (!parsed.success) return validationError(parsed.error);
 

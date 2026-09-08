@@ -11,7 +11,7 @@ import {
   parseAuditFilter,
 } from "@/features/audit/filter.schema";
 import { pageSchema } from "@/features/resources/list.schema";
-import { requireRole } from "@/server/auth/guards";
+import { requireActiveUser } from "@/server/auth/guards";
 import * as audit from "@/server/services/audit.service";
 import type { AuditLog } from "@/types";
 
@@ -33,7 +33,7 @@ export default async function AdminAuditLogsPage({
   searchParams,
 }: PageProps<"/admin/audit-logs">) {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
-  await requireRole("ADMIN");
+  await requireActiveUser();
 
   const sp = await searchParams;
   const page = pageSchema.parse(Array.isArray(sp.page) ? sp.page[0] : sp.page);

@@ -46,15 +46,31 @@ const VUS = Number(process.env.LOAD_VUS ?? 20);
 const SECONDS = Number(process.env.LOAD_SECONDS ?? 30);
 
 /** `NFR-PERF-001`·`002`·`004` — 이 스크립트가 판정하는 유일한 숫자 */
-const TARGETS: { label: string; path: () => string; p95: number; nfr: string }[] = [
-  { label: "자료 목록", path: () => "/resources", p95: 500, nfr: "NFR-PERF-001" },
+const TARGETS: {
+  label: string;
+  path: () => string;
+  p95: number;
+  nfr: string;
+}[] = [
+  {
+    label: "자료 목록",
+    path: () => "/resources",
+    p95: 500,
+    nfr: "NFR-PERF-001",
+  },
   {
     label: "통합 검색",
-    path: () => `/search?q=${encodeURIComponent(WORDS[Math.floor(Math.random() * WORDS.length)])}`,
+    path: () =>
+      `/search?q=${encodeURIComponent(WORDS[Math.floor(Math.random() * WORDS.length)])}`,
     p95: 1000,
     nfr: "NFR-PERF-002",
   },
-  { label: "자료 상세", path: () => detailPath(), p95: 700, nfr: "NFR-PERF-004" },
+  {
+    label: "자료 상세",
+    path: () => detailPath(),
+    p95: 700,
+    nfr: "NFR-PERF-004",
+  },
 ];
 
 const WORDS = ["드론", "정사영상", "RAG", "임베딩", "에이전트", "GIS"];
@@ -155,7 +171,6 @@ async function main() {
         passwordHash: await hashPassword("Load!12345"),
         name: `부하 ${i}`,
         status: "ACTIVE",
-        role: "MEMBER",
       },
       select: { id: true },
     });
@@ -174,8 +189,8 @@ async function main() {
    * 그것을 표본에 넣으면 P95 가 아니라 「최초 1회」를 재게 됩니다.
    */
   for (const t of TARGETS) {
-    await fetch(BASE + t.path(), { headers: { cookie: cookies[0]! } }).then((r) =>
-      r.text()
+    await fetch(BASE + t.path(), { headers: { cookie: cookies[0]! } }).then(
+      (r) => r.text()
     );
   }
 
@@ -200,7 +215,9 @@ async function main() {
       `  ${t.label}  ${String(mine.length).padStart(5)}` +
         `  ${p(ms, 0.5).toFixed(0).padStart(5)}ms` +
         `  ${p95.toFixed(0).padStart(5)}ms` +
-        `  ${Math.max(...ms).toFixed(0).padStart(5)}ms` +
+        `  ${Math.max(...ms)
+          .toFixed(0)
+          .padStart(5)}ms` +
         `  ${String(t.p95).padStart(4)}ms  ${ok ? "OK" : "실패"}  (${t.nfr})`
     );
   }
@@ -218,7 +235,8 @@ async function main() {
   );
   if (bad.length > 0) {
     const byStatus = new Map<number, number>();
-    for (const b of bad) byStatus.set(b.status, (byStatus.get(b.status) ?? 0) + 1);
+    for (const b of bad)
+      byStatus.set(b.status, (byStatus.get(b.status) ?? 0) + 1);
     console.log(
       `  ✗ 비정상: ${[...byStatus].map(([s, c]) => `${s || "연결실패"}×${c}`).join(", ")}`
     );

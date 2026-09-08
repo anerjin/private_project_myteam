@@ -73,7 +73,10 @@ async function run(job: { resourceId: string | null }) {
   });
   if (!resource) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
   if (!resource.url) {
-    throw new AppError("INVALID_STATE", "주소가 없는 자료는 보관할 수 없습니다.");
+    throw new AppError(
+      "INVALID_STATE",
+      "주소가 없는 자료는 보관할 수 없습니다."
+    );
   }
 
   /*
@@ -187,7 +190,12 @@ async function run(job: { resourceId: string | null }) {
 
 /** 파일 이름에 못 쓰는 글자를 걷어냅니다 — 한글은 그대로 둡니다 */
 function safeName(title: string): string {
-  return title.replace(/[\\/:*?"<>|]/g, "-").slice(0, 80).trim() || "보관본";
+  return (
+    title
+      .replace(/[\\/:*?"<>|]/g, "-")
+      .slice(0, 80)
+      .trim() || "보관본"
+  );
 }
 
 register("ARCHIVE_URL", run);

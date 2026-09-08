@@ -21,10 +21,10 @@ import {
  *
  * ## 누구에게 보이는가
  *
- * **수정 권한이 있는 사람**입니다(작성자 + `EDITOR` 이상). 「누가 언제 뭘
- * 고쳤나」는 그 자료를 고칠 수 있는 사람이 알아야 하는 것이고, 아무나
- * 보면 «누가 무엇을 하는지»가 새어 나갑니다. 전체 기록은 `ADMIN` 의
- * 감사 로그에 있습니다.
+ * 🔄 **수정 권한이 있는 사람**이었습니다(작성자 + `EDITOR` 이상). `DEC-077` 로
+ *    그 판정이 사라져 **자료를 볼 수 있으면 이력도 봅니다.** 겨누던 위험
+ *    (「아무나 보면 누가 무엇을 하는지 새어 나간다」)은 보는 사람이 한 명이면
+ *    성립하지 않습니다. 전체 기록은 감사 로그(`/admin/audit-logs`)에 있습니다.
  *
  * ## 변경 «내용»은 감사 로그에 있습니다
  *
@@ -48,33 +48,20 @@ export interface HistoryEntry {
   createdAt: string;
 }
 
-export function ResourceHistory({
-  entries,
-  canSeeAll,
-}: {
-  entries: HistoryEntry[];
-  /** `ADMIN` 인가 — 전체 감사 로그로 가는 링크를 줄지 정한다 */
-  canSeeAll: boolean;
-}) {
+export function ResourceHistory({ entries }: { entries: HistoryEntry[] }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">변경 이력</CardTitle>
         <CardDescription>
-          이 자료에 일어난 일입니다.
-          {canSeeAll && (
-            <>
-              {" "}
-              전체는{" "}
-              <Link
-                className="underline underline-offset-4"
-                href="/admin/audit-logs"
-              >
-                감사 로그
-              </Link>
-              에 있습니다.
-            </>
-          )}
+          이 자료에 일어난 일입니다. 전체는{" "}
+          <Link
+            className="underline underline-offset-4"
+            href="/admin/audit-logs"
+          >
+            감사 로그
+          </Link>
+          에 있습니다.
         </CardDescription>
       </CardHeader>
       <CardContent>

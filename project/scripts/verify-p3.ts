@@ -35,8 +35,7 @@ const made: string[] = [];
 
 async function makeUser(
   tag: string,
-  status: "PENDING" | "ACTIVE" | "REJECTED" | "SUSPENDED" | "WITHDRAWN",
-  role: "MEMBER" | "ADMIN" = "MEMBER",
+  status: "ACTIVE" | "SUSPENDED" | "WITHDRAWN",
   statusReason?: string
 ) {
   const u = await db.user.create({
@@ -46,23 +45,16 @@ async function makeUser(
       name: `검증-${tag}`,
       department: "검증팀",
       status,
-      role,
       statusReason,
-      signupReason: "P3 검증용 계정입니다",
     },
-    select: { id: true, username: true, name: true, role: true },
+    select: { id: true, username: true, name: true },
   });
   made.push(u.id);
   return u;
 }
 
-function actorOf(u: { id: string; username: string; role: string }): Actor {
-  return {
-    id: u.id,
-    username: u.username,
-    role: u.role as Actor["role"],
-    via: "WEB",
-  };
+function actorOf(u: { id: string; username: string }): Actor {
+  return { id: u.id, username: u.username, via: "WEB" };
 }
 
 /** 로그인 성공 후와 같은 방법으로 세션을 발급해 쿠키로 만든다 */
@@ -78,7 +70,7 @@ async function get(path: string, cookie?: string) {
   });
   /*
    * React 는 텍스트와 표현식 사이에 `<!-- -->` 를 넣습니다 —
-   * `승인 대기 {n}건` 은 HTML 에서 `승인 대기 <!-- -->2<!-- -->건` 입니다.
+   * `전체 {n}건` 은 HTML 에서 `전체 <!-- -->2<!-- -->건` 입니다.
    * 지우지 않으면 **화면에 제대로 나오는 값을 「안 나온다」고 판정**합니다.
    */
   const raw = res.status === 200 ? await res.text() : "";
@@ -106,26 +98,7 @@ async function run() {
   const adminActor = actorOf(admin);
   const adminCookie = await cookieFor(admin.id);
 
-  console.log("\n① 거부 → 그 계정으로 로그인 → 사유가 보이는가");
-  {
-    const applicant = await makeUser("reject", "PENDING");
-    const reason =
-      "제출하신 소속이 확인되지 않습니다. 팀장 확인 후 다시 신청해 주세요.";
-    await memberService.transition(adminActor, applicant.id, {
-      kind: "REJECT",
-      reason,
-    });
-    const msg = await messageOf(() =>
-      authService.signIn(applicant.username, PASSWORD, undefined, {})
-    );
-    check("거부 사유가 로그인 응답에 실린다", msg.includes(reason), msg);
-
-    // 알림 행을 만들지 않는다 (DEC-041) — 읽을 수 없는 곳에 쓰지 않는다
-    const n = await db.notification.count({ where: { userId: applicant.id } });
-    check("거부는 알림 행을 만들지 않는다", n === 0, `알림 ${n}건`);
-  }
-
-  console.log("\n①' 탈퇴 계정이 존재를 노출하지 않는가 (NFR-SEC-016)");
+  console.log("\n① 탈퇴 계정이 존재를 노출하지 않는가 (NFR-SEC-016)");
   {
     const gone = await makeUser("withdrawn", "WITHDRAWN");
     const msg = await messageOf(() =>
@@ -138,90 +111,9 @@ async function run() {
     );
   }
 
-  console.log("\n② 승인 → 즉시 대시보드 진입 (15분 대기 없음)");
+  console.log("\n② 목록 → 상세가 404 가 아닌가");
   {
-    const applicant = await makeUser("approve", "PENDING");
-    const before = await cookieFor(applicant.id);
-
-    // 승인 «전» 화면을 한 번 봐서 PENDING 스냅샷을 캐시에 깐다
-    const pendingPage = await get("/pending", before);
-    check("승인 전 /pending 이 보인다", pendingPage.status === 200);
-    const blocked = await get("/dashboard", before);
-    check(
-      "승인 전 /dashboard 는 /pending 으로 보낸다",
-      blocked.status === 307 && blocked.location?.includes("/pending") === true,
-      `${blocked.status} ${blocked.location ?? ""}`
-    );
-
-    const r = await memberService.transition(adminActor, applicant.id, {
-      kind: "APPROVE",
-    });
-    check("승인이 캐시를 무효화했다", r.sessions.cacheInvalidated);
-
-    // 승인은 세션을 끊는다 → 옛 쿠키는 즉시 죽어야 한다
-    const dead = await get("/dashboard", before);
-    check(
-      "옛 세션은 즉시 죽는다",
-      dead.status === 307 && dead.location?.includes("/login") === true,
-      `${dead.status} ${dead.location ?? ""}`
-    );
-
-    // 다시 로그인하면 곧바로 들어가야 한다 (옛 코드에서는 최대 15분 /pending)
-    const after = await cookieFor(applicant.id);
-    const dash = await get("/dashboard", after);
-    check(
-      "재로그인하면 대시보드가 열린다",
-      dash.status === 200,
-      `${dash.status}`
-    );
-  }
-
-  console.log(
-    "\n③ 일괄 승인에 처리 불가 회원을 섞으면 실패 목록에 이름이 나오는가"
-  );
-  {
-    const ok1 = await makeUser("bulk-ok1", "PENDING");
-    const ok2 = await makeUser("bulk-ok2", "PENDING");
-    const bad = await makeUser("bulk-bad", "SUSPENDED");
-    const res = await memberService.transitionMany(
-      adminActor,
-      [ok1.id, ok2.id, bad.id],
-      { kind: "APPROVE" }
-    );
-    check(
-      "성공 2 · 실패 1",
-      res.succeeded.length === 2 && res.failed.length === 1
-    );
-    check(
-      "실패 항목에 아이디가 실린다",
-      res.failed[0]?.username === bad.username,
-      res.failed[0]?.username ?? "(없음)"
-    );
-    check(
-      "성공 항목에 세션 결과가 실린다",
-      res.succeeded.every(
-        (s) => typeof s.sessions?.cacheInvalidated === "boolean"
-      )
-    );
-
-    // batchId 가 감사 로그에 남았는가 (DEC-039)
-    const logs = await db.auditLog.findMany({
-      where: { targetId: { in: [ok1.id, ok2.id] }, action: "USER_APPROVE" },
-      select: { diff: true },
-    });
-    const ids = new Set(
-      logs.map((l) => (l.diff as { batchId?: string } | null)?.batchId)
-    );
-    check(
-      "감사 로그 2건이 같은 batchId 로 묶인다",
-      logs.length === 2 && ids.size === 1 && [...ids][0] !== undefined,
-      [...ids].join(",")
-    );
-  }
-
-  console.log("\n④ 목록 → 상세가 404 가 아닌가");
-  {
-    const target = await makeUser("detail", "PENDING");
+    const target = await makeUser("detail", "ACTIVE");
     const list = await get("/admin/members", adminCookie);
     check("회원 목록이 열린다", list.status === 200, `${list.status}`);
     check(
@@ -231,69 +123,54 @@ async function run() {
     const detail = await get(`/admin/members/${target.id}`, adminCookie);
     check("상세가 열린다", detail.status === 200, `${detail.status}`);
     check("상세에 이름이 보인다", detail.body.includes(target.name));
-    check(
-      "상세에 가입 사유가 보인다",
-      detail.body.includes("P3 검증용 계정입니다")
-    );
   }
 
-  console.log("\n⑤ 거부 취소 → PENDING 복귀");
+  console.log("\n③ 지금 상태에서 갈 수 없는 전이는 거부되는가");
   {
-    const u = await makeUser("reopen", "PENDING");
-    await memberService.transition(adminActor, u.id, {
-      kind: "REJECT",
-      reason: "중복 신청으로 보여 일단 거부합니다. 확인 후 재검토하겠습니다.",
-    });
-    await memberService.transition(adminActor, u.id, { kind: "REOPEN" });
-    const after = await db.user.findUnique({
-      where: { id: u.id },
-      select: { status: true, statusReason: true },
-    });
-    check(
-      "상태가 PENDING 으로 돌아온다",
-      after?.status === "PENDING",
-      after?.status
-    );
-    check(
-      "옛 거부 사유가 지워진다",
-      after?.statusReason === null,
-      after?.statusReason ?? "null"
-    );
-  }
-
-  console.log("\n⑥ 같은 값으로 가는 전이는 거부되는가");
-  {
+    /*
+     * 🔄 여기는 **「같은 역할로 변경」**이었습니다 — 아무것도 안 바꾸는 전이가
+     *    세션만 끊고 `before === after` 인 감사 로그를 남기는 것을 막는 검사입니다.
+     *    `DEC-077` 로 역할 변경이 사라지면서 그 재현 경로가 없어졌고, 남은 셋은
+     *    전부 상태를 바꿉니다. 그래서 **같은 성질의 거부**(`spec.from` 위반)를
+     *    봅니다 — 거부된 전이가 세션을 끊지 않는다는 것이 이 검사의 값입니다.
+     */
     const u = await makeUser("noop", "ACTIVE");
     const msg = await messageOf(() =>
-      memberService.transition(adminActor, u.id, {
-        kind: "CHANGE_ROLE",
-        role: "MEMBER",
-      })
+      memberService.transition(adminActor, u.id, { kind: "REACTIVATE" })
     );
-    check("같은 역할로 변경은 거부된다", msg === "이미 그 상태입니다.", msg);
+    check(
+      "ACTIVE 인 계정의 정지 해제는 거부된다",
+      msg.includes("할 수 없는 상태입니다"),
+      msg
+    );
     const sessions = await db.session.count({ where: { userId: u.id } });
     check("거부됐으므로 세션도 안 끊긴다", sessions === 0, `${sessions}`);
   }
 
-  console.log("\n⑦ 비밀번호 초기화 — 자기 자신·차단 계정");
+  console.log("\n④ 비밀번호 초기화 — 자기 자신·차단 계정");
   {
     const self = await messageOf(() =>
       memberService.resetPassword(adminActor, admin.id, "x", hashPassword)
     );
     check("자기 자신에게는 못 건다", self.includes("마이페이지"), self);
 
-    const gone = await makeUser("reset-gone", "REJECTED");
+    /*
+     * 전에는 `REJECTED` 로 봤습니다. 그 상태가 `DEC-077` 로 없어졌으므로
+     * 같은 성질(로그인 자체가 막힌 계정)인 `WITHDRAWN` 으로 봅니다 —
+     * 초기화해 봐야 쓸 수 없고, 1년 뒤 익명화 대상에 새 해시를 찍는 셈입니다.
+     */
+    const gone = await makeUser("reset-gone", "WITHDRAWN");
     const blocked = await messageOf(() =>
       memberService.resetPassword(adminActor, gone.id, "x", hashPassword)
     );
     check(
-      "거부된 계정에는 못 건다",
+      "탈퇴한 계정에는 못 건다",
       blocked.includes("초기화할 수 없는 상태"),
       blocked
     );
   }
 
-  console.log("\n⑧ 감사 로그가 롤백과 운명을 같이하는가 (DEC-043)");
+  console.log("\n⑤ 감사 로그가 롤백과 운명을 같이하는가 (DEC-043)");
   {
     const u = await makeUser("audit", "ACTIVE");
     const before = await db.auditLog.count({ where: { targetId: u.id } });
@@ -324,20 +201,24 @@ async function run() {
     );
   }
 
-  console.log("\n⑨ 배지가 실데이터인가 (DEC-038)");
+  console.log("\n⑥ 관리자 대시보드의 회원 수가 실데이터인가 (DEC-038)");
   {
-    const dbCount = await db.user.count({ where: { status: "PENDING" } });
-    const svc = await memberService.countPending();
-    check(
-      "countPending 이 DB 와 같다",
-      svc === dbCount,
-      `${svc} vs ${dbCount}`
-    );
+    /*
+     * **여기서 재던 것은 「승인 대기 N건」 배지였습니다** (`DEC-038` 의 예시).
+     * 그 숫자가 `DEC-077` 로 사라졌으므로 같은 성질의 남은 숫자를 봅니다 —
+     * 「전체 회원」은 여전히 `users` 를 세고, 화면과 서비스가 같은 함수를 지납니다.
+     * 배지가 없어졌다고 «화면이 실데이터를 보는가»라는 질문까지 버리지 않습니다.
+     */
+    const dbCount = await db.user.count({
+      where: { status: { not: "WITHDRAWN" } },
+    });
+    const svc = await memberService.countAll();
+    check("countAll 이 DB 와 같다", svc === dbCount, `${svc} vs ${dbCount}`);
     const page = await get("/admin", adminCookie);
     check("관리자 대시보드가 열린다", page.status === 200, `${page.status}`);
     check(
-      `대시보드가 승인 대기 ${dbCount}건을 보여준다`,
-      page.body.includes(`승인 대기 ${dbCount}건`)
+      `대시보드가 전체 회원 ${dbCount}명을 보여준다`,
+      page.body.includes(`${dbCount}`)
     );
   }
 

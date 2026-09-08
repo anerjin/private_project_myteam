@@ -82,13 +82,17 @@ const REQ = path.resolve(ROOT, "../_docs/01.요구사항/03_기능_요구사항.
  *
  * `130 → 122`. **`FR-PROJ-005`~`009`·`012`·`016`·`017` 을 폐기했습니다**(`DEC-075`) —
  * 프로젝트를 gboard(Orbee) 형태로 바꾸며 문서·하위 할 일·선후행·마일스톤을 뗐습니다.
+ *
+ * `122 → 116`. **`FR-AUTH-001`·`002` · `FR-ADM-004`·`006` · `FR-NOTI-001`·`002` 를
+ * 폐기했습니다**(`DEC-077`) — 쓰는 사람이 한 명(+ 에이전트 둘)이라 가입 승인
+ * 절차와 역할 등급이 없습니다.
  * 운영자 요청이고 대장에 없던 도메인입니다 (`DEC-069` · 로드맵 `M7`).
  *
  * 이때 `REQ-03` 3.1 요약표가 **105 에서 멈춰 있던 것**도 함께 드러났습니다 —
  * `NOTE` 다섯이 대장에는 있는데 요약에서 빠져 있었고, 이 검사는 대장 행을
  * 세므로 110 을 보고 있었습니다. **사람이 보는 표만 거짓이었습니다.**
  */
-const EXPECTED_REQUIREMENTS = 122;
+const EXPECTED_REQUIREMENTS = 116;
 
 function loadRequirements() {
   const src = readFileSync(REQ, "utf8");
@@ -174,18 +178,15 @@ const DEBT = [
  * **손으로 세지 마십시오.**
  */
 const FIXTURE = {
-  M0: [
-    "NFR-BACKUP-007",
+  "M0": [
+    "NFR-BACKUP-007"
   ],
   "M0.5": [
-    "NFR-SEC-007",
+    "NFR-SEC-007"
   ],
-  M1: [
+  "M1": [
     "FR-ADM-002",
-    "FR-ADM-004",
     "FR-AUDIT-001",
-    "FR-AUTH-001",
-    "FR-AUTH-002",
     "FR-AUTH-004",
     "FR-AUTH-006",
     "FR-AUTH-007",
@@ -193,8 +194,6 @@ const FIXTURE = {
     "FR-AUTH-009",
     "FR-AUTH-011",
     "FR-AUTH-012",
-    "FR-NOTI-001",
-    "FR-NOTI-002",
     "FR-NOTI-003",
     "FR-USER-001",
     "FR-USER-003",
@@ -203,9 +202,9 @@ const FIXTURE = {
     "FR-USER-008",
     "NFR-SEC-001",
     "NFR-SEC-006",
-    "NFR-SEC-017",
+    "NFR-SEC-017"
   ],
-  M2: [
+  "M2": [
     "FR-ADM-014",
     "FR-COLL-001",
     "FR-COLL-002",
@@ -227,9 +226,9 @@ const FIXTURE = {
     "FR-SRCH-005",
     "FR-SRCH-006",
     "FR-SRCH-007",
-    "NFR-A11Y-006",
+    "NFR-A11Y-006"
   ],
-  M3: [
+  "M3": [
     "FR-CLI-001",
     "FR-CLI-002",
     "FR-CLI-003",
@@ -240,7 +239,7 @@ const FIXTURE = {
     "FR-CLI-008",
     "FR-CLI-009",
     "FR-CLI-010",
-    "NFR-SEC-018",
+    "NFR-SEC-018"
   ],
   "M4.1": [
     "FR-RES-005",
@@ -251,33 +250,7 @@ const FIXTURE = {
     "FR-TYPE-005",
     "FR-TYPE-006",
     "FR-TYPE-007",
-    "FR-TYPE-008",
-  ],
-  M5: [
-    "FR-ADM-001",
-    "FR-ADM-002",
-    "FR-ADM-003",
-    "FR-ADM-004",
-    "FR-ADM-005",
-    "FR-ADM-006",
-    "FR-ADM-007",
-    "FR-ADM-008",
-    "FR-ADM-009",
-    "FR-ADM-010",
-    "FR-ADM-011",
-    "FR-ADM-012",
-    "FR-ADM-013",
-    "FR-ADM-014",
-    "FR-ADM-015",
-    "FR-ADM-016",
-    "FR-AUDIT-002",
-    "FR-COLL-003",
-    "FR-COLL-004",
-    "FR-COLL-005",
-    "FR-COLL-006",
-    "FR-RES-009",
-    "FR-USER-002",
-    "FR-USER-007",
+    "FR-TYPE-008"
   ],
   "M4.2": [
     "FR-FILE-001",
@@ -297,8 +270,70 @@ const FIXTURE = {
     "FR-RES-008",
     "FR-RES-012",
     "NFR-BACKUP-007",
-    "NFR-SEC-009",
+    "NFR-SEC-009"
   ],
+  "M5": [
+    "FR-ADM-001",
+    "FR-ADM-002",
+    "FR-ADM-003",
+    "FR-ADM-005",
+    "FR-ADM-007",
+    "FR-ADM-008",
+    "FR-ADM-009",
+    "FR-ADM-010",
+    "FR-ADM-011",
+    "FR-ADM-012",
+    "FR-ADM-013",
+    "FR-ADM-014",
+    "FR-ADM-015",
+    "FR-ADM-016",
+    "FR-AUDIT-002",
+    "FR-COLL-003",
+    "FR-COLL-004",
+    "FR-COLL-005",
+    "FR-COLL-006",
+    "FR-RES-009",
+    "FR-USER-002",
+    "FR-USER-007"
+  ],
+  "M6": [
+    "FR-AUDIT-003",
+    "FR-AUDIT-004",
+    "FR-AUDIT-005",
+    "FR-COLL-007",
+    "FR-FILE-005",
+    "FR-NOTE-001",
+    "FR-NOTE-002",
+    "FR-NOTE-003",
+    "FR-NOTE-004",
+    "FR-NOTE-005",
+    "FR-NOTI-004",
+    "FR-RES-010",
+    "FR-RES-013",
+    "FR-RES-016",
+    "FR-SRCH-008",
+    "FR-USER-005",
+    "NFR-BACKUP-001",
+    "NFR-BACKUP-005",
+    "NFR-MAINT-004",
+    "NFR-PERF-001",
+    "NFR-PERF-002",
+    "NFR-PERF-004"
+  ],
+  "M7": [
+    "FR-PROJ-001",
+    "FR-PROJ-002",
+    "FR-PROJ-003",
+    "FR-PROJ-004",
+    "FR-PROJ-010",
+    "FR-PROJ-011",
+    "FR-PROJ-013",
+    "FR-PROJ-014",
+    "FR-PROJ-015",
+    "FR-PROJ-018",
+    "FR-PROJ-019",
+    "FR-PROJ-020"
+  ]
 };
 
 /** 페이즈 목록 표(7.11)와 같은 사실이므로 여기 적지 않고 문서에서 읽는다 */

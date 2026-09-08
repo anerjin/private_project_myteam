@@ -146,8 +146,8 @@ export function PurgeAuditButton() {
                     "이 범위에는 지울 기록이 없습니다."
                   ) : (
                     <>
-                      <b className="tabular-nums">{count.toLocaleString()}건</b>이
-                      사라집니다.
+                      <b className="tabular-nums">{count.toLocaleString()}건</b>
+                      이 사라집니다.
                     </>
                   )}
                 </p>
@@ -164,7 +164,7 @@ export function PurgeAuditButton() {
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction
               disabled={pending || count === null || nothingToDo}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90 text-white"
               onClick={(e) => {
                 // 0건이면 닫히지 않게 — 「눌렀는데 아무 일도 없었다」를 만들지 않는다
                 if (count === null || nothingToDo) {

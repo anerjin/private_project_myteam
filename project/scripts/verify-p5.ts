@@ -49,18 +49,16 @@ async function mkUser(tag: string) {
       passwordHash: await hashPassword("Verify!12345"),
       name: `P5검증-${tag}`,
       status: "ACTIVE",
-      role: "MEMBER",
     },
-    select: { id: true, username: true, role: true },
+    select: { id: true, username: true },
   });
   madeUsers.push(u.id);
   return u;
 }
 
-const actorOf = (u: { id: string; username: string; role: string }): Actor => ({
+const actorOf = (u: { id: string; username: string }): Actor => ({
   id: u.id,
   username: u.username,
-  role: u.role as Actor["role"],
   via: "WEB",
 });
 
@@ -92,9 +90,12 @@ interface Case {
 }
 
 const TABLES = {
-  aiMaterial: (id: string) => db.aiMaterial.findUnique({ where: { resourceId: id } }),
-  githubRepo: (id: string) => db.githubRepo.findUnique({ where: { resourceId: id } }),
-  mcpServer: (id: string) => db.mcpServer.findUnique({ where: { resourceId: id } }),
+  aiMaterial: (id: string) =>
+    db.aiMaterial.findUnique({ where: { resourceId: id } }),
+  githubRepo: (id: string) =>
+    db.githubRepo.findUnique({ where: { resourceId: id } }),
+  mcpServer: (id: string) =>
+    db.mcpServer.findUnique({ where: { resourceId: id } }),
   skill: (id: string) => db.skill.findUnique({ where: { resourceId: id } }),
   devNote: (id: string) => db.devNote.findUnique({ where: { resourceId: id } }),
   prompt: (id: string) => db.prompt.findUnique({ where: { resourceId: id } }),
@@ -140,7 +141,12 @@ const CASES: Case[] = [
       envVars: '[{"key":"TOKEN","required":true}]',
       usageStatus: "ADOPTED",
     },
-    cleared: { packageName: "", installCommand: "", clientSupport: "", envVars: "" },
+    cleared: {
+      packageName: "",
+      installCommand: "",
+      clientSupport: "",
+      envVars: "",
+    },
     expect: {
       transport: "STDIO",
       packageName: "@scope/srv",
@@ -213,7 +219,11 @@ async function run() {
     const missing = (Object.keys(DETAIL_SCHEMAS) as ResourceType[]).filter(
       (t) => !DETAIL_SCHEMAS[t]
     );
-    check("DETAIL_SCHEMAS 에 빈 칸이 없다", missing.length === 0, missing.join(", "));
+    check(
+      "DETAIL_SCHEMAS 에 빈 칸이 없다",
+      missing.length === 0,
+      missing.join(", ")
+    );
     check("여섯 종이다", Object.keys(DETAIL_SCHEMAS).length === 6);
   }
 
@@ -232,7 +242,10 @@ async function run() {
     const created = await resourceWrite.create(actor, parsed.data);
     madeResources.push(created.id);
 
-    const row = (await TABLES[c.table](created.id)) as Record<string, unknown> | null;
+    const row = (await TABLES[c.table](created.id)) as Record<
+      string,
+      unknown
+    > | null;
     check("상세 행이 생긴다", row !== null);
     if (!row) continue;
 
@@ -241,7 +254,11 @@ async function run() {
      * 그리고 `toDetail()` 이 없는 값에 기본값을 만들어 주므로 화면은 멀쩡합니다.
      */
     for (const [k, want] of Object.entries(c.expect)) {
-      check(`  ${k} 가 그대로 저장된다`, eq(row[k], want), `${JSON.stringify(row[k])}`);
+      check(
+        `  ${k} 가 그대로 저장된다`,
+        eq(row[k], want),
+        `${JSON.stringify(row[k])}`
+      );
     }
 
     // ── 수정: 채운 칸을 비우면 DB 에서도 비어야 한다 ──
@@ -255,7 +272,11 @@ async function run() {
         })
       );
       if (!again.ok) {
-        check("  비운 입력이 파싱된다", false, JSON.stringify(again.fieldErrors));
+        check(
+          "  비운 입력이 파싱된다",
+          false,
+          JSON.stringify(again.fieldErrors)
+        );
       } else {
         await resourceWrite.update(actor, created.id, again.data);
         const after = (await TABLES[c.table](created.id)) as Record<
@@ -289,7 +310,11 @@ async function run() {
   console.log("\n★ GITHUB_REPO — URL 이 정체성이다");
   {
     const bad = parseResourceInput(
-      formLike({ type: "GITHUB_REPO", title: "잘못된 주소", url: "https://example.com/a" })
+      formLike({
+        type: "GITHUB_REPO",
+        title: "잘못된 주소",
+        url: "https://example.com/a",
+      })
     );
     check(
       "GitHub 주소가 아니면 거절한다",
@@ -330,7 +355,9 @@ async function run() {
     );
   }
 
-  console.log("\n★ 같은 저장소는 하나만 (DEC-050) — 그러나 지운 것은 다시 등록된다");
+  console.log(
+    "\n★ 같은 저장소는 하나만 (DEC-050) — 그러나 지운 것은 다시 등록된다"
+  );
   {
     const mk = (title: string, url: string) =>
       parseResourceInput(formLike({ type: "GITHUB_REPO", title, url }));
@@ -342,7 +369,10 @@ async function run() {
     check("처음 등록된다", Boolean(first.id));
 
     // 다른 주소 형태로 같은 저장소 — 접힌 값이 같으므로 막혀야 한다
-    const b = mk("같은 저장소 다른 주소", "https://github.com/vendor/thing/tree/main");
+    const b = mk(
+      "같은 저장소 다른 주소",
+      "https://github.com/vendor/thing/tree/main"
+    );
     if (!b.ok) throw new Error("파싱 실패");
     const dup = await msg(() => resourceWrite.create(actor, b.data));
     check(
@@ -368,7 +398,11 @@ async function run() {
       const r = await resourceWrite.create(actor, c.data);
       madeResources.push(r.id);
     });
-    check("소프트 삭제한 저장소는 다시 등록된다", again === "(오류 없음)", again);
+    check(
+      "소프트 삭제한 저장소는 다시 등록된다",
+      again === "(오류 없음)",
+      again
+    );
   }
 
   console.log("\n★ 목록·상세에서 여섯 종이 보인다");
@@ -380,10 +414,14 @@ async function run() {
     );
     const mine = list.items.filter((r) => madeResources.includes(r.id));
     const kinds = new Set(mine.map((r) => r.detail.type));
-    check("여섯 타입이 모두 목록에 나온다", kinds.size === 6, [...kinds].join(", "));
+    check(
+      "여섯 타입이 모두 목록에 나온다",
+      kinds.size === 6,
+      [...kinds].join(", ")
+    );
 
     for (const r of mine) {
-      const d = await resourceService.getBySlug(r.slug, user.id, "MEMBER");
+      const d = await resourceService.getBySlug(r.slug, user.id);
       check(`  ${d.type} 상세가 열린다`, d.detail.type === d.type);
     }
   }
@@ -515,7 +553,9 @@ async function checkFormNames() {
 
     const keys = Object.keys(shape);
     const required = keys.filter((k) => {
-      const f = shape[k] as { safeParse?: (v: unknown) => { success: boolean } };
+      const f = shape[k] as {
+        safeParse?: (v: unknown) => { success: boolean };
+      };
       return f.safeParse ? !f.safeParse(undefined).success : false;
     });
 

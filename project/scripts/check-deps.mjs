@@ -32,7 +32,9 @@ function resolveSpec(spec, fromRel) {
   if (spec.startsWith("@/")) return spec.slice(2);
   if (!spec.startsWith(".")) return null; // 외부 패키지
 
-  const resolved = normalize(join(dirname(fromRel), spec)).split(sep).join("/");
+  const resolved = normalize(join(dirname(fromRel), spec))
+    .split(sep)
+    .join("/");
   // `src` 밖으로 나가는 import 는 계층 규칙의 대상이 아니다
   return resolved.startsWith("..") ? null : resolved;
 }
@@ -94,7 +96,7 @@ function importsOf(code) {
  *
  *   const patch = { status: "ACTIVE" }; db.user.update({ where, data: patch })
  *   db.$executeRaw`UPDATE users SET status = 'ACTIVE' …`
- *   import { db as client } from "@/lib/db"; client.user.update({ … role … })
+ *   import { db as client } from "@/lib/db"; client.user.update({ … status … })
  *
  * **인자를 보면 우회 형태가 무한하고, 위치를 보면 유한합니다.**
  * 허용 목록의 길이가 곧 「그 테이블로 가는 문의 개수」라 리뷰에서 보입니다.
@@ -135,12 +137,12 @@ const BYPASS = [
     allow: [
       // 상태·역할 전이와 비밀번호 초기화 (DEC-036)
       "server/services/member.service.ts",
-      // 가입 시 생성 · lastLoginAt 갱신
+      // lastLoginAt 갱신 · 프로필 수정 (가입 생성은 DEC-077 로 사라졌다)
       "server/repositories/user.repository.ts",
       // 본인 비밀번호 변경
       "server/services/auth.service.ts",
     ],
-    why: "users 쓰기는 위 세 파일로만 한다 (DEC-036·DEC-044). status·role 을 다른 데서 바꾸면 세션 무효화가 갈라져 「정지했는데 안 끊긴다」가 된다",
+    why: "users 쓰기는 위 세 파일로만 한다 (DEC-036·DEC-044). status 를 다른 데서 바꾸면 세션 무효화가 갈라져 「정지했는데 안 끊긴다」가 된다",
   },
   {
     /*
@@ -271,7 +273,11 @@ for await (const file of walk(SRC)) {
      *
      * 목을 «쓰는» 것과 «퍼뜨리는» 것은 다릅니다. 부채 목록은 앞의 것만 허용합니다.
      */
-    if (toLayer === "mocks" && fromLayer !== "mocks" && isReExport(code, spec)) {
+    if (
+      toLayer === "mocks" &&
+      fromLayer !== "mocks" &&
+      isReExport(code, spec)
+    ) {
       violations.push({
         file: rel,
         spec,
@@ -307,7 +313,9 @@ for await (const file of walk(SRC)) {
      */
     if (fromLayer === "app" && /^@\/lib\/db$|(^|\/)lib\/db$/.test(spec)) {
       const named = code.match(
-        new RegExp(`import\\s*\\{([^}]*)\\}\\s*from\\s*["']${spec.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`)
+        new RegExp(
+          `import\\s*\\{([^}]*)\\}\\s*from\\s*["']${spec.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`
+        )
       );
       const brings = (named?.[1] ?? "db").split(",").map((s) => s.trim());
       if (brings.some((b) => b === "db" || b.startsWith("db "))) {

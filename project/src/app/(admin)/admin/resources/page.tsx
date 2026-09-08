@@ -16,7 +16,7 @@ import { TypeBadge } from "@/features/resources/components/badges";
 import { TrashActions } from "@/features/resources/components/trash-actions";
 import { getContentType } from "@/features/resources/content-types";
 import { pageSchema } from "@/features/resources/list.schema";
-import { requireRole } from "@/server/auth/guards";
+import { requireActiveUser } from "@/server/auth/guards";
 import * as resourceRepo from "@/server/repositories/resource.repository";
 import * as resourceService from "@/server/services/resource.service";
 import { Trash2 } from "lucide-react";
@@ -36,11 +36,14 @@ const PAGE_SIZE = 30;
  *
  * ## 전체 탭에는 **강제 삭제를 두지 않습니다**
  *
- * `FR-ADM-010` 은 「강제 수정·삭제」를 말하는데, 수정은 자료 상세의 편집
- * 화면이 이미 `EDITOR` 이상에게 열려 있고(`canEditResource`) 삭제도
- * 마찬가지입니다. 같은 일을 하는 두 번째 버튼을 관리 목록에 두면
- * **어느 쪽이 «강제»인지** 아무도 모르게 됩니다 — 관리자의 권한은
- * 별도 버튼이 아니라 `actor.role` 이 만듭니다.
+ * `FR-ADM-010` 은 「강제 수정·삭제」를 말하는데, 🔄 `DEC-077` 뒤에는
+ * **「강제」와 「보통」이 같은 일**입니다: 자료 상세의 편집 화면과 삭제가
+ * 로그인한 사람 전부에게 열려 있습니다. 같은 일을 하는 두 번째 버튼을 관리
+ * 목록에 두면 **어느 쪽이 «강제»인지** 아무도 모르게 됩니다.
+ *
+ * 이 화면이 여전히 하는 일은 **휴지통**입니다 — 복구와 영구 삭제는 여기에만
+ * 있고, 영구 삭제의 마지막 관문이 그 확인 다이얼로그입니다
+ * (`resource.service.purge` 머리말).
  *
  * 오프셋 페이지네이터의 두 번째 소비자입니다.
  */
@@ -48,7 +51,7 @@ export default async function AdminResourcesPage({
   searchParams,
 }: PageProps<"/admin/resources">) {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
-  await requireRole("ADMIN");
+  await requireActiveUser();
 
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) =>
@@ -134,7 +137,9 @@ export default async function AdminResourcesPage({
                   <TableHead>경로</TableHead>
                   <TableHead className="text-right">조회</TableHead>
                   <TableHead>등록일</TableHead>
-                  {trash && <TableHead className="w-48 text-right">처리</TableHead>}
+                  {trash && (
+                    <TableHead className="w-48 text-right">처리</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -167,9 +172,7 @@ export default async function AdminResourcesPage({
                     </TableCell>
                     {trash && (
                       <TableCell>
-                        <TrashActions
-                          resource={{ id: r.id, title: r.title }}
-                        />
+                        <TrashActions resource={{ id: r.id, title: r.title }} />
                       </TableCell>
                     )}
                   </TableRow>

@@ -7,7 +7,7 @@ import * as resourceWrite from "@/server/services/resource.write";
 /** API-102 자료 상세 — 타입별 상세까지 (`FR-CLI-003` 의 뒷단) */
 export const GET = ingest("resources:read", async ({ actor, url }) => {
   const id = url.pathname.split("/").pop()!;
-  const r = await resourceService.getById(id, actor.id, actor.role);
+  const r = await resourceService.getById(id, actor.id);
   return json({
     data: {
       id: r.id,
@@ -32,7 +32,9 @@ export const GET = ingest("resources:read", async ({ actor, url }) => {
  * API-105 자료 수정 (`FR-CLI-006`).
  *
  * **보강**이 목적입니다 — 에이전트가 나중에 더 찾은 내용을 얹습니다.
- * 소유권은 service 가 봅니다(`canEditResource`) — 남의 자료는 `EDITOR` 이상만.
+ * 🔄 소유권 판정(`canEditResource`)이 여기 걸려 있었습니다 — 「남의 자료는
+ * `EDITOR` 이상만」. `DEC-077` 로 등급이 사라져 **이 키의 문은 스코프 하나**입니다:
+ * `resources:write` 가 있으면 씁니다.
  *
  * `parseResourceInput` 이 **전체 입력**을 받으므로 부분 수정이 아닙니다.
  * 그래서 먼저 지금 값을 읽어 합칩니다 — 그러지 않으면 한 칸을 고치려다
@@ -45,7 +47,7 @@ export const PATCH = ingest("resources:write", async ({ actor, req, url }) => {
     throw new AppError("VALIDATION_ERROR", "JSON 본문이 필요합니다.");
   }
 
-  const current = await resourceService.getById(id, actor.id, actor.role);
+  const current = await resourceService.getById(id, actor.id);
   const merged = {
     title: current.title,
     summary: current.summary ?? "",

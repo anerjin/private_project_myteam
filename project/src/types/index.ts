@@ -12,9 +12,7 @@ export type ResourceType =
 export type ResourceStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 export type SourceChannel = "WEB" | "MCP" | "IMPORT";
 
-export type Role = "MEMBER" | "EDITOR" | "ADMIN";
-export type UserStatus =
-  "PENDING" | "ACTIVE" | "REJECTED" | "SUSPENDED" | "WITHDRAWN";
+export type UserStatus = "ACTIVE" | "SUSPENDED" | "WITHDRAWN";
 
 /** 자료 간 관계 (`FR-RES-012`) — 한 행을 «양쪽에서» 읽는다 */
 export type RelationType = "RELATED" | "SOURCE_OF" | "SUPERSEDES" | "PART_OF";
@@ -186,9 +184,7 @@ export interface Member {
   username: string;
   name: string;
   department: string;
-  role: Role;
   status: UserStatus;
-  signupReason?: string;
   statusReason?: string;
   resourceCount: number;
   apiKeyCount: number;

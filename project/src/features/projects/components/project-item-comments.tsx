@@ -388,12 +388,13 @@ export function ProjectItemComments({
 
                   {/*
                     **화면의 값은 관문이 아닙니다.** 실제로 막는 것은 service 입니다
-                    (`assertCanEdit`·`assertCanDelete`) — 여기 있는 것은 「무엇을
-                    그릴까」이고, 단추가 없다고 서버가 안 막는 것이 아닙니다.
+                    (`assertCanEdit`) — 여기 있는 것은 「무엇을 그릴까」이고,
+                    단추가 없다고 서버가 안 막는 것이 아닙니다.
 
-                    고치기는 **본인만**, 지우기는 **본인·프로젝트를 만든 사람·관리자**라
-                    두 조건이 다릅니다. 남의 말을 그 사람 이름 아래에서 바꾸는 것은
-                    조정이 아니라 위조입니다.
+                    고치기는 **본인만**이고 지우기는 **전원**이라 두 조건이 다릅니다.
+                    남의 말을 그 사람 이름 아래에서 바꾸는 것은 조정이 아니라 위조입니다.
+                    🔄 지우기가 「본인·프로젝트를 만든 사람·관리자」였다가 `DEC-077` 로
+                    전원이 됐습니다 — 그래서 지우기 단추에는 조건이 없습니다.
                   */}
                   {editingId === c.id ? null : (
                     <div className="flex shrink-0 gap-0.5">
@@ -412,21 +413,19 @@ export function ProjectItemComments({
                           <Pencil className="size-4" />
                         </Button>
                       )}
-                      {c.canDelete && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="text-muted-foreground hover:text-destructive size-8"
-                          /* 이름을 넣습니다 — 단추가 여럿이면 「댓글 지우기」 셋이
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-destructive size-8"
+                        /* 이름을 넣습니다 — 단추가 여럿이면 「댓글 지우기」 셋이
                              나란히 놓이고, 화면 낭독기에서 어느 것이 어느 것인지
                              알 길이 없습니다 (`NFR-A11Y-002`) */
-                          aria-label={`${displayName(c.author.name)}의 댓글 지우기`}
-                          disabled={busy}
-                          onClick={() => void remove(c.id)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      )}
+                        aria-label={`${displayName(c.author.name)}의 댓글 지우기`}
+                        disabled={busy}
+                        onClick={() => void remove(c.id)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
                     </div>
                   )}
                 </li>
@@ -435,8 +434,9 @@ export function ProjectItemComments({
           )}
 
           {/*
-            **역할로 입력칸을 감추지 않습니다.** `MEMBER` 는 자료를 못 고치는
-            것이지 말을 못 하는 것이 아닙니다 (`DEC-018`).
+            **로그인한 사람은 누구나 씁니다** (`DEC-018`). 🔄 전에 이 자리는
+            「역할로 입력칸을 감추지 않는다」였습니다 — 감출 역할이 없어졌습니다
+            (`DEC-077`).
           */}
           <div className="flex flex-col gap-2">
             <Textarea

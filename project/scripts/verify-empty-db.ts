@@ -63,7 +63,6 @@ async function run() {
       passwordHash: await hashPassword("Verify!12345"),
       name: "빈DB검증",
       status: "ACTIVE",
-      role: "ADMIN",
     },
     select: { id: true },
   });
@@ -85,7 +84,11 @@ async function run() {
 
   console.log("\n★ 지금 — 화면이 DB 의 하위분류를 그린다");
   const before = await get("/admin/taxonomy", cookie);
-  check("관리자로 화면이 열린다", before.status === 200, `HTTP ${before.status}`);
+  check(
+    "관리자로 화면이 열린다",
+    before.status === 200,
+    `HTTP ${before.status}`
+  );
   for (const label of HARDCODED_LABELS) {
     check(`«${label}» 이 화면에 있다`, before.body.includes(label));
   }
@@ -205,44 +208,24 @@ async function run() {
   }
 
   /*
-   * ## 가입 폼의 「사용할 수 있는 아이디입니다」도 DB 에서 와야 합니다
+   * ## 「이 아이디는 다시 못 쓴다」가 실제로 판정되는가 (`DEC-021`)
    *
-   * 여기 `const TAKEN = [...]` 다섯 개가 박혀 있었습니다 — `src/mocks/` 를
-   * 지웠을 때 살아남은 세 번째 목입니다. `check-deps` 는 import 형태를 세고,
-   * 이 검사는 그동안 **카테고리 경로만** 봤습니다.
+   * 여기 있던 검사는 **가입 폼**을 봤습니다 — 화면에 `const TAKEN = [...]`
+   * 다섯 개가 박혀 있던 자리이고, `src/mocks/` 를 지웠을 때 살아남은 세 번째
+   * 목이었습니다. 그 화면은 `DEC-077` 로 사라졌습니다.
    *
-   * 성질은 같습니다: **DB 를 바꾸면 화면도 바뀌는가.**
-   * 실제로 있는 계정을 물어 「사용 중」이 나와야 합니다.
+   * **판정 함수는 남깁니다.** 성질이 같기 때문입니다: 「DB 를 바꾸면 답도
+   * 바뀌는가」. 탈퇴 1년 뒤 익명화된 아이디는 `users` 에 없지만 예약돼 있고,
+   * 남이 그걸 쓰면 **옛 감사 로그를 물려받습니다.**
+   *
+   * ⚠️ **지금 이 함수를 부르는 앱 코드는 없습니다.** 계정을 만드는 길이
+   * `prisma/seed.ts` 하나뿐이고 그쪽은 `upsert` 라 여길 지나지 않습니다.
+   * 즉 `reserved_usernames` 는 **쓰기만 하고 아무도 읽지 않는 표**입니다 —
+   * 표를 지울지 시드가 이 함수를 보게 할지는 아직 정해지지 않았습니다.
+   * 이 검사는 그 사실이 정해질 때까지 판정 자체가 옳은지를 붙잡아 둡니다.
    */
-  console.log("\n★ 가입 폼의 아이디 검사도 DB 를 본다 (FR-AUTH-002)");
+  console.log("\n★ 아이디 점유 판정이 DB 를 본다 (DEC-021)");
   {
-    /*
-     * **액션을 여기서 부를 수 없습니다.** `"use server"` 모듈은
-     * `next/navigation` 을 끌어오고, 그건 React 컨텍스트를 요구합니다 —
-     * 이 스크립트는 Next 밖입니다. 그래서 두 조각으로 나눠 봅니다:
-     * ① 화면이 «가짜 목록»을 더 이상 싣지 않는가 ② 판정 함수가 옳은가.
-     */
-    const page = await get("/signup", cookie);
-    check("가입 화면이 열린다", page.status === 200, `HTTP ${page.status}`);
-    /*
-     * `hyunwoo` 는 그 하드코딩 목록에만 있던 이름입니다 —
-     * `jaehyun` 은 입력칸 placeholder 라 지금도 나옵니다.
-     */
-    check(
-      "가짜 «이미 쓰는 아이디» 목록이 사라졌다",
-      !page.body.includes("hyunwoo"),
-      "남아 있으면 화면이 DB 가 아니라 상수를 보고 판정한다"
-    );
-    /*
-     * **「서버에 묻는가」는 HTML 로 확인할 수 없습니다.** 「확인 중」은 입력
-     * 뒤에만 나타나는 상태고, 서버 액션 참조는 빌드가 불투명한 id 로 바꿉니다.
-     * 그 검사를 넣었다가 «항상 실패»했습니다 — **화면이 아니라 검사가 틀린**
-     * 경우였습니다.
-     *
-     * 그래서 증거를 둘로 나눕니다: 위의 「가짜 목록이 없다」와 아래의
-     * 「판정 함수가 옳다」. 둘이 맞으면 화면이 상수로 답할 방법이 없습니다.
-     */
-
     const userRepo = await import("@/server/repositories/user.repository");
     const existing = await db.user.findFirstOrThrow({
       where: { status: "ACTIVE" },
@@ -255,14 +238,11 @@ async function run() {
     );
     check(
       "없는 아이디는 «사용 가능»이다",
-      !(await userRepo.isUsernameTaken(`vempty_free_${Date.now().toString(36)}`))
+      !(await userRepo.isUsernameTaken(
+        `vempty_free_${Date.now().toString(36)}`
+      ))
     );
 
-    /*
-     * **점유된 아이디도 «사용 중»입니다** (`DEC-021`). 탈퇴 1년 뒤 익명화된
-     * 아이디는 `users` 에 없지만 예약돼 있고, 남이 그걸 쓰면 **옛 감사 로그를
-     * 물려받습니다.**
-     */
     const reserved = `vempty_res_${Date.now().toString(36)}`;
     await db.reservedUsername.create({
       data: { username: reserved, reason: "verify-empty-db" },

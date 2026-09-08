@@ -14,7 +14,7 @@
  *
  * ## 관리자도 못 봅니다
  *
- * 이 시스템의 다른 곳은 대개 `EDITOR`·`ADMIN` 에게 더 보여 줍니다
+ * 이 시스템의 다른 곳은 로그인한 사람 전원에게 다 보여 줍니다 (`DEC-077`)
  * (`draftScope`). 여기는 아닙니다 — 운영자가 「나만 보는 노트」라고 정했고,
  * 예외가 하나 있으면 그건 「나만」이 아닙니다. **관리자로도 집어 봅니다.**
  */
@@ -25,7 +25,6 @@ import { AppError } from "@/lib/errors";
 import { hashPassword } from "@/server/auth/password";
 import * as memberService from "@/server/services/member.service";
 import * as noteService from "@/server/services/note.service";
-import type { Role } from "@/types";
 
 let pass = 0;
 let fail = 0;
@@ -39,16 +38,15 @@ function check(label: string, ok: boolean, detail = "") {
 
 const madeUsers: string[] = [];
 
-async function mkUser(tag: string, role: Role = "MEMBER") {
+async function mkUser(tag: string) {
   const u = await db.user.create({
     data: {
       username: `vnote_${tag}_${randomBytes(4).toString("hex")}`,
       passwordHash: await hashPassword("Verify!12345"),
       name: `노트검증-${tag}`,
       status: "ACTIVE",
-      role,
     },
-    select: { id: true, username: true, role: true },
+    select: { id: true, username: true },
   });
   madeUsers.push(u.id);
   return u;
@@ -65,11 +63,13 @@ async function throwsNotFound(fn: () => Promise<unknown>): Promise<boolean> {
 }
 
 async function main() {
-  console.log("\n★ 나의 노트 — 만들고 읽고 고치고 지운다 (FR-NOTE-001·002·003)");
+  console.log(
+    "\n★ 나의 노트 — 만들고 읽고 고치고 지운다 (FR-NOTE-001·002·003)"
+  );
 
   const me = await mkUser("me");
   const other = await mkUser("other");
-  const admin = await mkUser("admin", "ADMIN");
+  const admin = await mkUser("admin");
 
   const made = await noteService.create(me.id, {
     title: "좌표계 변환 메모",
@@ -82,14 +82,21 @@ async function main() {
   check("본문이 그대로다", read.body.includes("pyproj"));
 
   const list = await noteService.listFor(me.id);
-  check("목록에 나온다", list.some((n) => n.id === made.id), `${list.length}건`);
+  check(
+    "목록에 나온다",
+    list.some((n) => n.id === made.id),
+    `${list.length}건`
+  );
   check(
     "목록에는 본문 «일부»만 싣는다",
     list[0]?.excerpt.length <= 120,
     "목록에 20,000자를 실어 보내지 않는다"
   );
 
-  await noteService.update(made.id, me.id, { title: "고친 제목", body: "고침" });
+  await noteService.update(made.id, me.id, {
+    title: "고친 제목",
+    body: "고침",
+  });
   const after = await noteService.get(made.id, me.id);
   check("고쳐진다", after.title === "고친 제목", after.title);
 
@@ -146,7 +153,10 @@ async function main() {
    * 사람이 읽는 이름으로 바꾸느라 제목을 찾습니다. 거기서 `ownerId` 를
    * 빼면 **본문은 못 봐도 제목은** 주소창 밑에 뜹니다.
    */
-  check("내 빵부스러기에는 제목이 나온다", (await noteService.titleFor(made.id, me.id)) === "고친 제목");
+  check(
+    "내 빵부스러기에는 제목이 나온다",
+    (await noteService.titleFor(made.id, me.id)) === "고친 제목"
+  );
   check(
     "남의 빵부스러기에는 안 나온다",
     (await noteService.titleFor(made.id, other.id)) === null,
@@ -229,9 +239,18 @@ async function main() {
   );
 
   // 휴지통 비우기 — 내 것만
-  const mineA = await noteService.create(me.id, { title: "비울 것 1", body: "" });
-  const mineB = await noteService.create(me.id, { title: "비울 것 2", body: "" });
-  const theirs = await noteService.create(other.id, { title: "남의 것", body: "" });
+  const mineA = await noteService.create(me.id, {
+    title: "비울 것 1",
+    body: "",
+  });
+  const mineB = await noteService.create(me.id, {
+    title: "비울 것 2",
+    body: "",
+  });
+  const theirs = await noteService.create(other.id, {
+    title: "남의 것",
+    body: "",
+  });
   await noteService.moveToTrash(mineA.id, me.id);
   await noteService.moveToTrash(mineB.id, me.id);
   await noteService.moveToTrash(theirs.id, other.id);
@@ -246,7 +265,10 @@ async function main() {
 
   console.log("\n★ 탈퇴하면 함께 사라진다 (FR-NOTE-004)");
   const leaver = await mkUser("leaver");
-  await noteService.create(leaver.id, { title: "탈퇴할 사람의 메모", body: "x" });
+  await noteService.create(leaver.id, {
+    title: "탈퇴할 사람의 메모",
+    body: "x",
+  });
   const willTrash = await noteService.create(leaver.id, {
     title: "두 번째",
     body: "y",
@@ -258,10 +280,13 @@ async function main() {
    */
   await noteService.moveToTrash(willTrash.id, leaver.id);
   check("탈퇴 전 — 본 목록 1건", (await noteService.countFor(leaver.id)) === 1);
-  check("탈퇴 전 — 휴지통 1건", (await noteService.countTrash(leaver.id)) === 1);
+  check(
+    "탈퇴 전 — 휴지통 1건",
+    (await noteService.countTrash(leaver.id)) === 1
+  );
 
   await memberService.transition(
-    { id: admin.id, role: "ADMIN", username: admin.username, via: "WEB" },
+    { id: admin.id, username: admin.username, via: "WEB" },
     leaver.id,
     { kind: "WITHDRAW", reason: "노트 삭제 검증" }
   );
@@ -287,7 +312,7 @@ async function main() {
   const leaver2 = await mkUser("leaver2");
   await noteService.create(leaver2.id, { title: "또 탈퇴", body: "" });
   await memberService.transition(
-    { id: admin.id, role: "ADMIN", username: admin.username, via: "WEB" },
+    { id: admin.id, username: admin.username, via: "WEB" },
     leaver2.id,
     { kind: "WITHDRAW", reason: "노트 삭제 검증 2" }
   );
@@ -319,7 +344,9 @@ main()
   })
   .catch(async (e) => {
     console.error(e);
-    await db.user.deleteMany({ where: { id: { in: madeUsers } } }).catch(() => {});
+    await db.user
+      .deleteMany({ where: { id: { in: madeUsers } } })
+      .catch(() => {});
     await db.$disconnect();
     process.exit(1);
   });

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { db } from "@/lib/db";
-import { isEditor, type Actor } from "@/server/auth/actor";
+import type { Actor } from "@/server/auth/actor";
 import { AppError } from "@/lib/errors";
 import type { Collection, Resource } from "@/types";
 import { toResource } from "@/server/services/resource.mapper";
@@ -65,13 +65,15 @@ function toCollection(c: Row): Collection {
 /**
  * 목록 — 팀 공개 + 내 것.
  *
- * **`PRIVATE` 은 소유자에게만 보입니다.** 이 판정을 화면이 하면 다른 사람의
- * 비공개 컬렉션이 RSC 페이로드에 실려 나갑니다 — 안 그려도 payload 에는 있습니다.
+ * 🔄 **`PRIVATE` 이 「소유자와 `EDITOR` 이상에게만」이었습니다.** `DEC-077` 로
+ *    등급이 사라져 **로그인한 사람은 전부 봅니다** — 관리자가 이미 전부 보고
+ *    있었고, 이제 모두가 관리자입니다.
  *
- * > **`EDITOR`·`ADMIN` 은 전부 봅니다** (`REQ-02 · 2.5` 권한 매트릭스:
- * > 「컬렉션 생성·편집 — MEMBER ⚠️본인 / **EDITOR ✅전체 / ADMIN ✅전체**」).
- * > 전에는 `viewerId` 만 받아 역할을 몰랐고, 그래서 **관리자가 편집해야 할 컬렉션을
- * > 볼 수조차 없었습니다.** 목록과 상세가 서로 일관됐을 뿐 둘 다 규격과 어긋났습니다.
+ *    ⚠️ 그래서 `collections.visibility` 의 `PRIVATE` 은 지금 **아무도 못 보게
+ *    하지 않습니다.** 남아 있는 뜻은 두 가지입니다: ① 「팀」 목록과 「내 것」
+ *    목록을 나누는 표시 ② 탈퇴 시 비공개만 지운다는 규칙(`member.service`).
+ *    「나만 보는」이 필요하면 그 자리는 **개인 메모**입니다(`note.service` —
+ *    거기는 `ownerId` 로 막고, 등급이 있던 적이 없습니다).
  */
 export async function listFor(actor: Actor): Promise<{
   team: Collection[];
@@ -79,10 +81,8 @@ export async function listFor(actor: Actor): Promise<{
 }> {
   const [team, mine] = await Promise.all([
     db.collection.findMany({
-      // 편집자·관리자에게는 비공개도 「팀」 목록에 함께 보인다
-      where: isEditor(actor)
-        ? { deletedAt: null, NOT: { ownerId: actor.id } }
-        : { visibility: "TEAM", deletedAt: null },
+      // 남의 것은 비공개까지 전부 「팀」 목록에 보인다 (`DEC-077`)
+      where: { deletedAt: null, NOT: { ownerId: actor.id } },
       select: COLLECTION_SELECT,
       orderBy: { updatedAt: "desc" },
     }),
@@ -97,8 +97,7 @@ export async function listFor(actor: Actor): Promise<{
 
 /** 상세 — 담긴 자료를 순서대로 */
 export async function getBySlug(
-  slug: string,
-  actor: Actor
+  slug: string
 ): Promise<{ collection: Collection; items: Resource[] }> {
   const row = await db.collection.findFirst({
     where: { slug, deletedAt: null },
@@ -107,20 +106,16 @@ export async function getBySlug(
   if (!row) throw new AppError("NOT_FOUND", "컬렉션을 찾을 수 없습니다.");
 
   /*
-   * 비공개는 소유자와 `EDITOR` 이상만 — service 에서 판정합니다
-   * (데이터를 봐야 알 수 있으므로, `actor.ts`).
+   * 🔄 「비공개는 소유자와 `EDITOR` 이상만」 판정이 여기 있었고, 못 보는 경우
+   *    `FORBIDDEN` 이 아니라 **`NOT_FOUND` 로 위장**했습니다(존재 여부를 slug 로
+   *    캐내지 못하게). `DEC-077` 로 등급이 사라져 판정이 통째로 참이 됐습니다 —
+   *    목록(`listFor`)과 **같은 규칙**이라 둘이 어긋나지 않습니다.
    *
-   * **`FORBIDDEN` 이 아니라 `NOT_FOUND` 로 위장합니다.** 「권한이 없습니다」는
-   * *그 slug 의 컬렉션이 존재한다*를 알려 줍니다 — 남의 비공개 컬렉션의
-   * 존재 여부를 slug 로 캐낼 수 있게 됩니다.
+   *    그래서 **`actor` 파라미터도 함께 뺐습니다.** 판정이 없는데 `Actor` 를
+   *    받으면 「여기서 인가를 한다」고 말하는 서명이 됩니다 — 다음 사람이
+   *    그 말을 믿고 판정을 안 넣습니다. 들어와도 되는지는 page 의
+   *    `requireActiveUser()` 가 이미 물었습니다.
    */
-  if (
-    row.visibility === "PRIVATE" &&
-    row.owner.id !== actor.id &&
-    !isEditor(actor)
-  ) {
-    throw new AppError("NOT_FOUND", "컬렉션을 찾을 수 없습니다.");
-  }
 
   const items = await db.collectionItem.findMany({
     where: { collectionId: row.id, resource: { deletedAt: null } },
@@ -146,20 +141,13 @@ export async function nameBySlug(slug: string): Promise<string | null> {
 /* ────────────────────────────────────────────────────────────────────────
  * 쓰기 (`FR-COLL-003`~`006`)
  *
- * ## 소유권은 **본인 + `EDITOR` 이상** (`REQ-02 · 2.5`)
+ * ## 읽기와 **같은 규칙**입니다 (`DEC-077`)
  *
- * 읽기 쪽(`listFor`·`getBySlug`)이 이미 그 규칙으로 판정하고 있습니다.
- * 쓰기만 「본인만」으로 좁히면 **관리자가 편집해야 할 컬렉션을 볼 수는 있는데
- * 고칠 수는 없는** 상태가 됩니다 — 목록과 상세가 서로 다른 규칙을 쓰던
- * `P4` 이전 상태와 같은 부류의 어긋남입니다.
+ * 🔄 「본인 + `EDITOR` 이상」이었고 `assertCanEdit(actor, ownerId)` 가 봤습니다.
+ *    등급이 사라져 그 식이 참이 되어 **함수를 지웠습니다.** 규칙이 읽기와 같아야
+ *    한다는 점은 그대로입니다 — 한쪽만 좁히면 「볼 수는 있는데 고칠 수는 없는」
+ *    상태가 되고, 그것이 `P4` 이전에 실제로 있던 어긋남이었습니다.
  * ──────────────────────────────────────────────────────────────────────── */
-
-/** 이 컬렉션을 고칠 수 있는가 — 읽기 판정과 **같은 규칙** */
-function assertCanEdit(actor: Actor, ownerId: string): void {
-  if (ownerId !== actor.id && !isEditor(actor)) {
-    throw new AppError("FORBIDDEN", "이 컬렉션을 편집할 권한이 없습니다.");
-  }
-}
 
 /**
  * 이름 → slug.
@@ -236,10 +224,9 @@ export async function update(
 ): Promise<void> {
   const target = await db.collection.findFirst({
     where: { slug, deletedAt: null },
-    select: { id: true, ownerId: true },
+    select: { id: true },
   });
   if (!target) throw new AppError("NOT_FOUND", "컬렉션을 찾을 수 없습니다.");
-  assertCanEdit(actor, target.ownerId);
 
   await db.collection.update({
     where: { id: target.id },
@@ -259,10 +246,9 @@ export async function update(
 export async function remove(actor: Actor, slug: string): Promise<void> {
   const target = await db.collection.findFirst({
     where: { slug, deletedAt: null },
-    select: { id: true, ownerId: true },
+    select: { id: true },
   });
   if (!target) throw new AppError("NOT_FOUND", "컬렉션을 찾을 수 없습니다.");
-  assertCanEdit(actor, target.ownerId);
 
   await db.collection.update({
     where: { id: target.id },
@@ -285,10 +271,9 @@ export async function addItem(
 ): Promise<{ added: boolean }> {
   const target = await db.collection.findFirst({
     where: { slug, deletedAt: null },
-    select: { id: true, ownerId: true },
+    select: { id: true },
   });
   if (!target) throw new AppError("NOT_FOUND", "컬렉션을 찾을 수 없습니다.");
-  assertCanEdit(actor, target.ownerId);
 
   const resource = await db.resource.findFirst({
     where: { id: resourceId, deletedAt: null },
@@ -334,10 +319,9 @@ export async function removeItem(
 ): Promise<void> {
   const target = await db.collection.findFirst({
     where: { slug, deletedAt: null },
-    select: { id: true, ownerId: true },
+    select: { id: true },
   });
   if (!target) throw new AppError("NOT_FOUND", "컬렉션을 찾을 수 없습니다.");
-  assertCanEdit(actor, target.ownerId);
 
   await db.collectionItem.deleteMany({
     where: { collectionId: target.id, resourceId },
@@ -364,10 +348,9 @@ export async function reorderItems(
 ): Promise<void> {
   const target = await db.collection.findFirst({
     where: { slug, deletedAt: null },
-    select: { id: true, ownerId: true },
+    select: { id: true },
   });
   if (!target) throw new AppError("NOT_FOUND", "컬렉션을 찾을 수 없습니다.");
-  assertCanEdit(actor, target.ownerId);
 
   await db.$transaction(async (tx) => {
     const items = await tx.collectionItem.findMany({
@@ -415,9 +398,8 @@ export async function listForPicker(
   resourceId: string
 ): Promise<{ slug: string; name: string; contains: boolean }[]> {
   const rows = await db.collection.findMany({
-    where: isEditor(actor)
-      ? { deletedAt: null }
-      : { deletedAt: null, ownerId: actor.id },
+    // 담을 곳은 전부 보인다 (`DEC-077` — 읽기 판정과 같은 규칙)
+    where: { deletedAt: null },
     select: {
       slug: true,
       name: true,

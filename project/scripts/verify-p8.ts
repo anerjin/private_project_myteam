@@ -73,29 +73,23 @@ const madeCategories: string[] = [];
 const madeTags: string[] = [];
 const madeCollections: string[] = [];
 
-async function mkUser(tag: string, role: "MEMBER" | "EDITOR" | "ADMIN") {
+async function mkUser(tag: string) {
   const u = await db.user.create({
     data: {
       username: `vp8_${tag}_${randomBytes(4).toString("hex")}`,
       passwordHash: await hashPassword("Verify!12345"),
       name: `P8검증-${tag}`,
       status: "ACTIVE",
-      role,
     },
-    select: { id: true, username: true, role: true, name: true },
+    select: { id: true, username: true, name: true },
   });
   madeUsers.push(u.id);
   return u;
 }
 
-const actorOf = (u: {
-  id: string;
-  username: string;
-  role: string;
-}): Actor => ({
+const actorOf = (u: { id: string; username: string }): Actor => ({
   id: u.id,
   username: u.username,
-  role: u.role as Actor["role"],
   via: "WEB",
 });
 
@@ -107,7 +101,10 @@ async function cookieFor(userId: string): Promise<string> {
 async function get(path: string, cookie: string) {
   // dev 서버의 첫 컴파일이 500 을 내는 일이 있습니다 (`verify-p6` 와 같은 이유)
   for (let i = 0; i < 2; i++) {
-    const res = await fetch(BASE + path, { headers: { cookie }, redirect: "manual" });
+    const res = await fetch(BASE + path, {
+      headers: { cookie },
+      redirect: "manual",
+    });
     if (res.status !== 500) {
       const body = res.status === 200 ? await res.text() : "";
       return { status: res.status, body: body.replaceAll("<!-- -->", "") };
@@ -127,9 +124,9 @@ async function msg(fn: () => Promise<unknown>): Promise<string> {
 }
 
 async function run() {
-  const admin = await mkUser("admin", "ADMIN");
-  const editor = await mkUser("editor", "EDITOR");
-  const member = await mkUser("member", "MEMBER");
+  const admin = await mkUser("admin");
+  const editor = await mkUser("editor");
+  const member = await mkUser("member");
   const adminActor = actorOf(admin);
   const editorActor = actorOf(editor);
   const memberActor = actorOf(member);
@@ -139,12 +136,16 @@ async function run() {
   /* ── 회원 (FR-ADM-003·005·006·008·009·016) ───────────────────────── */
   console.log("\n★ 강제 탈퇴 (FR-ADM-008)");
   {
-    const victim = await mkUser("victim", "MEMBER");
+    const victim = await mkUser("victim");
     const vCookie = await cookieFor(victim.id);
 
     // 탈퇴 전에는 로그인이 살아 있다
     const before = await get("/dashboard", vCookie);
-    check("탈퇴 전에는 화면이 열린다", before.status === 200, `${before.status}`);
+    check(
+      "탈퇴 전에는 화면이 열린다",
+      before.status === 200,
+      `${before.status}`
+    );
 
     await memberService.transition(adminActor, victim.id, {
       kind: "WITHDRAW",
@@ -163,7 +164,11 @@ async function run() {
      * 「계정은 죽었는데 열려 있던 탭은 계속 도는」 상태가 됩니다.
      */
     const after = await get("/dashboard", vCookie);
-    check("세션이 끊겨 로그인으로 간다", after.status !== 200, `${after.status}`);
+    check(
+      "세션이 끊겨 로그인으로 간다",
+      after.status !== 200,
+      `${after.status}`
+    );
 
     const log = await db.auditLog.findFirst({
       where: { targetId: victim.id, action: "USER_WITHDRAW" },
@@ -178,21 +183,27 @@ async function run() {
         reason: "두 번째 시도입니다 확인용",
       })
     );
-    check("이미 탈퇴한 회원은 다시 못 한다", again.includes("할 수 없는 상태"), again);
+    check(
+      "이미 탈퇴한 회원은 다시 못 한다",
+      again.includes("할 수 없는 상태"),
+      again
+    );
   }
 
   console.log("\n★ 마지막 관리자 보호가 «탈퇴»에서도 (FR-ADM-009)");
   {
     /*
-     * 시드 관리자가 이미 있으므로 이 검증의 관리자는 「마지막」이 아닙니다.
-     * 그래서 **일반식이 도는지**를 봅니다 — `removesActiveAdmin` 은
+     * 시드 계정이 이미 있으므로 이 검증의 계정은 「마지막」이 아닙니다.
+     * 그래서 **일반식이 도는지**를 봅니다 — `removesActiveAccount` 는
      * `spec.next !== "ACTIVE"` 로 판정하므로 탈퇴도 그 그물에 걸립니다.
      */
-    const solo = await mkUser("solo", "ADMIN");
-    const activeAdmins = await db.user.count({
-      where: { role: "ADMIN", status: "ACTIVE" },
-    });
-    check("활성 관리자가 둘 이상이라 탈퇴가 통과한다", activeAdmins >= 2, `${activeAdmins}명`);
+    const solo = await mkUser("solo");
+    const activeUsers = await db.user.count({ where: { status: "ACTIVE" } });
+    check(
+      "활성 계정이 둘 이상이라 탈퇴가 통과한다",
+      activeUsers >= 2,
+      `${activeUsers}개`
+    );
     await memberService.transition(adminActor, solo.id, {
       kind: "WITHDRAW",
       reason: "마지막 관리자 판정 경로 확인용입니다",
@@ -201,14 +212,19 @@ async function run() {
       where: { id: solo.id },
       select: { status: true },
     });
-    check("관리자도 탈퇴된다", s.status === "WITHDRAWN");
+    check("활성 계정도 탈퇴된다", s.status === "WITHDRAWN");
   }
 
   console.log("\n★ 회원 상세가 실제로 보여준다 (FR-ADM-003)");
   {
     const page = await get(`/admin/members/${member.id}`, adminCookie);
     check("관리자로 열린다", page.status === 200, `${page.status}`);
-    for (const label of ["활동 내역", "로그인 이력", "API 키", "상태 변경 이력"]) {
+    for (const label of [
+      "활동 내역",
+      "로그인 이력",
+      "API 키",
+      "상태 변경 이력",
+    ]) {
       check(`«${label}» 카드가 있다`, page.body.includes(label));
     }
     /*
@@ -224,14 +240,17 @@ async function run() {
     const activity = await memberService.activityFor(member.id);
     check(
       "활동 숫자를 센다",
-      typeof activity.resources === "number" && typeof activity.apiKeys === "number"
+      typeof activity.resources === "number" &&
+        typeof activity.apiKeys === "number"
     );
   }
 
   console.log("\n★ 회원 API 키 강제 폐기 (FR-ADM-016)");
   {
     const apiKeyService = await import("@/server/services/api-key.service");
-    const k1 = await apiKeyService.issue(actorOf(member), "키1", ["resources:read"]);
+    const k1 = await apiKeyService.issue(actorOf(member), "키1", [
+      "resources:read",
+    ]);
     await apiKeyService.issue(actorOf(member), "키2", ["resources:read"]);
 
     const n = await apiKeyService.revokeAllKeysFor(adminActor, member.id);
@@ -245,7 +264,11 @@ async function run() {
       where: { targetId: member.id, action: "APIKEY_REVOKE" },
       select: { diff: true },
     });
-    check("무엇을 지웠는지 남는다", Boolean(log), JSON.stringify(log?.diff ?? null));
+    check(
+      "무엇을 지웠는지 남는다",
+      Boolean(log),
+      JSON.stringify(log?.diff ?? null)
+    );
   }
 
   /* ── 자료 관리 · 휴지통 (FR-ADM-010·011, FR-RES-008·009) ─────────── */
@@ -295,14 +318,22 @@ async function run() {
      * **영구 삭제는 «휴지통에 있을 때만»** — 살아 있는 자료를 바로 지우면
      * 30일 유예가 있는 이유가 사라집니다.
      */
-    const tooSoon = await msg(() => resourceService.purge(adminActor, created.id));
-    check("살아 있는 자료는 영구 삭제 못 한다", tooSoon.includes("먼저 삭제"), tooSoon);
+    const tooSoon = await msg(() =>
+      resourceService.purge(adminActor, created.id)
+    );
+    check(
+      "살아 있는 자료는 영구 삭제 못 한다",
+      tooSoon.includes("먼저 삭제"),
+      tooSoon
+    );
 
     await resourceService.remove(editorActor, created.id);
-    const asEditor = await msg(() => resourceService.purge(editorActor, created.id));
-    check("EDITOR 는 영구 삭제 못 한다", asEditor.includes("관리자만"), asEditor);
-
-    await resourceService.purge(adminActor, created.id);
+    /*
+     * 🔄 여기 「`EDITOR` 는 영구 삭제 못 한다」가 있었습니다. `DEC-077` 로 등급이
+     *    사라져 **로그인한 사람이면 누구나 영구 삭제합니다** — 남은 방어선은
+     *    「휴지통에 있을 때만」(바로 위)과 화면의 확인 다이얼로그입니다.
+     */
+    await resourceService.purge(editorActor, created.id);
     const gone = await db.resource.findUnique({ where: { id: created.id } });
     check("행이 사라진다", gone === null);
     madeResources.pop();
@@ -336,7 +367,10 @@ async function run() {
       slug: sub,
       parentSlug: top,
     });
-    await categoryService.create(adminActor, { name: "P8 다른곳", slug: other });
+    await categoryService.create(adminActor, {
+      name: "P8 다른곳",
+      slug: other,
+    });
 
     // 깊이 2단계 — **하위의 하위는 못 만듭니다**
     const deep = await msg(() =>
@@ -377,7 +411,11 @@ async function run() {
       where: { id: res.id },
       select: { category: { select: { slug: true } } },
     });
-    check("자료가 새 분류로 갔다", movedRow.category?.slug === other, movedRow.category?.slug ?? "");
+    check(
+      "자료가 새 분류로 갔다",
+      movedRow.category?.slug === other,
+      movedRow.category?.slug ?? ""
+    );
 
     // 순서 — 형제 전체를 받는다
     const tree = await categoryService.listAllForAdmin();
@@ -406,10 +444,23 @@ async function run() {
     );
     await categoryService.update(adminActor, other, { isActive: true });
 
-    const noPerm = await msg(() =>
-      categoryService.create(memberActor, { name: "권한없음", slug: "vp8-nope" })
+    /*
+     * 🔄 「`MEMBER` 는 못 만든다」가 있었습니다 (`DEC-077` 로 그 등급이 없습니다).
+     *    분류를 고치는 문은 이제 **로그인** 하나이고, 그것을 확인하는 자리는
+     *    액션(`taxonomy.actions` 의 `requireActor`)과 화면 가드입니다.
+     */
+    const anyone = await msg(() =>
+      categoryService.create(memberActor, {
+        name: "누구나",
+        slug: "vp8-anyone",
+      })
     );
-    check("MEMBER 는 못 만든다", noPerm.includes("권한이 없습니다"), noPerm);
+    check(
+      "로그인한 사람이면 만든다 (DEC-077)",
+      anyone === "(예외 없음)",
+      anyone
+    );
+    await categoryService.remove(adminActor, "vp8-anyone", null);
   }
 
   /* ── 태그 (FR-ADM-013, FR-SRCH-007) ─────────────────────────────── */
@@ -438,7 +489,11 @@ async function run() {
     await mk("P8 태그 검증 셋", b);
 
     const suggested = await tagService.suggest(a.slice(0, 6));
-    check("자동완성이 후보를 준다", suggested.some((t) => t.slug === a), a);
+    check(
+      "자동완성이 후보를 준다",
+      suggested.some((t) => t.slug === a),
+      a
+    );
 
     /*
      * **이미 고른 것을 빼도 검색어가 살아 있어야 합니다.** 처음 구현에서
@@ -453,7 +508,11 @@ async function run() {
     );
 
     const { moved, merged } = await tagService.merge(adminActor, a, b);
-    check("겹치는 자료를 버리고 옮긴다", moved === 1 && merged === 1, `이동 ${moved} · 중복 ${merged}`);
+    check(
+      "겹치는 자료를 버리고 옮긴다",
+      moved === 1 && merged === 1,
+      `이동 ${moved} · 중복 ${merged}`
+    );
 
     const gone = await db.tag.findUnique({ where: { slug: a } });
     check("합친 태그는 사라진다", gone === null);
@@ -498,13 +557,7 @@ async function run() {
     const before = await contentTypeService.listSettings();
     const target = before.find((t) => t.code === "PROMPT")!;
 
-    const asEditor = await msg(() =>
-      contentTypeService.updateSettings(
-        editorActor,
-        before.map((t) => ({ code: t.code, isActive: t.isActive, showInNav: t.showInNav }))
-      )
-    );
-    check("EDITOR 는 못 바꾼다", asEditor.includes("관리자만"), asEditor);
+    // 🔄 「`EDITOR` 는 못 바꾼다」가 있었습니다 (`DEC-077` — 등급이 없습니다)
 
     await contentTypeService.updateSettings(
       adminActor,
@@ -553,12 +606,11 @@ async function run() {
     const upload = rows.find((r) => r.key === "upload.maxMb")!;
     check("건드리기 전에는 기본값이라고 말한다", upload.overridden === false);
 
-    const asEditor = await msg(() =>
-      settingsService.set(editorActor, "upload.maxMb", 77)
-    );
-    check("EDITOR 는 못 바꾼다", asEditor.includes("관리자만"), asEditor);
+    // 🔄 「`EDITOR` 는 못 바꾼다」가 있었습니다 (`DEC-077` — 등급이 없습니다)
 
-    const bad = await msg(() => settingsService.set(adminActor, "upload.maxMb", 0));
+    const bad = await msg(() =>
+      settingsService.set(adminActor, "upload.maxMb", 0)
+    );
     check("범위를 벗어난 값은 막는다", bad.includes("넣을 수 없는 값"), bad);
 
     await settingsService.set(adminActor, "upload.maxMb", 77);
@@ -579,12 +631,20 @@ async function run() {
       where: { targetId: "upload.maxMb", action: "SETTING_UPDATE" },
       select: { diff: true },
     });
-    check("변경 전·후가 남는다", Boolean(log), JSON.stringify(log?.diff ?? null));
+    check(
+      "변경 전·후가 남는다",
+      Boolean(log),
+      JSON.stringify(log?.diff ?? null)
+    );
 
     // 디스크 임계치도 같은 경로
     await settingsService.set(adminActor, "disk.minFreeGb", 3);
     const usage = await storageService.usage();
-    check("디스크 임계치가 반영된다", usage.disk.minFreeGb === 3, `${usage.disk.minFreeGb}`);
+    check(
+      "디스크 임계치가 반영된다",
+      usage.disk.minFreeGb === 3,
+      `${usage.disk.minFreeGb}`
+    );
 
     // 화면이 그 값을 보여준다
     const page = await get("/admin/settings", adminCookie);
@@ -618,7 +678,11 @@ async function run() {
         byActor.items.every((l) => l.actorUsername === admin.username),
       `${byActor.total}건`
     );
-    check("총 건수도 필터를 본다", byActor.total < all.total, `${byActor.total} < ${all.total}`);
+    check(
+      "총 건수도 필터를 본다",
+      byActor.total < all.total,
+      `${byActor.total} < ${all.total}`
+    );
 
     const byAction = await audit.list({
       page: 1,
@@ -645,18 +709,32 @@ async function run() {
     check("오늘 하루가 통째로 포함된다", byDate.total > 0, `${byDate.total}건`);
 
     const actors = await audit.listActors();
-    check("행위자 선택지가 있다", actors.includes(admin.username), `${actors.length}명`);
+    check(
+      "행위자 선택지가 있다",
+      actors.includes(admin.username),
+      `${actors.length}명`
+    );
 
     const page = await get(
       `/admin/audit-logs?actor=${admin.username}&action=USER_WITHDRAW`,
       adminCookie
     );
     check("필터가 걸린 화면이 열린다", page.status === 200, `${page.status}`);
-    check("필터 UI 가 있다", page.body.includes("행위자") && page.body.includes("시작일"));
+    check(
+      "필터 UI 가 있다",
+      page.body.includes("행위자") && page.body.includes("시작일")
+    );
 
     // 못 알아듣는 값은 «버리고» 나머지로 거른다 — 오류 화면이 아니다
-    const junk = await get("/admin/audit-logs?action=NOPE&from=어제", adminCookie);
-    check("이상한 필터에도 화면이 열린다", junk.status === 200, `${junk.status}`);
+    const junk = await get(
+      "/admin/audit-logs?action=NOPE&from=어제",
+      adminCookie
+    );
+    check(
+      "이상한 필터에도 화면이 열린다",
+      junk.status === 200,
+      `${junk.status}`
+    );
   }
 
   /* ── 대시보드 (FR-ADM-001, FR-FILE-006) ─────────────────────────── */
@@ -708,33 +786,52 @@ async function run() {
     check("두 번 담아도 오류가 아니다", again.added === false);
     await collectionService.addItem(editorActor, c.slug, r2.id);
 
-    const before = await collectionService.getBySlug(c.slug, editorActor);
+    const before = await collectionService.getBySlug(c.slug);
     check("순서대로 온다", before.items[0]?.id === r1.id);
 
     await collectionService.reorderItems(editorActor, c.slug, [r2.id, r1.id]);
-    const after = await collectionService.getBySlug(c.slug, editorActor);
+    const after = await collectionService.getBySlug(c.slug);
     check("순서가 바뀐다", after.items[0]?.id === r2.id);
 
     const stale = await msg(() =>
       collectionService.reorderItems(editorActor, c.slug, [r2.id, "없는id"])
     );
-    check("목록에 없는 것이 오면 거절한다", stale.includes("목록이 바뀌었습니다"), stale);
+    check(
+      "목록에 없는 것이 오면 거절한다",
+      stale.includes("목록이 바뀌었습니다"),
+      stale
+    );
 
     // 팀 공개는 남도 본다 (FR-COLL-006)
-    const asMember = await collectionService.getBySlug(c.slug, memberActor);
+    const asMember = await collectionService.getBySlug(c.slug);
     check("팀 공개는 남도 본다", asMember.items.length === 2);
 
-    await collectionService.update(editorActor, c.slug, { visibility: "PRIVATE" });
-    const hidden = await msg(() => collectionService.getBySlug(c.slug, memberActor));
-    check("비공개로 바꾸면 남은 못 본다", hidden.includes("찾을 수 없습니다"), hidden);
-
-    const notMine = await msg(() =>
-      collectionService.update(memberActor, c.slug, { name: "남의 것" })
+    /*
+     * 🔄 여기서 **「비공개로 바꾸면 남은 못 본다」**와 **「남의 컬렉션은 못 고친다」**를
+     *    봤습니다. 둘 다 「소유자 또는 `EDITOR` 이상」 판정이었고 `DEC-077` 로
+     *    사라졌습니다 — `PRIVATE` 은 이제 «남에게 안 보이는 것»이 아니라 「팀」
+     *    목록과 「내 것」 목록을 가르는 표시입니다(`collection.service` 머리말).
+     *
+     *    ⚠️ 「나만 보는」이 필요한 자리는 **개인 메모**이고, 그건 `verify:notes` 가
+     *       봅니다 — 거기는 `ownerId` 로 막고 등급이 있던 적이 없습니다.
+     */
+    await collectionService.update(editorActor, c.slug, {
+      visibility: "PRIVATE",
+    });
+    const stillVisible = await collectionService.getBySlug(c.slug);
+    check(
+      "비공개로 바꿔도 로그인한 사람은 본다 (DEC-077)",
+      stillVisible.items.length === 2
     );
-    check("남의 컬렉션은 못 고친다", notMine.includes("권한이 없습니다"), notMine);
+
+    const byOther = await msg(() =>
+      collectionService.update(memberActor, c.slug, { name: "남이 고침" })
+    );
+    check("남의 컬렉션도 고친다 (DEC-077)", byOther === "(예외 없음)", byOther);
+    await collectionService.update(editorActor, c.slug, { name: "P8 컬렉션" });
 
     await collectionService.removeItem(editorActor, c.slug, r1.id);
-    const left = await collectionService.getBySlug(c.slug, editorActor);
+    const left = await collectionService.getBySlug(c.slug);
     check("뺀다", left.items.length === 1);
 
     const picker = await collectionService.listForPicker(editorActor, r2.id);
@@ -752,9 +849,11 @@ async function run() {
   /* ── 탈퇴 즉시 처리 (DEC-021) ───────────────────────────────────── */
   console.log("\n★ 탈퇴는 «즉시» 개인정보를 지운다 (DEC-021)");
   {
-    const leaver = await mkUser("leaver", "MEMBER");
+    const leaver = await mkUser("leaver");
     const apiKeyService = await import("@/server/services/api-key.service");
-    await apiKeyService.issue(actorOf(leaver), "탈퇴 전 키", ["resources:read"]);
+    await apiKeyService.issue(actorOf(leaver), "탈퇴 전 키", [
+      "resources:read",
+    ]);
 
     const col = await collectionService.create(actorOf(leaver), {
       name: `P8 비공개 ${randomBytes(2).toString("hex")}`,
@@ -791,8 +890,14 @@ async function run() {
      * 그때까지 관리자가 감사 로그와 이어 볼 수 있어야 합니다.
      */
     check("이름이 마스킹된다", after.name.includes("*"), after.name);
-    check("아이디는 그대로 (1년 뒤 익명화)", after.username === leaver.username);
-    check("소속·자기소개가 지워진다", after.department === null && after.bio === null);
+    check(
+      "아이디는 그대로 (1년 뒤 익명화)",
+      after.username === leaver.username
+    );
+    check(
+      "소속·자기소개가 지워진다",
+      after.department === null && after.bio === null
+    );
 
     const liveKeys = await db.apiKey.count({
       where: { userId: leaver.id, revokedAt: null },
@@ -820,7 +925,11 @@ async function run() {
   console.log("\n★ 스케줄 작업과 보존 배치");
   {
     const rows = await maintenanceService.schedules();
-    check("스케줄 셋을 안다", rows.length === 3, rows.map((r) => r.type).join(","));
+    check(
+      "스케줄 셋을 안다",
+      rows.length === 3,
+      rows.map((r) => r.type).join(",")
+    );
     /*
      * **한 번도 안 돈 것은 «밀린 것»입니다.** 「아직 때가 아니다」로 두면
      * 처음 켠 시스템에서 영원히 안 돕니다.
@@ -839,7 +948,7 @@ async function run() {
     );
 
     // 1년 지난 탈퇴 계정을 만들어 익명화를 실제로 돌린다
-    const old = await mkUser("old", "MEMBER");
+    const old = await mkUser("old");
     await memberService.transition(adminActor, old.id, {
       kind: "WITHDRAW",
       reason: "1년 경과 익명화 경로를 확인합니다",
@@ -858,7 +967,11 @@ async function run() {
     ).username;
 
     const before = await maintenanceService.retentionStatus();
-    check("익명화 대상으로 잡힌다", before.anonymizeDue >= 1, `${before.anonymizeDue}건`);
+    check(
+      "익명화 대상으로 잡힌다",
+      before.anonymizeDue >= 1,
+      `${before.anonymizeDue}건`
+    );
 
     const r = await maintenanceService.runRetention(adminActor);
     check("익명화된다", r.anonymized >= 1, `${r.anonymized}건`);
@@ -867,13 +980,25 @@ async function run() {
       where: { id: old.id },
       select: { username: true, name: true, passwordHash: true },
     });
-    check("아이디가 바뀐다", anon.username.startsWith("deleted_"), anon.username);
+    check(
+      "아이디가 바뀐다",
+      anon.username.startsWith("deleted_"),
+      anon.username
+    );
     check("이름이 익명이 된다", anon.name === "탈퇴한 사용자", anon.name);
-    check("비밀번호 해시가 무효화된다", anon.passwordHash.startsWith("!anonymized:"));
+    check(
+      "비밀번호 해시가 무효화된다",
+      anon.passwordHash.startsWith("!anonymized:")
+    );
 
     /*
-     * **옛 아이디는 «예약»됩니다** — 남이 같은 아이디로 가입해 옛 감사
-     * 로그를 물려받으면 안 됩니다.
+     * **옛 아이디는 «예약»됩니다** — 남이 같은 아이디를 물려받아 옛 감사
+     * 로그의 주체가 되면 안 됩니다.
+     *
+     * ⚠️ **지금 이 예약을 «읽는» 앱 코드는 없습니다** (`DEC-077`). 계정을
+     * 만드는 길이 `prisma/seed.ts` 하나뿐이고 그쪽은 `upsert` 라 판정 함수를
+     * 지나지 않습니다. 판정 자체는 여전히 옳고 아래에서 그것을 확인하지만,
+     * **강제되는 지점이 없다**는 사실은 따로 정해야 합니다.
      */
     const reserved = await db.reservedUsername.findUnique({
       where: { username: oldUsername },
@@ -882,14 +1007,18 @@ async function run() {
 
     const taken = await import("@/server/repositories/user.repository");
     check(
-      "그 아이디로는 가입할 수 없다",
+      "판정 함수가 그 아이디를 «사용 중»으로 본다",
       await taken.isUsernameTaken(oldUsername),
       "users 와 reserved 양쪽을 본다"
     );
 
     // 두 번 돌려도 같은 계정을 다시 잡지 않는다
     const again = await maintenanceService.runRetention(adminActor);
-    check("이미 익명화된 계정은 다시 안 잡는다", again.anonymized === 0, `${again.anonymized}건`);
+    check(
+      "이미 익명화된 계정은 다시 안 잡는다",
+      again.anonymized === 0,
+      `${again.anonymized}건`
+    );
   }
 
   /*
@@ -986,7 +1115,9 @@ async function run() {
      * 전부 `MOVED` 로 뒤집힙니다. 바로 위 「사는 링크는 OK」가 그 증거입니다.
      */
     const healthType = (
-      await fetch(`${BASE}/api/health`).then((r) => r.headers.get("content-type"))
+      await fetch(`${BASE}/api/health`).then((r) =>
+        r.headers.get("content-type")
+      )
     )?.includes("json");
     check("health 는 JSON 이다", healthType === true, "위 검사의 전제");
 
@@ -1013,7 +1144,11 @@ async function run() {
       select: { status: true, result: true },
     });
     const lr = linkResult.result as { checked: number } | null;
-    check("작업이 끝나고 «몇 건 봤는지» 남긴다", linkResult.status === "DONE" && (lr?.checked ?? 0) >= 2, JSON.stringify(lr));
+    check(
+      "작업이 끝나고 «몇 건 봤는지» 남긴다",
+      linkResult.status === "DONE" && (lr?.checked ?? 0) >= 2,
+      JSON.stringify(lr)
+    );
 
     // ── 휴지통 정리: 31일 전에 지운 자료 ──
     const oldTrash = await mkUrl("P8 오래된 휴지통", `${BASE}/api/health`);
@@ -1027,7 +1162,9 @@ async function run() {
     const trashJob = await enqueue({ type: "CLEANUP_TRASH" });
     await runNow(trashJob.id);
 
-    const goneRow = await db.resource.findUnique({ where: { id: oldTrash.id } });
+    const goneRow = await db.resource.findUnique({
+      where: { id: oldTrash.id },
+    });
     const freshRow = await db.resource.findUnique({ where: { id: fresh.id } });
     check("30일 지난 것은 지워진다", goneRow === null);
     /*
@@ -1073,7 +1210,7 @@ async function run() {
     );
 
     // 본인 탈퇴는 **강제 탈퇴와 같은 함수**를 지납니다 — 액션은 앞에 비밀번호만 더합니다
-    const selfLeaver = await mkUser("self", "MEMBER");
+    const selfLeaver = await mkUser("self");
     await memberService.transition(actorOf(selfLeaver), selfLeaver.id, {
       kind: "WITHDRAW",
       reason: "본인 요청으로 탈퇴했습니다.",
@@ -1098,14 +1235,17 @@ async function run() {
       bio: "한 줄 소개",
     });
     const p = await userService.getProfile(member.id);
-    check("프로필이 바뀐다", p.name === "이름바꿈" && p.department === "검증팀");
+    check(
+      "프로필이 바뀐다",
+      p.name === "이름바꿈" && p.department === "검증팀"
+    );
 
     /*
-     * **`updateProfile` 로는 상태·역할을 못 바꿉니다** — 그 문은
+     * **`updateProfile` 로는 상태를 못 바꿉니다** — 그 문은
      * `member.service.transition` 하나뿐입니다 (`DEC-036`).
      * 타입이 막으므로 여기서는 «그 인자가 없다»는 사실만 확인합니다.
      */
-    check("역할·상태는 그대로다", p.role === "MEMBER" && p.status === "ACTIVE");
+    check("상태는 그대로다", p.status === "ACTIVE");
   }
   /* ── 작업 알림 · 변경 이력 (FR-NOTI-004 · FR-RES-013) ───────────── */
   console.log("\n★ 작업이 끝나면 «요청한 사람»에게 알린다 (FR-NOTI-004)");
@@ -1183,7 +1323,11 @@ async function run() {
     const batch = await enqueue({ type: "CLEANUP_TRASH" });
     await runNow(batch.id);
     const after = await db.notification.count({ where: { type: "JOB_DONE" } });
-    check("요청자 없는 배치는 성공을 안 알린다", after === before, `${before} → ${after}`);
+    check(
+      "요청자 없는 배치는 성공을 안 알린다",
+      after === before,
+      `${before} → ${after}`
+    );
   }
 
   console.log("\n★ 자료 변경 이력 (FR-RES-013)");
@@ -1232,27 +1376,35 @@ async function run() {
     );
 
     /*
-     * **고칠 수 없는 사람에게는 안 보입니다.** 「누가 언제 뭘 고쳤나」는
-     * 그 자료를 고칠 수 있는 사람이 알아야 하는 것입니다.
+     * 🔄 **「고칠 수 없는 사람에게는 안 보인다」**였습니다 — 「누가 언제 뭘
+     *    고쳤나」는 그 자료를 고칠 수 있는 사람만 알아야 한다는 규칙이었고,
+     *    그 판정이 `canEditResource` 였습니다. `DEC-077` 로 사라져
+     *    **자료를 볼 수 있으면 이력도 봅니다.**
      */
     const memberCookie = await cookieFor(member.id);
     const asMember = await get(
       `/resources/dev-note/${encodeURIComponent(res.slug)}`,
       memberCookie
     );
-    check("남에게는 이력이 안 보인다", !asMember.body.includes("변경 이력"));
+    check(
+      "남에게도 이력이 보인다 (DEC-077)",
+      asMember.body.includes("변경 이력")
+    );
   }
-  /* ── 권한 경계 (DEC-057, OPEN-016 해소) ─────────────────────────── */
-  console.log("\n★ 관리 영역은 통째로 ADMIN 이다 (DEC-057)");
+  /* ── 관리 영역의 «남은» 문 (DEC-057 → DEC-077) ─────────────────── */
+  console.log("\n★ 관리 영역을 가르는 것은 이제 로그인 여부다 (DEC-077)");
   {
     /*
-     * ## 여기서 «상태 코드»를 봅니다
+     * 🔄 여기는 **「관리 영역은 통째로 `ADMIN` 이다」**였고, `EDITOR` 쿠키로
+     *    여섯 경로가 `200` 이 «아닌» 것을 봤습니다. 그 검사가 붙잡던 진짜 위험은
+     *    등급이 아니라 **레이아웃이 page 보다 먼저 스트리밍되는 것**이었습니다:
+     *    레이아웃을 낮추면 `page` 의 `redirect()` 가 `307` 이 아니라
+     *    `200` + 클라이언트 리다이렉트가 되어, 막혔다고 믿는 화면이 실은
+     *    RSC 페이로드를 실어 보냅니다.
      *
-     * `EDITOR` 에게 관리 그룹을 열어 봤다가 되돌린 이유가 이 검사입니다.
-     * 레이아웃을 `EDITOR` 로 낮추면 `page` 의 `redirect()` 가
-     * **`307` 이 아니라 `200` + 클라이언트 리다이렉트**가 됩니다 —
-     * 레이아웃이 먼저 스트리밍을 시작해 상태 코드를 못 바꿉니다.
-     * 그래서 「막혔다」를 **본문이 아니라 상태 코드로** 확인합니다.
+     *    `DEC-077` 로 낮출 등급이 없어져 그 시나리오는 재현할 수 없습니다.
+     *    남은 것은 **비로그인**이고, 그 경로에서 같은 성질을 봅니다 —
+     *    「막혔다」를 본문이 아니라 **상태 코드**로 확인합니다.
      */
     for (const path of [
       "/admin",
@@ -1262,24 +1414,16 @@ async function run() {
       "/admin/audit-logs",
       "/admin/resources",
     ]) {
-      const r = await get(path, editorCookie);
-      check(`EDITOR 는 ${path} 에서 막힌다`, r.status !== 200, `${r.status}`);
+      const r = await get(path, "");
+      check(`비로그인은 ${path} 에서 막힌다`, r.status !== 200, `${r.status}`);
     }
 
     const adminTax = await get("/admin/taxonomy", adminCookie);
-    check("ADMIN 은 열린다", adminTax.status === 200, `${adminTax.status}`);
+    check("로그인하면 열린다", adminTax.status === 200, `${adminTax.status}`);
     check("세 탭이 다 있다", adminTax.body.includes("콘텐츠 타입"));
 
-    /*
-     * **`EDITOR` 가 잃은 것은 «체계를 고치는» 일뿐입니다.**
-     * 자료를 등록하며 분류를 고르고 태그를 만드는 것은 그대로입니다.
-     */
-    const editorCanTag = await tagService.suggest("vp8");
-    check("EDITOR 도 자동완성은 쓴다", Array.isArray(editorCanTag));
-    const cantEdit = await msg(() =>
-      categoryService.create(editorActor, { name: "안 됨", slug: "vp8-editor" })
-    );
-    check("EDITOR 는 분류를 못 고친다", cantEdit.includes("권한이 없습니다"), cantEdit);
+    const canTag = await tagService.suggest("vp8");
+    check("자동완성은 그대로 쓴다", Array.isArray(canTag));
   }
 
   console.log("\n★ 기록 정리 — 지울 수 있는 것과 없는 것 (SCR-241 · SCR-251)");
@@ -1320,7 +1464,7 @@ async function run() {
     );
 
     /* ── 감사 로그 정리는 «지운 사실»을 남긴다 ─────────────────── */
-    const admin2 = await mkUser("purger", "ADMIN");
+    const admin2 = await mkUser("purger");
     const old = new Date("2000-01-01T00:00:00Z");
     await db.auditLog.create({
       data: {
@@ -1347,10 +1491,7 @@ async function run() {
       "vp8 검증"
     );
     check("지워진다", removed === before, `${removed}/${before}`);
-    check(
-      "지운 뒤에는 0건이다",
-      (await audit.countBefore(cutoff)) === 0
-    );
+    check("지운 뒤에는 0건이다", (await audit.countBefore(cutoff)) === 0);
 
     /*
      * **핵심.** 감사 로그를 지우는 일은 흔적을 끊는 일이라, 그 사실 자체가
@@ -1380,7 +1521,11 @@ async function run() {
     const trails = await db.auditLog.count({
       where: { action: "AUDIT_PURGE", actorId: admin2.id },
     });
-    check("0건이면 기록도 안 남긴다", again === 0 && trails === 1, `${trails}줄`);
+    check(
+      "0건이면 기록도 안 남긴다",
+      again === 0 && trails === 1,
+      `${trails}줄`
+    );
   }
 
   console.log(`\n합계: 통과 ${pass} · 실패 ${fail}`);
@@ -1394,7 +1539,9 @@ async function cleanup() {
     await db.collectionItem.deleteMany({
       where: { collection: { slug: { in: madeCollections } } },
     });
-    await db.collection.deleteMany({ where: { slug: { in: madeCollections } } });
+    await db.collection.deleteMany({
+      where: { slug: { in: madeCollections } },
+    });
   }
   if (madeResources.length) {
     await db.resource.deleteMany({ where: { id: { in: madeResources } } });

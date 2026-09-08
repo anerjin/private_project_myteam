@@ -76,14 +76,7 @@ export interface CategoryTop extends CategoryChild {
 /** 「분류 없음」을 `Select` 에서 나타낼 표식 — 빈 문자열은 값으로 못 씁니다 */
 const NONE = "__none__";
 
-export function CategoryManager({
-  categories,
-  canEdit,
-}: {
-  categories: CategoryTop[];
-  /** `EDITOR` 이상인가 — 판정은 서버가 하고 여기는 «보여줄지»만 */
-  canEdit: boolean;
-}) {
+export function CategoryManager({ categories }: { categories: CategoryTop[] }) {
   const router = useRouter();
   const [busy, startTransition] = useTransition();
   const [adding, setAdding] = useState<{ parentSlug?: string } | null>(null);
@@ -94,7 +87,10 @@ export function CategoryManager({
     null
   );
 
-  function run(fn: () => Promise<{ ok: boolean; message?: string }>, done: string) {
+  function run(
+    fn: () => Promise<{ ok: boolean; message?: string }>,
+    done: string
+  ) {
     startTransition(async () => {
       const r = await fn();
       if (!r.ok) {
@@ -127,14 +123,12 @@ export function CategoryManager({
 
   return (
     <div className="space-y-4">
-      {canEdit && (
-        <div className="flex justify-end">
-          <Button size="sm" variant="outline" onClick={() => setAdding({})}>
-            <Plus className="size-4" />
-            대분류 추가
-          </Button>
-        </div>
-      )}
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" onClick={() => setAdding({})}>
+          <Plus className="size-4" />
+          대분류 추가
+        </Button>
+      </div>
 
       {categories.length === 0 ? (
         <p className="text-muted-foreground text-sm">
@@ -146,7 +140,6 @@ export function CategoryManager({
             <li key={c.slug} className="space-y-2 p-3">
               <Row
                 item={c}
-                canEdit={canEdit}
                 busy={busy}
                 onUp={i > 0 ? () => move(categories, i, -1) : undefined}
                 onDown={
@@ -165,7 +158,6 @@ export function CategoryManager({
                     <li key={s.slug}>
                       <Row
                         item={s}
-                        canEdit={canEdit}
                         busy={busy}
                         small
                         onUp={j > 0 ? () => move(c.children, j, -1) : undefined}
@@ -235,7 +227,6 @@ export function CategoryManager({
 
 function Row({
   item,
-  canEdit,
   busy,
   small = false,
   onUp,
@@ -245,7 +236,6 @@ function Row({
   onAddChild,
 }: {
   item: CategoryChild & { icon?: string | null };
-  canEdit: boolean;
   busy: boolean;
   small?: boolean;
   onUp?: () => void;
@@ -259,7 +249,7 @@ function Row({
       <span className={small ? "text-sm" : "font-medium"}>{item.name}</span>
       <code className="text-muted-foreground text-xs">{item.slug}</code>
       {!item.isActive && (
-        <span className="text-muted-foreground rounded bg-muted px-1.5 py-0.5 text-xs">
+        <span className="text-muted-foreground bg-muted rounded px-1.5 py-0.5 text-xs">
           숨김
         </span>
       )}
@@ -267,62 +257,60 @@ function Row({
         {item.resourceCount}건
       </span>
 
-      {canEdit && (
-        <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-0.5">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-7"
+          aria-label="위로"
+          disabled={busy || !onUp}
+          onClick={onUp}
+        >
+          <ChevronUp className="size-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-7"
+          aria-label="아래로"
+          disabled={busy || !onDown}
+          onClick={onDown}
+        >
+          <ChevronDown className="size-4" />
+        </Button>
+        {onAddChild && (
           <Button
             size="icon"
             variant="ghost"
             className="size-7"
-            aria-label="위로"
-            disabled={busy || !onUp}
-            onClick={onUp}
-          >
-            <ChevronUp className="size-4" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="size-7"
-            aria-label="아래로"
-            disabled={busy || !onDown}
-            onClick={onDown}
-          >
-            <ChevronDown className="size-4" />
-          </Button>
-          {onAddChild && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="size-7"
-              aria-label="하위분류 추가"
-              disabled={busy}
-              onClick={onAddChild}
-            >
-              <Plus className="size-4" />
-            </Button>
-          )}
-          <Button
-            size="icon"
-            variant="ghost"
-            className="size-7"
-            aria-label="수정"
+            aria-label="하위분류 추가"
             disabled={busy}
-            onClick={onEdit}
+            onClick={onAddChild}
           >
-            <Pencil className="size-4" />
+            <Plus className="size-4" />
           </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="text-destructive size-7"
-            aria-label="삭제"
-            disabled={busy}
-            onClick={onDelete}
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        </div>
-      )}
+        )}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-7"
+          aria-label="수정"
+          disabled={busy}
+          onClick={onEdit}
+        >
+          <Pencil className="size-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="text-destructive size-7"
+          aria-label="삭제"
+          disabled={busy}
+          onClick={onDelete}
+        >
+          <Trash2 className="size-4" />
+        </Button>
+      </div>
     </div>
   );
 }
@@ -353,8 +341,8 @@ function AddDialog({
             {parentName ? `${parentName} 아래에 하위분류 추가` : "대분류 추가"}
           </DialogTitle>
           <DialogDescription>
-            분류는 2단계까지입니다. 주소(slug)는 나중에 바꿀 수 없습니다 —
-            필터 링크에 그대로 실립니다.
+            분류는 2단계까지입니다. 주소(slug)는 나중에 바꿀 수 없습니다 — 필터
+            링크에 그대로 실립니다.
           </DialogDescription>
         </DialogHeader>
 
@@ -418,8 +406,8 @@ function EditDialog({
         <DialogHeader>
           <DialogTitle>분류 수정</DialogTitle>
           <DialogDescription>
-            주소(<code>{item.slug}</code>)는 바꿀 수 없습니다. 남이 공유한
-            필터 링크가 죽습니다.
+            주소(<code>{item.slug}</code>)는 바꿀 수 없습니다. 남이 공유한 필터
+            링크가 죽습니다.
           </DialogDescription>
         </DialogHeader>
 
@@ -436,8 +424,8 @@ function EditDialog({
             <div>
               <p className="text-sm font-medium">목록에 노출</p>
               <p className="text-muted-foreground text-xs">
-                꺼도 자료 {item.resourceCount}건은 그대로 남습니다. 필터와
-                등록 폼에서만 숨습니다.
+                꺼도 자료 {item.resourceCount}건은 그대로 남습니다. 필터와 등록
+                폼에서만 숨습니다.
               </p>
             </div>
             <Switch checked={isActive} onCheckedChange={setIsActive} />

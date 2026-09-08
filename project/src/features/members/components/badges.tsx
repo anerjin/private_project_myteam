@@ -1,13 +1,10 @@
-import { Badge } from "@/components/ui/badge";
-import { ROLE_LABEL, USER_STATUS_LABEL } from "@/config/site";
+import { USER_STATUS_LABEL } from "@/config/site";
 import { cn } from "@/lib/utils";
-import type { Role, UserStatus } from "@/types";
+import type { UserStatus } from "@/types";
 
 const USER_STATUS_CLASS: Record<UserStatus, string> = {
-  PENDING: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   ACTIVE:
     "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-  REJECTED: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
   SUSPENDED: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
   WITHDRAWN:
     "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
@@ -26,10 +23,7 @@ export function UserStatusBadge({ status }: { status: UserStatus }) {
   );
 }
 
-export function RoleBadge({ role }: { role: Role }) {
-  return (
-    <Badge variant={role === "ADMIN" ? "default" : "secondary"}>
-      {ROLE_LABEL[role]}
-    </Badge>
-  );
-}
+/*
+ * `RoleBadge` 가 여기 있었습니다. **지웠습니다** (`DEC-077`) —
+ * 모두가 같은 하나이면 배지는 아무것도 구분하지 않습니다.
+ */

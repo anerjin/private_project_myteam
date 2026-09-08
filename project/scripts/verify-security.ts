@@ -56,16 +56,15 @@ const ELSEWHERE: Record<string, string> = {
 const madeUsers: string[] = [];
 const madeResources: string[] = [];
 
-async function mkUser(tag: string, role: "MEMBER" | "EDITOR" | "ADMIN") {
+async function mkUser(tag: string) {
   const u = await db.user.create({
     data: {
       username: `vsec_${tag}_${randomBytes(4).toString("hex")}`,
       passwordHash: await hashPassword("Verify!12345"),
       name: `보안검증-${tag}`,
       status: "ACTIVE",
-      role,
     },
-    select: { id: true, username: true, role: true },
+    select: { id: true, username: true },
   });
   madeUsers.push(u.id);
   return u;
@@ -116,16 +115,39 @@ async function run() {
   console.log("\n[NFR-SEC-003] 인가 — 권한 매트릭스 전체는 verify:p3 · p8");
   {
     const anon = await get("/admin/members");
-    check("비로그인은 관리 화면에 못 닿는다", anon.status !== 200, `${anon.status}`);
+    check(
+      "비로그인은 관리 화면에 못 닿는다",
+      anon.status !== 200,
+      `${anon.status}`
+    );
     const anonApi = await get("/api/ingest/whoami");
     check("비인증 Ingest 는 401", anonApi.status === 401, `${anonApi.status}`);
-    const member = await mkUser("member", "MEMBER");
-    const { token } = await issueSession(member.id, { userAgent: "verify-sec" });
-    const asMember = await get("/admin/members", `${COOKIE}=${token}`);
+    /*
+     * 🔄 여기는 **「`MEMBER` 세션도 관리 화면에 못 닿는다」**였습니다.
+     *    `DEC-077` 로 사람이 전부 관리자가 되어 그 시나리오는 재현할 수 없습니다 —
+     *    관리 영역을 가르는 것은 이제 등급이 아니라 **로그인 여부**입니다.
+     *
+     *    그래서 «남은» 문을 봅니다: **세션이 죽으면 못 닿는다.** 정지는 세션 행을
+     *    같은 트랜잭션에서 지우므로(`DEC-036`), 정지된 계정의 쿠키는 그 즉시
+     *    관리 화면을 열지 못해야 합니다. 이것이 「인가 = 인증」이 된 뒤 남은
+     *    유일한 차단선이고, 여기가 뚫리면 정지가 아무 뜻도 없습니다.
+     */
+    const member = await mkUser("member");
+    const suspender = await mkUser("suspender");
+    const { token } = await issueSession(member.id, {
+      userAgent: "verify-sec",
+    });
+    const memberService = await import("@/server/services/member.service");
+    await memberService.transition(
+      { id: suspender.id, username: suspender.username, via: "WEB" },
+      member.id,
+      { kind: "SUSPEND", reason: "보안 검증을 위한 정지입니다." }
+    );
+    const asSuspended = await get("/admin/members", `${COOKIE}=${token}`);
     check(
-      "MEMBER 세션도 관리 화면에 못 닿는다",
-      asMember.status !== 200,
-      `${asMember.status}`
+      "정지된 계정의 세션은 관리 화면에 못 닿는다",
+      asSuspended.status !== 200,
+      `${asSuspended.status}`
     );
   }
 
@@ -164,14 +186,18 @@ async function run() {
         },
         body,
       });
-      check(`깨진 본문이 500 이 아니다: ${body.slice(0, 14)}`, res.status !== 500, `${res.status}`);
+      check(
+        `깨진 본문이 500 이 아니다: ${body.slice(0, 14)}`,
+        res.status !== 500,
+        `${res.status}`
+      );
     }
   }
 
   /* ── NFR-SEC-007 · XSS (마크다운 sanitize) ──────────────────────── */
   console.log("\n[NFR-SEC-007] XSS");
   {
-    const author = await mkUser("xss", "EDITOR");
+    const author = await mkUser("xss");
     const slug = `vsec-xss-${randomBytes(4).toString("hex")}`;
     const r = await db.resource.create({
       data: {
@@ -188,7 +214,9 @@ async function run() {
     });
     madeResources.push(r.id);
 
-    const { token } = await issueSession(author.id, { userAgent: "verify-sec" });
+    const { token } = await issueSession(author.id, {
+      userAgent: "verify-sec",
+    });
     const page = await get(`/resources/dev-note/${slug}`, `${COOKIE}=${token}`);
     check("상세가 열린다", page.status === 200, `${page.status}`);
 
@@ -209,7 +237,10 @@ async function run() {
       "<script> 태그로 살아 나가지 않는다",
       !/<script[^>]*>\s*alert\(1\)/i.test(page.body)
     );
-    check("onerror 를 «단 img 태그»가 없다", !/<img[^>]*\sonerror/i.test(page.body));
+    check(
+      "onerror 를 «단 img 태그»가 없다",
+      !/<img[^>]*\sonerror/i.test(page.body)
+    );
     check(
       "javascript: 링크가 남지 않는다",
       !/href="javascript:/i.test(page.body)
@@ -261,11 +292,25 @@ async function run() {
      * 하고, 그것이 실제로 그런지 여기서 봅니다.
      */
     const SELF = [new URL(BASE).origin];
-    const selfOk = await threw(() => assertPublicUrl(`${BASE}/api/health`, SELF));
-    check("예외에 든 오리진은 통과한다", selfOk === "(예외 없음)", selfOk.slice(0, 50));
-    for (const near of ["http://localhost:5433/", "http://localhost:6380/", "http://127.0.0.1:3100/"]) {
+    const selfOk = await threw(() =>
+      assertPublicUrl(`${BASE}/api/health`, SELF)
+    );
+    check(
+      "예외에 든 오리진은 통과한다",
+      selfOk === "(예외 없음)",
+      selfOk.slice(0, 50)
+    );
+    for (const near of [
+      "http://localhost:5433/",
+      "http://localhost:6380/",
+      "http://127.0.0.1:3100/",
+    ]) {
       const e = await threw(() => assertPublicUrl(near, SELF));
-      check(`예외가 옆으로 새지 않는다: ${near}`, e.startsWith("UnsafeUrlError"), e.slice(0, 40));
+      check(
+        `예외가 옆으로 새지 않는다: ${near}`,
+        e.startsWith("UnsafeUrlError"),
+        e.slice(0, 40)
+      );
     }
   }
 
@@ -277,7 +322,11 @@ async function run() {
      * 들고 있어도, 로그인 뒤 목적지는 서버가 정합니다.
      */
     const evil = await get("/login?next=https://evil.example/steal");
-    check("외부 next 가 붙어도 로그인 화면은 200", evil.status === 200, `${evil.status}`);
+    check(
+      "외부 next 가 붙어도 로그인 화면은 200",
+      evil.status === 200,
+      `${evil.status}`
+    );
     check(
       "외부 주소가 폼 action 으로 새지 않는다",
       !evil.body.includes("evil.example/steal") ||
@@ -330,18 +379,26 @@ async function run() {
         shell: true,
       });
       const j = JSON.parse(out);
-      high = (j.metadata?.vulnerabilities?.high ?? 0) + (j.metadata?.vulnerabilities?.critical ?? 0);
+      high =
+        (j.metadata?.vulnerabilities?.high ?? 0) +
+        (j.metadata?.vulnerabilities?.critical ?? 0);
     } catch (e) {
       // `npm audit` 은 취약점이 있으면 종료 코드가 0이 아닙니다 — 출력은 그대로 옵니다
       const out = (e as { stdout?: string }).stdout ?? "";
       try {
         const j = JSON.parse(out);
-        high = (j.metadata?.vulnerabilities?.high ?? 0) + (j.metadata?.vulnerabilities?.critical ?? 0);
+        high =
+          (j.metadata?.vulnerabilities?.high ?? 0) +
+          (j.metadata?.vulnerabilities?.critical ?? 0);
       } catch {
         high = -1;
       }
     }
-    check("High 이상 취약점 0건", high === 0, high < 0 ? "audit 을 못 읽음" : `${high}건`);
+    check(
+      "High 이상 취약점 0건",
+      high === 0,
+      high < 0 ? "audit 을 못 읽음" : `${high}건`
+    );
   }
 
   /* ── NFR-SEC-014 · 보안 헤더 ────────────────────────────────────── */
@@ -351,13 +408,20 @@ async function run() {
     const h = res.headers;
     const csp = h.get("content-security-policy") ?? "";
     check("Content-Security-Policy 가 있다", csp.length > 0);
-    check("X-Frame-Options: DENY", h.get("x-frame-options") === "DENY", h.get("x-frame-options") ?? "없음");
+    check(
+      "X-Frame-Options: DENY",
+      h.get("x-frame-options") === "DENY",
+      h.get("x-frame-options") ?? "없음"
+    );
     check(
       "X-Content-Type-Options: nosniff",
       h.get("x-content-type-options") === "nosniff",
       h.get("x-content-type-options") ?? "없음"
     );
-    check("Referrer-Policy 가 있다", (h.get("referrer-policy") ?? "").length > 0);
+    check(
+      "Referrer-Policy 가 있다",
+      (h.get("referrer-policy") ?? "").length > 0
+    );
     check("X-Powered-By 를 흘리지 않는다", h.get("x-powered-by") === null);
 
     /*
@@ -371,7 +435,10 @@ async function run() {
       !scriptSrc.includes("'unsafe-inline'"),
       scriptSrc.slice(0, 80)
     );
-    check("script-src 에 요청별 nonce 가 있다", /'nonce-[^']+'/.test(scriptSrc));
+    check(
+      "script-src 에 요청별 nonce 가 있다",
+      /'nonce-[^']+'/.test(scriptSrc)
+    );
     check("frame-ancestors 'none'", csp.includes("frame-ancestors 'none'"));
     check("object-src 'none'", csp.includes("object-src 'none'"));
     check("form-action 'self'", csp.includes("form-action 'self'"));
@@ -404,17 +471,26 @@ async function run() {
   /* ── NFR-SEC-015 · 감사 추적 ────────────────────────────────────── */
   console.log("\n[NFR-SEC-015] 감사 추적");
   {
-    const admin = await mkUser("auditor", "ADMIN");
-    const target = await mkUser("victim", "MEMBER");
+    /*
+     * 🔄 「역할 변경이 감사 로그를 남긴다」였습니다. `DEC-077` 로 그 전이가
+     *    사라져 **정지**로 봅니다 — 남은 전이 중 사유를 받는 것이고,
+     *    사유가 감사 로그에만 남는다는 점에서 추적이 가장 중요한 쪽입니다.
+     */
+    const admin = await mkUser("auditor");
+    const target = await mkUser("victim");
     const before = await db.auditLog.count();
     const memberService = await import("@/server/services/member.service");
     await memberService.transition(
-      { id: admin.id, username: admin.username, role: "ADMIN", via: "WEB" },
+      { id: admin.id, username: admin.username, via: "WEB" },
       target.id,
-      { kind: "CHANGE_ROLE", role: "EDITOR" }
+      { kind: "SUSPEND", reason: "감사 추적 검증을 위한 정지입니다." }
     );
     const after = await db.auditLog.count();
-    check("역할 변경이 감사 로그를 남긴다", after > before, `${before} → ${after}`);
+    check(
+      "상태 변경이 감사 로그를 남긴다",
+      after > before,
+      `${before} → ${after}`
+    );
   }
 
   /* ── 다른 곳에서 증명된 것 ──────────────────────────────────────── */

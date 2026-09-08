@@ -1,0 +1,28 @@
+-- 사람의 역할 구분 제거 (DEC-077)
+--
+-- 쓰는 «사람»이 운영자 한 명이면 MEMBER/EDITOR/ADMIN 세 등급은 값이 하나뿐인
+-- 칸이 됩니다. 남기면 Actor·SessionUser·회원 목록 필터·배지가 그 칸을 계속
+-- 나르고, 다음 사람은 「등급이 있긴 있구나」로 읽습니다.
+--
+-- **스코프는 남깁니다.** 「이 키가 무엇까지 할 수 있나」는 여전히 필요한 질문이고,
+-- 그 답은 api_keys.scopes 가 합니다 — 이 마이그레이션은 그 표를 건드리지 않습니다.
+--
+-- 손으로 씁니다. `prisma migrate dev` 로 만들면 `resources.search_vector` 를
+-- 지우려 듭니다 — 그 컬럼은 마이그레이션 SQL 로만 존재하고 스키마에는 없어서
+-- 매번 드리프트로 잡힙니다 (20260908060000_restore_resources_search_vector).
+
+-- ── users.role ──────────────────────────────────────
+-- 인덱스는 컬럼을 지우면 함께 사라지지만, 이름을 적어 두면 무엇이 없어지는지
+-- SQL 만 읽고도 압니다.
+DROP INDEX IF EXISTS "users_role_idx";
+ALTER TABLE "users" DROP COLUMN "role";
+
+-- 이 타입을 참조하는 컬럼이 위 하나뿐이라 그냥 지웁니다.
+-- 참조가 남아 있으면 여기서 실패합니다 — 그게 맞습니다. 조용히 남기지 않습니다.
+DROP TYPE "Role";
+
+-- ── 감사 로그는 손대지 않습니다 ──────────────────────
+-- audit_logs 의 USER_ROLE_CHANGE 행과 diff 의 {"role":{"before":…,"after":…}} 는
+-- 그대로 둡니다. action 은 text, diff 는 jsonb 라 이 타입에 매여 있지 않고,
+-- **그때 실제로 있었던 일**입니다. 기록을 지우는 것은 기록을 고치는 것입니다.
+-- features/audit/actions.ts 가 USER_ROLE_CHANGE 라벨을 남겨 둔 이유가 이것입니다.

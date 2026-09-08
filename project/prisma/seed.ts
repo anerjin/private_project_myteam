@@ -172,7 +172,6 @@ async function seedAdmin() {
       username,
       passwordHash: await hash(password, ARGON2),
       name: "관리자",
-      role: "ADMIN",
       status: "ACTIVE",
       // 최초 로그인 시 변경 강제 (FR-AUTH-011)
       mustChangePassword: true,
@@ -182,7 +181,10 @@ async function seedAdmin() {
 }
 
 /**
- * 개발 전용 계정 — 역할별 화면을 확인할 때 씁니다.
+ * 개발 전용 계정 — 「남이 만든 것」이 있는 화면을 확인할 때 씁니다.
+ *
+ * 🔄 「역할별 화면을 확인할 때」였습니다. `DEC-077` 로 등급이 사라져 두 계정의
+ *    차이는 **이름·소속과 «누가 만들었나»** 뿐입니다.
  *
  * 프로토타입의 «사용자 전환기»를 대체합니다. 전환기 대신 **실제 로그아웃 → 로그인**으로
  * 확인하면 그 경로가 곧 E2E ①·④ 라 테스트를 따로 만들지 않아도 됩니다.
@@ -190,7 +192,7 @@ async function seedAdmin() {
  * **`NODE_ENV !== "production"` 로 판정하지 않습니다.** 시드는 `next` 와 다른
  * 프로세스(`tsx`)라 `NODE_ENV` 가 대개 비어 있고, `.env` 에 `NODE_ENV=production` 을
  * 적는 사람도 없습니다. 그러면 **운영 서버에서 관리자 계정을 만들려고 시드를 돌리는 순간**
- * 공개된 비밀번호를 가진 `EDITOR` 계정이 생깁니다.
+ * 공개된 비밀번호를 가진 계정이 둘 생깁니다 — `DEC-077` 뒤에는 그 둘도 관리자입니다.
  * 「안 돈다」가 기본값에 대한 낙관이 되지 않도록 **명시적 옵트인**으로 뒤집습니다.
  */
 async function seedDevUsers() {
@@ -203,13 +205,8 @@ async function seedDevUsers() {
 
   const passwordHash = await hash("neowave-work-dev-1234", ARGON2);
   const users = [
-    { username: "minsu", name: "박민수", department: "개발팀", role: "MEMBER" },
-    {
-      username: "seoyeon",
-      name: "이서연",
-      department: "공간정보팀",
-      role: "EDITOR",
-    },
+    { username: "minsu", name: "박민수", department: "개발팀" },
+    { username: "seoyeon", name: "이서연", department: "공간정보팀" },
   ] as const;
 
   for (const u of users) {

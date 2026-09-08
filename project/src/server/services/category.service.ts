@@ -2,7 +2,7 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { isAdmin, type Actor } from "@/server/auth/actor";
+import type { Actor } from "@/server/auth/actor";
 import * as audit from "@/server/services/audit.service";
 import type { CategoryChoice, CategoryNode } from "@/types";
 
@@ -89,36 +89,36 @@ export async function listChoices(): Promise<CategoryChoice[]> {
   const tree = await listTree();
   return tree.flatMap((c) => [
     { slug: c.slug, name: c.name, depth: 0 as const },
-    ...c.children.map((s) => ({ slug: s.slug, name: s.name, depth: 1 as const })),
+    ...c.children.map((s) => ({
+      slug: s.slug,
+      name: s.name,
+      depth: 1 as const,
+    })),
   ]);
 }
 
 /* ────────────────────────────────────────────────────────────────────────
  * 쓰기 — 카테고리 관리 (`FR-ADM-012`)
  *
- * ## 누가 할 수 있는가 — `ADMIN` (`DEC-057`, `OPEN-016` 해소)
+ * ## 누가 할 수 있는가 — **로그인한 사람** (`DEC-077`)
  *
- * `REQ-02` 권한 매트릭스는 「카테고리 생성」·「카테고리 체계 관리」를
- * **`EDITOR`** 로 두었고, 편집 화면(`SCR-231`)은 `ADMIN` 전용이었습니다 —
- * 둘이 어긋나 있었습니다. **매트릭스 쪽을 고쳤습니다.**
+ * 🔄 전에는 `assertAdmin(actor)` 이 이 파일의 쓰기 넷 앞에 서 있었고,
+ *    「매트릭스는 `EDITOR`, 화면은 `ADMIN` 이라 둘이 어긋났다 → 매트릭스를 고쳤다」
+ *    (`DEC-057`·`OPEN-016`)가 그 근거였습니다. 등급이 사라지면서 그 판정이 언제나
+ *    통과가 되어 **검사를 지웠습니다** — 언제나 참인 `assertAdmin` 을 남겨 두면
+ *    다음 사람이 없는 등급을 찾습니다.
  *
- * 문을 여는 쪽도 해 봤는데, 관리 영역 전체의 차단이 약해졌습니다:
- * 그룹 레이아웃을 `EDITOR` 로 낮추면 `ADMIN` 전용 화면의 `redirect()` 가
- * **`307` 이 아니라 `200` + 클라이언트 리다이렉트**가 됩니다(레이아웃이 먼저
- * 스트리밍되므로). 한 탭을 위해 그 보증을 바꾸지 않습니다.
+ * 남은 문은 두 개입니다:
+ * - 액션(`taxonomy.actions`)의 `requireActor()` — 로그인한 계정인가
+ * - 화면(`/admin/taxonomy`)의 `requireActiveUser()` — 같은 질문, page 쪽
  *
- * `EDITOR` 는 **자료를 등록·수정하며 분류를 «쓰는» 일**을 계속합니다 —
- * 못 하는 것은 체계를 «고치는» 일뿐입니다.
+ * **에이전트는 여기 닿지 않습니다.** `/api/ingest/taxonomy` 는 읽기 전용이고
+ * (`listTree`), 쓰기 넷을 여는 라우트가 없습니다. 여는 날에는 스코프를 하나
+ * 만들어야 합니다 — 그때 이 자리는 다시 검사를 갖습니다.
  * ──────────────────────────────────────────────────────────────────────── */
 
 /** 깊이 2단계 상한 (`FR-SRCH-006`). DB 트리거도 같은 것을 막습니다 */
 const MAX_DEPTH = 2;
-
-function assertAdmin(actor: Actor): void {
-  if (!isAdmin(actor)) {
-    throw new AppError("FORBIDDEN", "분류를 편집할 권한이 없습니다.");
-  }
-}
 
 /**
  * 카테고리 생성.
@@ -131,8 +131,6 @@ export async function create(
   actor: Actor,
   input: { name: string; slug: string; parentSlug?: string; icon?: string }
 ): Promise<{ slug: string }> {
-  assertAdmin(actor);
-
   return db.$transaction(async (tx) => {
     let parentId: string | null = null;
     if (input.parentSlug) {
@@ -211,8 +209,6 @@ export async function update(
   slug: string,
   input: { name?: string; icon?: string | null; isActive?: boolean }
 ): Promise<void> {
-  assertAdmin(actor);
-
   await db.$transaction(async (tx) => {
     const target = await tx.category.findUnique({
       where: { slug },
@@ -262,11 +258,7 @@ export async function update(
  * 순서가 뒤엉킵니다. 목록 전체를 받아 **그 순간의 배열을 그대로** 씁니다 —
  * 마지막에 저장한 사람의 순서가 남고, 그건 화면에서 본 대로입니다.
  */
-export async function reorder(
-  actor: Actor,
-  slugs: string[]
-): Promise<void> {
-  assertAdmin(actor);
+export async function reorder(actor: Actor, slugs: string[]): Promise<void> {
   if (slugs.length === 0) return;
 
   await db.$transaction(async (tx) => {
@@ -331,8 +323,6 @@ export async function remove(
   slug: string,
   moveTo: string | null
 ): Promise<{ moved: number }> {
-  assertAdmin(actor);
-
   return db.$transaction(async (tx) => {
     const target = await tx.category.findUnique({
       where: { slug },
@@ -363,7 +353,10 @@ export async function remove(
           throw new AppError("NOT_FOUND", "옮길 분류를 찾을 수 없습니다.");
         }
         if (dest.id === target.id) {
-          throw new AppError("VALIDATION_ERROR", "자기 자신으로는 옮길 수 없습니다.");
+          throw new AppError(
+            "VALIDATION_ERROR",
+            "자기 자신으로는 옮길 수 없습니다."
+          );
         }
         nextId = dest.id;
       }

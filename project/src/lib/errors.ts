@@ -10,15 +10,14 @@
 
 export const ERROR_CODES = {
   UNAUTHENTICATED: 401,
-  ACCOUNT_PENDING: 403,
   ACCOUNT_BLOCKED: 403,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   VALIDATION_ERROR: 422,
   DUPLICATE: 409,
   /**
-   * 대상의 «상태»가 이 동작을 허용하지 않음 (`DEC-039`).
-   * 「PENDING 이 아닌 계정을 승인」·「이미 처리됨」 — **입력은 정확했고 대상이 달라진 것**이라
+   * 대상의 «상태»가 이 동작을 허용하지 않음.
+   * 「ACTIVE 가 아닌 계정을 정지」·「이미 처리됨」 — **입력은 정확했고 대상이 달라진 것**이라
    * `VALIDATION_ERROR`(422, `fieldErrors`)에 밀어 넣지 않는다.
    */
   INVALID_STATE: 409,
@@ -26,7 +25,13 @@ export const ERROR_CODES = {
   PAYLOAD_TOO_LARGE: 413,
   UPSTREAM_ERROR: 502,
   INTERNAL_ERROR: 500,
-  LAST_ADMIN: 409,
+  /**
+   * 이 동작이 «마지막으로 로그인할 수 있는 계정»을 막는다 (`FR-ADM-009`).
+   *
+   * 🔄 옛 이름은 `LAST_ADMIN` 이었습니다. `DEC-077` 로 등급이 사라져 「마지막
+   *    관리자」가 「마지막 활성 계정」이 됐고, 코드 이름이 뜻을 따라갑니다.
+   */
+  LAST_ACTIVE_ACCOUNT: 409,
   // Ingest API 전용 (DEV-05 · 5.11절)
   KEY_INVALID: 401,
   KEY_REVOKED: 401,

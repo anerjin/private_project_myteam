@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Prisma, Role, UserStatus } from "@prisma/client";
+import type { Prisma, UserStatus } from "@prisma/client";
 
 import { db } from "@/lib/db";
 
@@ -17,7 +17,6 @@ import { db } from "@/lib/db";
 
 export interface MemberFilter {
   status?: UserStatus;
-  role?: Role;
   /** 아이디·이름 부분 일치 */
   q?: string;
 }
@@ -28,9 +27,7 @@ export const MEMBER_SELECT = {
   username: true,
   name: true,
   department: true,
-  role: true,
   status: true,
-  signupReason: true,
   statusReason: true,
   statusChangedAt: true,
   lastLoginAt: true,
@@ -44,7 +41,6 @@ export type MemberListItem = Prisma.UserGetPayload<{
 function toWhere(filter: MemberFilter): Prisma.UserWhereInput {
   return {
     ...(filter.status ? { status: filter.status } : {}),
-    ...(filter.role ? { role: filter.role } : {}),
     ...(filter.q
       ? {
           OR: [
@@ -79,20 +75,23 @@ export function findDetail(id: string): Promise<MemberListItem | null> {
 }
 
 /**
- * 활성 관리자 수.
+ * 지금 로그인할 수 있는 계정 수.
  *
- * **`ACTIVE` 인 것만 셉니다.** 정지된 관리자는 로그인할 수 없으므로
- * 「마지막 관리자」 판정에서 관리자로 쳐 주면 안 됩니다 — 그러면 남은 활성
- * 관리자를 강등해도 통과해 아무도 못 들어오는 상태가 됩니다 (`FR-ADM-009`).
+ * 🔄 옛 이름은 `countActiveAdmins` 였고 `role: "ADMIN"` 을 함께 봤습니다.
+ *    `DEC-077` 로 등급이 사라져 **조건이 상태 하나**로 줄었습니다.
+ *
+ * **`ACTIVE` 인 것만 셉니다.** 정지된 계정은 로그인할 수 없으므로
+ * 「마지막 하나인가」 판정에서 세어 주면 안 됩니다 — 그러면 남은 활성 계정을
+ * 정지시켜도 통과해 아무도 못 들어오는 상태가 됩니다 (`FR-ADM-009`).
  */
-export function countActiveAdmins(tx: Prisma.TransactionClient = db) {
-  return tx.user.count({ where: { role: "ADMIN", status: "ACTIVE" } });
+export function countActiveUsers(tx: Prisma.TransactionClient = db) {
+  return tx.user.count({ where: { status: "ACTIVE" } });
 }
 
 /*
  * **`updateStatus()` 를 두지 않습니다** (`DEC-044`).
  *
- * `status`·`role` 로 가는 setter 를 여기 두면 그것이 **두 번째 문**이 됩니다.
+ * `status` 로 가는 setter 를 여기 두면 그것이 **두 번째 문**이 됩니다.
  * 누군가 `memberRepo.updateStatus(id, { status: "ACTIVE" })` 한 줄을 부르면
  * advisory 락도, 마지막 관리자 재판정도, 세션 삭제도, 캐시 무효화도, 감사 로그도
  * 없이 상태가 바뀝니다 (`DEC-036` 이 막으려는 전부).

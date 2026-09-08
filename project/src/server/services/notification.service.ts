@@ -5,7 +5,12 @@ import type { NotificationType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 
 /**
- * 인앱 알림 (FR-NOTI-001~004).
+ * 인앱 알림 (`FR-NOTI-003`·`FR-NOTI-004`).
+ *
+ * > 전에는 네 요구사항을 범위로 적었습니다. 앞의 둘(「가입 신청 알림 + 대기 건수
+ * > 배지」·「승인/거부 알림」)은 주어가 가입 신청·승인이라 `DEC-077` 로 사라졌습니다.
+ * > **그 번호를 여기 다시 적지 않습니다** — `check:fr` 은 번호가 코드에 있으면
+ * > 「만들었다」로 세므로, 설명하려고 적으면 그 자리가 곧 거짓 초록이 됩니다.
  *
  * **메일도 메신저도 보내지 않습니다** (`DEC-015`). 알림함과 배지가 전부입니다.
  * 그래서 «알림을 못 봤다»가 곧 «모른다»가 되므로, 알림은 **상태가 바뀐 사실 자체**를
@@ -43,18 +48,25 @@ export async function notifyMany(inputs: NotifyInput[]): Promise<void> {
 }
 
 /**
- * 관리자 전원에게 (가입 신청 등 — `FR-NOTI-001`).
+ * 운영 알림을 **들어올 수 있는 계정 전원에게** (작업 실패 — `FR-NOTI-004`).
  *
- * 정지된 관리자는 제외합니다. 볼 수 없는 사람의 알림함을 채울 이유가 없습니다.
+ * 「새 가입 신청」이 이 함수의 첫 손님이었습니다. 그 절차는 `DEC-077` 로
+ * 사라졌고, 지금 부르는 곳은 `job.service` 하나입니다.
+ *
+ * 🔄 이름이 `notifyAdmins` 였고 `where` 에 `role: "ADMIN"` 이 있었습니다.
+ *    `DEC-077` 로 등급이 사라져 **조건이 `status` 하나**가 됐습니다 —
+ *    이름이 뜻을 따라 `notifyEveryone` 이 됩니다.
+ *
+ * 정지된 계정은 제외합니다. 볼 수 없는 사람의 알림함을 채울 이유가 없습니다.
  */
-export async function notifyAdmins(
+export async function notifyEveryone(
   input: Omit<NotifyInput, "userId">
 ): Promise<void> {
-  const admins = await db.user.findMany({
-    where: { role: "ADMIN", status: "ACTIVE" },
+  const targets = await db.user.findMany({
+    where: { status: "ACTIVE" },
     select: { id: true },
   });
-  await notifyMany(admins.map((a) => ({ ...input, userId: a.id })));
+  await notifyMany(targets.map((t) => ({ ...input, userId: t.id })));
 }
 
 export function listFor(

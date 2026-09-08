@@ -510,10 +510,11 @@ export async function update(
     });
     if (!target) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
 
-    // 소유권은 데이터를 봐야 알 수 있으므로 service 에서 (actor.ts)
-    if (actor.role === "MEMBER" && target.authorId !== actor.id) {
-      throw new AppError("FORBIDDEN", "이 자료를 수정할 권한이 없습니다.");
-    }
+    /*
+     * 🔄 「`MEMBER` 는 남의 자료를 못 고친다」가 여기 있었습니다. `DEC-077` 로
+     *    등급이 사라져 조건이 참이 됐습니다 — **로그인한 사람이면 누구나** 고칩니다.
+     *    남는 것은 아래 「타입은 못 바꾼다」이고, 그건 권한이 아니라 표의 문제입니다.
+     */
     if (input.type !== target.type) {
       throw new AppError(
         "INVALID_STATE",

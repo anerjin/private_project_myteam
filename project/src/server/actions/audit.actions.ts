@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { type ActionResult, guard, ok } from "@/lib/result";
-import { requireAdminActor } from "@/server/auth/guards";
+import { requireActor } from "@/server/auth/guards";
 import * as audit from "@/server/services/audit.service";
 
 /**
@@ -37,10 +37,13 @@ export async function countAuditBeforeAction(
   days: unknown
 ): Promise<ActionResult<{ n: number; cutoff: string }>> {
   return guard(async () => {
-    await requireAdminActor();
+    await requireActor();
     const d = daysSchema.parse(days);
     const cutoff = new Date(Date.now() - d * 24 * 60 * 60 * 1000);
-    return ok({ n: await audit.countBefore(cutoff), cutoff: cutoff.toISOString() });
+    return ok({
+      n: await audit.countBefore(cutoff),
+      cutoff: cutoff.toISOString(),
+    });
   });
 }
 
@@ -48,7 +51,7 @@ export async function purgeAuditLogsAction(
   days: unknown
 ): Promise<ActionResult<{ n: number }>> {
   return guard(async () => {
-    const actor = await requireAdminActor();
+    const actor = await requireActor();
     const d = daysSchema.parse(days);
     const cutoff = new Date(Date.now() - d * 24 * 60 * 60 * 1000);
     const n = await audit.purgeBefore(

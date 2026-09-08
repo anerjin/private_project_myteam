@@ -29,12 +29,10 @@ import { archiveUrlAction } from "@/server/actions/github.actions";
 export function WebArchivePanel({
   resourceId,
   archived,
-  canEdit,
 }: {
   resourceId: string;
   /** 이미 보관해 둔 것 — 없으면 `null` */
   archived: { name: string; sizeBytes: number } | null;
-  canEdit: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -43,8 +41,7 @@ export function WebArchivePanel({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Archive className="size-4" />
-          웹 페이지 보관
+          <Archive className="size-4" />웹 페이지 보관
         </CardTitle>
         <CardDescription>
           {archived
@@ -74,41 +71,34 @@ export function WebArchivePanel({
             </Button>
           )}
 
-          {canEdit && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pending}
-              onClick={() =>
-                startTransition(async () => {
-                  const r = await archiveUrlAction(resourceId);
-                  if (!r.ok) {
-                    toast.error(r.message ?? "실행하지 못했습니다.");
-                    return;
-                  }
-                  toast.success("보관을 시작했습니다.", {
-                    description:
-                      "진행 상황은 관리자 › 작업 모니터에서 볼 수 있습니다.",
-                  });
-                  router.refresh();
-                })
-              }
-            >
-              <Archive className="size-4" />
-              {archived ? "다시 보관" : "페이지 보관"}
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                const r = await archiveUrlAction(resourceId);
+                if (!r.ok) {
+                  toast.error(r.message ?? "실행하지 못했습니다.");
+                  return;
+                }
+                toast.success("보관을 시작했습니다.", {
+                  description:
+                    "진행 상황은 관리자 › 작업 모니터에서 볼 수 있습니다.",
+                });
+                router.refresh();
+              })
+            }
+          >
+            <Archive className="size-4" />
+            {archived ? "다시 보관" : "페이지 보관"}
+          </Button>
         </div>
 
         {archived && (
           <p className="text-muted-foreground text-xs">
             <code>.mhtml</code> 파일입니다. 브라우저에 끌어다 놓으면 그때 모습
             그대로 열립니다.
-          </p>
-        )}
-        {!archived && !canEdit && (
-          <p className="text-muted-foreground text-xs">
-            아직 보관하지 않았습니다.
           </p>
         )}
       </CardContent>

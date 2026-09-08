@@ -3,16 +3,16 @@ export const SITE = {
   description: "네오웨이브 운영 시스템",
 } as const;
 
-export const ROLE_LABEL: Record<string, string> = {
-  MEMBER: "일반 회원",
-  EDITOR: "편집자",
-  ADMIN: "관리자",
-};
-
+/*
+ * `ROLE_LABEL`(「일반 회원」·「편집자」·「관리자」)이 여기 있었습니다.
+ * **지웠습니다** (`DEC-077`) — 라벨을 붙일 등급이 없습니다.
+ *
+ * 감사 로그의 옛 `USER_ROLE_CHANGE` 행은 이 표를 안 씁니다. `diff` 패널은
+ * before/after 를 **적힌 그대로** 그리므로(`features/audit/components/audit-table`)
+ * 과거 기록은 이 표 없이도 읽힙니다.
+ */
 export const USER_STATUS_LABEL: Record<string, string> = {
-  PENDING: "승인 대기",
   ACTIVE: "활성",
-  REJECTED: "거부",
   SUSPENDED: "정지",
   WITHDRAWN: "탈퇴",
 };

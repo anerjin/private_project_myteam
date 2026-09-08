@@ -19,7 +19,7 @@ import { PurgeJobsButton } from "@/features/jobs/components/purge-jobs-button";
 import { RetryJobButton } from "@/features/jobs/components/retry-job-button";
 import { EmptyState } from "@/components/common/empty-state";
 import type { JobStatus } from "@/types";
-import { requireRole } from "@/server/auth/guards";
+import { requireActiveUser } from "@/server/auth/guards";
 import { rateLimit as githubRateLimit } from "@/lib/github";
 import * as jobService from "@/server/services/job.service";
 import * as maintenanceService from "@/server/services/maintenance.service";
@@ -63,7 +63,7 @@ const SCHEDULE_EVERY: Record<string, string> = {
 /** SCR-241 수집 작업 모니터 */
 export default async function AdminJobsPage() {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
-  await requireRole("ADMIN");
+  await requireActiveUser();
 
   /*
    * **「P6 에서 붙습니다」 안내문을 만들지 않습니다.**
@@ -218,7 +218,8 @@ export default async function AdminJobsPage() {
                       : "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
-                    {(j.requestedById && requesterNames[j.requestedById]) ?? "-"}
+                    {(j.requestedById && requesterNames[j.requestedById]) ??
+                      "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
                     {j.createdAt.toISOString().slice(5, 16).replace("T", " ")}

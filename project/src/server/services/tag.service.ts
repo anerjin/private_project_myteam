@@ -2,7 +2,7 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { isAdmin, type Actor } from "@/server/auth/actor";
+import type { Actor } from "@/server/auth/actor";
 import * as audit from "@/server/services/audit.service";
 
 /**
@@ -89,14 +89,19 @@ export async function listAll(): Promise<TagRow[]> {
     select: { slug: true, label: true, usageCount: true },
     orderBy: [{ usageCount: "desc" }, { slug: "asc" }],
   });
-  return rows.map((t) => ({ slug: t.slug, label: t.label, count: t.usageCount }));
+  return rows.map((t) => ({
+    slug: t.slug,
+    label: t.label,
+    count: t.usageCount,
+  }));
 }
 
-function assertAdmin(actor: Actor): void {
-  if (!isAdmin(actor)) {
-    throw new AppError("FORBIDDEN", "태그를 정리할 권한이 없습니다.");
-  }
-}
+/*
+ * `assertAdmin(actor)` 이 아래 넷(병합·이름 변경·정리·재집계) 앞에 서 있었습니다.
+ * **지웠습니다** (`DEC-077`) — 등급이 사라져 언제나 통과가 됐습니다.
+ * 남은 문은 액션의 `requireActor()` 이고, 에이전트가 닿는 라우트는 없습니다
+ * (`category.service` 머리말에 같은 이야기가 조금 더 자세히 있습니다).
+ */
 
 /**
  * 병합 — `from` 을 `into` 로 합치고 `from` 을 지웁니다.
@@ -118,18 +123,25 @@ export async function merge(
   from: string,
   into: string
 ): Promise<{ moved: number; merged: number }> {
-  assertAdmin(actor);
   if (from === into) {
     throw new AppError("VALIDATION_ERROR", "같은 태그로는 병합할 수 없습니다.");
   }
 
   return db.$transaction(async (tx) => {
     const [src, dst] = await Promise.all([
-      tx.tag.findUnique({ where: { slug: from }, select: { id: true, label: true } }),
-      tx.tag.findUnique({ where: { slug: into }, select: { id: true, label: true } }),
+      tx.tag.findUnique({
+        where: { slug: from },
+        select: { id: true, label: true },
+      }),
+      tx.tag.findUnique({
+        where: { slug: into },
+        select: { id: true, label: true },
+      }),
     ]);
-    if (!src) throw new AppError("NOT_FOUND", `태그를 찾을 수 없습니다: ${from}`);
-    if (!dst) throw new AppError("NOT_FOUND", `태그를 찾을 수 없습니다: ${into}`);
+    if (!src)
+      throw new AppError("NOT_FOUND", `태그를 찾을 수 없습니다: ${from}`);
+    if (!dst)
+      throw new AppError("NOT_FOUND", `태그를 찾을 수 없습니다: ${into}`);
 
     // 둘 다 붙은 자료 — 옮기면 유니크 위반이므로 `from` 쪽을 버립니다
     const both = await tx.resourceTag.findMany({
@@ -193,8 +205,6 @@ export async function rename(
   slug: string,
   next: { slug: string; label: string }
 ): Promise<void> {
-  assertAdmin(actor);
-
   await db.$transaction(async (tx) => {
     const target = await tx.tag.findUnique({
       where: { slug },
@@ -245,8 +255,6 @@ export async function rename(
  * 여러 개를 지우는 동작이라 근거가 캐시여서는 안 됩니다.
  */
 export async function cleanup(actor: Actor): Promise<{ removed: string[] }> {
-  assertAdmin(actor);
-
   return db.$transaction(async (tx) => {
     const orphans = await tx.tag.findMany({
       where: { resources: { none: {} } },
@@ -281,10 +289,12 @@ export async function cleanup(actor: Actor): Promise<{ removed: string[] }> {
  * 두는 편이, 어긋난 것을 보고도 손쓸 수 없는 것보다 낫습니다.
  */
 export async function recount(actor: Actor): Promise<{ fixed: number }> {
-  assertAdmin(actor);
-
   const rows = await db.tag.findMany({
-    select: { id: true, usageCount: true, _count: { select: { resources: true } } },
+    select: {
+      id: true,
+      usageCount: true,
+      _count: { select: { resources: true } },
+    },
   });
   const wrong = rows.filter((t) => t.usageCount !== t._count.resources);
   if (wrong.length === 0) return { fixed: 0 };

@@ -2,7 +2,6 @@
 
 import { AppError } from "@/lib/errors";
 import { guard, ok, type ActionResult } from "@/lib/result";
-import { canEditResource } from "@/server/auth/actor";
 import { requireActor } from "@/server/auth/guards";
 import { db } from "@/lib/db";
 // **이 import 가 「워커를 켜는 것」입니다** (`DEC-053`) — 없으면 처리기가 등록되지 않는다
@@ -40,9 +39,11 @@ async function requireEditable(
   if (opts.needsUrl && !target.url) {
     throw new AppError("INVALID_STATE", "원본 주소가 없는 자료입니다.");
   }
-  if (!canEditResource(actor, target.authorId)) {
-    throw new AppError("FORBIDDEN", "이 자료를 수정할 권한이 없습니다.");
-  }
+  /*
+   * 🔄 `canEditResource(actor, target.authorId)` 가 여기 있었습니다 —
+   *    「작성자 또는 `EDITOR` 이상」. `DEC-077` 로 통째로 참이 되어 지웠습니다.
+   *    남은 문은 위의 `requireActor()` 입니다.
+   */
   return actor;
 }
 

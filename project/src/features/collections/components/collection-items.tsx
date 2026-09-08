@@ -44,11 +44,9 @@ export interface CollectionResource {
 export function CollectionItems({
   slug,
   items,
-  canEdit,
 }: {
   slug: string;
   items: CollectionResource[];
-  canEdit: boolean;
 }) {
   const router = useRouter();
   const [busy, startTransition] = useTransition();
@@ -132,40 +130,38 @@ export function CollectionItems({
               )}
             </div>
 
-            {canEdit && (
-              <div className="flex shrink-0 gap-0.5">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="size-7"
-                  aria-label="위로"
-                  disabled={busy || i === 0}
-                  onClick={() => move(i, -1)}
-                >
-                  <ChevronUp className="size-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="size-7"
-                  aria-label="아래로"
-                  disabled={busy || i === order.length - 1}
-                  onClick={() => move(i, 1)}
-                >
-                  <ChevronDown className="size-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="text-destructive size-7"
-                  aria-label="빼기"
-                  disabled={busy}
-                  onClick={() => remove(resource)}
-                >
-                  <X className="size-4" />
-                </Button>
-              </div>
-            )}
+            <div className="flex shrink-0 gap-0.5">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-7"
+                aria-label="위로"
+                disabled={busy || i === 0}
+                onClick={() => move(i, -1)}
+              >
+                <ChevronUp className="size-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-7"
+                aria-label="아래로"
+                disabled={busy || i === order.length - 1}
+                onClick={() => move(i, 1)}
+              >
+                <ChevronDown className="size-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="text-destructive size-7"
+                aria-label="빼기"
+                disabled={busy}
+                onClick={() => remove(resource)}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ))}

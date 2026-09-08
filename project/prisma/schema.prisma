@@ -20,16 +20,24 @@ datasource db {
 }
 
 // ───────── enum ─────────
-enum Role {
-  MEMBER
-  EDITOR
-  ADMIN
-}
+/// `Role` 이 여기 있었습니다 (`MEMBER`·`EDITOR`·`ADMIN`). **지웠습니다** (`DEC-077`).
+/// 이 시스템을 쓰는 «사람»은 운영자 한 명이고 나머지는 에이전트입니다 — 등급은
+/// 여러 사람을 전제한 개념이라, 쓸 사람이 하나면 값이 하나뿐인 칸만 남습니다.
+///
+/// 「이 «키»가 무엇까지 할 수 있나」는 그대로 필요하고, 그 답은 **API 키의
+/// 스코프**가 합니다 (`api_keys.scopes`). 역할이 스코프를 «제한»하던 것이
+/// 없어졌을 뿐, 키마다 스코프를 «고르는» 것은 남습니다.
+///
+/// 과거 감사 로그의 `USER_ROLE_CHANGE` 행과 `diff.role` 은 그대로 읽힙니다 —
+/// `audit_logs.action` 은 `String`, `diff` 는 `Json` 이라 이 타입에 매여 있지 않습니다.
 
+/// 계정이 «지금 쓸 수 있는가». 가입 신청·승인 절차를 걷어내면서
+/// `PENDING`·`REJECTED` 가 사라졌습니다 (`DEC-077`) — 신청이 없으니 대기도 거부도
+/// 없고, 계정을 만드는 길은 시드 하나뿐입니다.
+/// `WITHDRAWN` 은 남습니다: 이건 신청의 결말이 아니라 **계정의 끝**이고,
+/// 즉시 마스킹 + 1년 뒤 익명화(`DEC-021`)가 그 위에 서 있습니다.
 enum UserStatus {
-  PENDING
   ACTIVE
-  REJECTED
   SUSPENDED
   WITHDRAWN
 }
@@ -148,10 +156,9 @@ enum NoteKind {
   RETRO
 }
 
+/// `SIGNUP_REQUEST`·`APPROVED`·`REJECTED` 를 걷어냈습니다 (`DEC-077`) —
+/// 셋 다 가입 신청·승인이 만들던 알림이고, 그 절차가 없어졌습니다.
 enum NotificationType {
-  SIGNUP_REQUEST
-  APPROVED
-  REJECTED
   JOB_DONE
   JOB_FAILED
   SYSTEM
@@ -167,9 +174,7 @@ model User {
   department         String?
   avatarUrl          String?    @map("avatar_url")
   bio                String?
-  role               Role       @default(MEMBER)
-  status             UserStatus @default(PENDING)
-  signupReason       String?    @map("signup_reason")
+  status             UserStatus @default(ACTIVE)
   statusReason       String?    @map("status_reason")
   statusChangedAt    DateTime?  @map("status_changed_at")
   statusChangedById  String?    @map("status_changed_by")
@@ -198,7 +203,6 @@ model User {
   itemComments      ProjectItemComment[] @relation("ProjectItemCommentAuthor")
 
   @@index([status])
-  @@index([role])
   @@map("users")
 }
 

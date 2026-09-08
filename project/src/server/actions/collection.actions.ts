@@ -10,8 +10,9 @@ import * as collectionService from "@/server/services/collection.service";
 /**
  * 컬렉션 액션 (`FR-COLL-003`~`006`, `SCR-131`).
  *
- * **소유권 판정은 service 가** 합니다 — 데이터를 봐야 알 수 있고
- * (`actor.ts`), 읽기 쪽과 **같은 규칙**이어야 합니다: 본인 + `EDITOR` 이상.
+ * 🔄 **소유권 판정은 service 가** 했습니다 — 「본인 + `EDITOR` 이상」.
+ * `DEC-077` 로 그 판정이 사라져 **남은 문은 `requireActor()` 하나**입니다.
+ * 읽기와 쓰기가 같은 규칙이어야 한다는 점은 그대로이고, 둘 다 함께 접혔습니다.
  */
 
 const nameSchema = z.string().trim().min(1).max(60);

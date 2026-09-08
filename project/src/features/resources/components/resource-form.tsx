@@ -287,7 +287,10 @@ export function ResourceForm({
                 **`name="tags"` 에 쉼표 문자열** 하나입니다 — `TagInput` 이
                 숨은 `input` 으로 그 값을 싣습니다.
               */}
-              <TagInput id="tags" defaultValue={resource?.tags.join(", ") ?? ""} />
+              <TagInput
+                id="tags"
+                defaultValue={resource?.tags.join(", ") ?? ""}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="body">본문 (마크다운)</FieldLabel>
@@ -344,7 +347,7 @@ export function ResourceForm({
               `PUBLISHED` 로 만듭니다. 누를 수 있으면 눌러 보고 「아무 일도 안
               일어나네」가 되고, 그건 이 저장소가 반복해서 피한 「있는데 안 된다」
               입니다(태그 병합·대분류 추가 버튼과 같은 처리).
-              초안을 «보는» 쪽은 이미 됩니다 — 작성자와 `EDITOR` 이상만 봅니다.
+              초안을 «보는» 쪽은 이미 됩니다 — 로그인한 사람이 봅니다 (`DEC-077`).
             */
             <Button type="button" variant="ghost" disabled>
               임시 저장

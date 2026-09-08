@@ -11,7 +11,6 @@ import {
 import { TypeBadge } from "@/features/resources/components/badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { canEditResource } from "@/server/auth/actor";
 import { requireActiveUser, toActor } from "@/server/auth/guards";
 import { AUDIT_ACTION_LABEL } from "@/features/audit/actions";
 import { AddToCollection } from "@/features/collections/components/add-to-collection";
@@ -72,11 +71,7 @@ export default async function ResourceDetailPage({
    */
   let resource;
   try {
-    resource = await resourceService.getBySlug(
-      slug,
-      session.userId,
-      session.role
-    );
+    resource = await resourceService.getBySlug(slug, session.userId);
   } catch (e) {
     if (e instanceof AppError && e.code === "NOT_FOUND") notFound();
     throw e;
@@ -86,10 +81,12 @@ export default async function ResourceDetailPage({
 
   // 카테고리 이름은 자료와 «같은 행»에서 온다 — slug→이름 표를 두면 그게 목이 된다
   const category = resource.category
-    ? { slug: resource.category, name: resource.categoryName ?? resource.category }
+    ? {
+        slug: resource.category,
+        name: resource.categoryName ?? resource.category,
+      }
     : undefined;
   const toc = resource.body ? extractToc(resource.body) : [];
-  const canEdit = canEditResource(await toActor(session), resource.author.id);
 
   const actor = await toActor(session);
   const [related, attachments, linked, collections] = await Promise.all([
@@ -107,7 +104,7 @@ export default async function ResourceDetailPage({
    */
   const repo =
     resource.detail.type === "GITHUB_REPO"
-      ? await githubService.repoView(resource.id, actor)
+      ? await githubService.repoView(resource.id)
       : null;
 
   /*
@@ -121,17 +118,17 @@ export default async function ResourceDetailPage({
       : null;
 
   /*
-   * 변경 이력 (`FR-RES-013`) — **고칠 수 있는 사람에게만.**
-   * 「누가 언제 뭘 고쳤나」는 그 자료를 고칠 수 있는 사람이 알아야 하는
-   * 것이고, 아무나 보면 «누가 무엇을 하는지»가 새어 나갑니다.
+   * 변경 이력 (`FR-RES-013`).
+   *
+   * 🔄 **「고칠 수 있는 사람에게만」이었습니다** — 그 판정(`canEditResource`)이
+   *    `DEC-077` 로 사라져 조건 없이 읽습니다. 겨누던 위험(「아무나 보면 누가
+   *    무엇을 하는지 새어 나간다」)은 **보는 사람이 한 명이면 성립하지 않습니다.**
    */
-  const history = canEdit
-    ? await audit.list({
-        page: 1,
-        size: 10,
-        filter: { targetId: resource.id },
-      })
-    : null;
+  const history = await audit.list({
+    page: 1,
+    size: 10,
+    filter: { targetId: resource.id },
+  });
 
   return (
     <>
@@ -163,21 +160,19 @@ export default async function ResourceDetailPage({
               resourceId={resource.id}
               collections={collections}
             />
-            {canEdit ? (
-              <div className="ml-auto flex gap-2">
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href={`/resources/${meta.slug}/${resource.slug}/edit`}>
-                    <Pencil className="size-4" />
-                    수정
-                  </Link>
-                </Button>
-                <DeleteResourceDialog resource={resource} />
-              </div>
-            ) : (
-              <span className="text-muted-foreground ml-auto self-center text-xs">
-                다른 사람이 등록한 자료입니다
-              </span>
-            )}
+            {/*
+              🔄 여기 `canEdit ? … : 「다른 사람이 등록한 자료입니다」` 가 있었습니다.
+                 `DEC-077` 로 남의 자료도 고칠 수 있게 되어 **한쪽만 남았습니다.**
+            */}
+            <div className="ml-auto flex gap-2">
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={`/resources/${meta.slug}/${resource.slug}/edit`}>
+                  <Pencil className="size-4" />
+                  수정
+                </Link>
+              </Button>
+              <DeleteResourceDialog resource={resource} />
+            </div>
           </div>
 
           <TypeDetail resource={resource} />
@@ -209,35 +204,24 @@ export default async function ResourceDetailPage({
             />
           )}
 
-          <LinkedResources
-            resourceId={resource.id}
-            items={linked}
-            canEdit={canEdit}
-          />
+          <LinkedResources resourceId={resource.id} items={linked} />
 
-          <Attachments
-            resourceId={resource.id}
-            files={attachments}
-            canEdit={canEdit}
-          />
+          <Attachments resourceId={resource.id} files={attachments} />
 
-          {history && (
-            <ResourceHistory
-              canSeeAll={session.role === "ADMIN"}
-              entries={history.items.map((l) => ({
-                id: l.id,
-                // 라벨을 여기서 붙입니다 — 조립은 app 계층 (`DEV-06 · 6.9`)
-                actionLabel:
-                  AUDIT_ACTION_LABEL[
-                    l.action as keyof typeof AUDIT_ACTION_LABEL
-                  ] ?? l.action,
-                summary: l.summary,
-                actorUsername: l.actorUsername,
-                via: l.via,
-                createdAt: l.createdAt.toISOString(),
-              }))}
-            />
-          )}
+          <ResourceHistory
+            entries={history.items.map((l) => ({
+              id: l.id,
+              // 라벨을 여기서 붙입니다 — 조립은 app 계층 (`DEV-06 · 6.9`)
+              actionLabel:
+                AUDIT_ACTION_LABEL[
+                  l.action as keyof typeof AUDIT_ACTION_LABEL
+                ] ?? l.action,
+              summary: l.summary,
+              actorUsername: l.actorUsername,
+              via: l.via,
+              createdAt: l.createdAt.toISOString(),
+            }))}
+          />
         </div>
 
         <aside className="space-y-4">
@@ -260,17 +244,12 @@ export default async function ResourceDetailPage({
               archiveSizeBytes={resource.detail.archiveSizeBytes}
               archivedSha={resource.detail.archivedSha}
               isGone={resource.detail.isGone}
-              canEdit={canEdit}
             />
           )}
 
           {/* 저장소가 아닌 자료 — 페이지 자체를 보관합니다 */}
           {resource.detail.type !== "GITHUB_REPO" && resource.url && (
-            <WebArchivePanel
-              resourceId={resource.id}
-              archived={webArchive}
-              canEdit={canEdit}
-            />
+            <WebArchivePanel resourceId={resource.id} archived={webArchive} />
           )}
 
           <Card>

@@ -29,7 +29,8 @@ import * as projectService from "@/server/services/project.service";
 export default async function ProjectDetailPage({
   params,
 }: PageProps<"/projects/[slug]">) {
-  const session = await requireActiveUser();
+  // 반환값은 안 씁니다 — 「들어와도 되는가」만 묻습니다 (`DEC-035`)
+  await requireActiveUser();
   // 한국어 slug 는 인코딩된 채로 옵니다 (`lib/route-params`)
   const { slug: rawSlug } = await params;
   const slug = decodeSegment(rawSlug);
@@ -89,13 +90,9 @@ export default async function ProjectDetailPage({
         username: p.username,
         avatarUrl: p.avatarUrl,
       }))}
-      /* 🔴 **휴지통 버튼을 그릴지만 정합니다** (`FR-PROJ-004`).
-         ⚠️ **관문이 아닙니다** — 막는 것은 `project.service.assertCanDelete` 이고,
-            이 값을 속여도 서버가 거절합니다. 조건을 여기 손으로 적은 것은 그
-            함수가 `server-only` 라 화면이 못 읽기 때문입니다. */
-      canDelete={
-        session.role === "ADMIN" || project.owner.id === session.userId
-      }
+      /* 🔄 `canDelete={session.role === "ADMIN" || project.owner.id === session.userId}`
+         가 여기 있었습니다 (`FR-PROJ-004`). `DEC-077` 로 service 쪽 판정
+         (`assertCanDelete`)이 사라져 화면이 흉내 낼 원본이 없어졌습니다. */
     />
   );
 }

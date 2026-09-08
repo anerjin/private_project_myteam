@@ -2,8 +2,6 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import type { Actor } from "@/server/auth/actor";
-import { draftScope } from "@/server/services/file.service";
 import type { RepoFile } from "@/types";
 
 /**
@@ -34,17 +32,15 @@ export interface RepoView {
  * `file_tree` 도 수십 줄인데, 카드는 둘 다 안 그립니다 — `githubRepo: true`
  * 로 두면 목록 한 쪽(24행)이 그걸 전부 끌고 옵니다.
  *
- * 초안 범위는 `file.service` 와 **같은 규칙**을 씁니다. README 도 자료의
- * 일부라, 초안이 남에게 보이면 안 되는 것은 첨부와 같습니다.
+ * 🔄 초안 범위(`file.service.draftScope`)를 함께 걸었습니다. `DEC-077` 로 그
+ *    범위가 없어져 **`viewer` 인자가 사라졌습니다** — 부르는 쪽(상세 화면)의
+ *    `requireActiveUser()` 가 그대로 문입니다.
  */
-export async function repoView(
-  resourceId: string,
-  viewer: Actor
-): Promise<RepoView> {
+export async function repoView(resourceId: string): Promise<RepoView> {
   const row = await db.githubRepo.findFirst({
     where: {
       resourceId,
-      resource: { deletedAt: null, ...draftScope(viewer) },
+      resource: { deletedAt: null },
     },
     select: { fileTree: true, readmeContent: true },
   });
@@ -104,8 +100,7 @@ export async function archivedFile(
  * 사람이 무엇을 해야 할지 모릅니다.
  */
 export async function archiveForDownload(
-  resourceId: string,
-  viewer: Actor
+  resourceId: string
 ): Promise<ArchiveDownload> {
   /*
    * **GitHub 자료만 받을 수 있었습니다.**
@@ -114,10 +109,11 @@ export async function archiveForDownload(
    * 이제 문서 사이트·논문도 보관합니다(`ARCHIVE_URL`) — 그것들에는 그 행이
    * 없습니다. **보관본은 `files(role=ARCHIVE)` 에 있고**, 그건 타입과 무관합니다.
    *
-   * 초안의 보관본도 새면 안 됩니다 — `file.service` 와 같은 규칙입니다.
+   * 🔄 초안의 보관본도 막았습니다 — `DEC-077` 로 그 범위가 없어졌습니다.
+   *    막는 것은 라우트의 `requireActor()` 입니다.
    */
   const resource = await db.resource.findFirst({
-    where: { id: resourceId, deletedAt: null, ...draftScope(viewer) },
+    where: { id: resourceId, deletedAt: null },
     select: { githubRepo: { select: { archiveStatus: true } } },
   });
   if (!resource) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");

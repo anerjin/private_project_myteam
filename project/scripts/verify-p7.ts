@@ -15,7 +15,6 @@ import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { hashPassword } from "@/server/auth/password";
 import * as apiKeyService from "@/server/services/api-key.service";
-import type { Role } from "@/types";
 
 const BASE = "http://localhost:3100/api/ingest";
 
@@ -32,16 +31,15 @@ function check(label: string, ok: boolean, detail = "") {
 const madeUsers: string[] = [];
 const madeResources: string[] = [];
 
-async function mkUser(tag: string, role: Role) {
+async function mkUser(tag: string) {
   const u = await db.user.create({
     data: {
       username: `vp7_${tag}_${randomBytes(4).toString("hex")}`,
       passwordHash: await hashPassword("Verify!12345"),
       name: `P7검증-${tag}`,
       status: "ACTIVE",
-      role,
     },
-    select: { id: true, username: true, role: true },
+    select: { id: true, username: true },
   });
   madeUsers.push(u.id);
   return u;
@@ -70,14 +68,14 @@ async function call(
 }
 
 async function run() {
-  const author = await mkUser("author", "EDITOR");
+  const author = await mkUser("author");
 
   /*
    * **키는 실제 발급 경로로 만듭니다.** 해시를 손으로 넣으면 `verifyKey` 가
    * 보는 것과 다른 것을 시험하게 됩니다.
    */
   const issued = await apiKeyService.issue(
-    { id: author.id, username: author.username, role: "EDITOR", via: "WEB" },
+    { id: author.id, username: author.username, via: "WEB" },
     "P7 검증",
     ["resources:read", "resources:write", "archive:run"]
   );
@@ -98,16 +96,32 @@ async function run() {
     check("틀린 키는 401", r.status === 401, r.body.error?.code ?? "");
   }
 
-  console.log("\n★ API-108 whoami — 스코프는 «지금» 행사할 수 있는 것 (DEC-037)");
+  console.log(
+    "\n★ API-108 whoami — 스코프는 «지금» 행사할 수 있는 것 (DEC-037)"
+  );
   {
     const r = await call("/whoami", KEY);
-    const d = r.body.data as { username: string; role: string; scopes: string[]; via: string };
-    check("200 이고 소유자를 말한다", r.status === 200 && d.username === author.username);
+    const d = r.body.data as {
+      username: string;
+      role?: string;
+      scopes: string[];
+      via: string;
+    };
+    check(
+      "200 이고 소유자를 말한다",
+      r.status === 200 && d.username === author.username
+    );
     check("경로가 MCP 로 잡힌다", d.via === "MCP", d.via);
     check(
-      "EDITOR 는 archive:run 을 갖는다",
+      "발급할 때 고른 스코프를 그대로 돌려준다",
       d.scopes.includes("archive:run"),
       d.scopes.join(",")
+    );
+    // 🔄 `role` 을 함께 돌려줬습니다 — `DEC-077` 로 응답에서 뺐습니다
+    check(
+      "응답에 role 이 없다 (DEC-077)",
+      d.role === undefined,
+      String(d.role)
     );
   }
 
@@ -117,7 +131,10 @@ async function run() {
     const types = r.body.data as {
       code: string;
       label: string;
-      detailSchema: { properties?: Record<string, unknown>; required?: string[] };
+      detailSchema: {
+        properties?: Record<string, unknown>;
+        required?: string[];
+      };
     }[];
     check("여섯 타입이 온다", types.length === 6, `${types.length}종`);
 
@@ -162,14 +179,21 @@ async function run() {
       ["providedTools", "name"],
     ] as const) {
       const prop = mcp.detailSchema.properties?.[field] as
-        | { anyOf?: { type?: string; items?: { properties?: Record<string, unknown> } }[] }
+        | {
+            anyOf?: {
+              type?: string;
+              items?: { properties?: Record<string, unknown> };
+            }[];
+          }
         | undefined;
       const arr = prop?.anyOf?.find((b) => b.type === "array");
       const props = Object.keys(arr?.items?.properties ?? {});
       check(
         `${field} 배열 항목의 모양이 내려온다`,
         props.includes(key),
-        props.length ? props.join(", ") : "items 가 비어 있음 — 무엇이든 받는다고 말한다"
+        props.length
+          ? props.join(", ")
+          : "items 가 비어 있음 — 무엇이든 받는다고 말한다"
       );
     }
   }
@@ -181,8 +205,15 @@ async function run() {
       categories: { slug: string; children: unknown[] }[];
       tags: unknown[];
     };
-    check("카테고리 트리가 온다", d.categories.length > 0, `${d.categories.length}개`);
-    check("하위분류도 온다", d.categories.some((c) => c.children.length > 0));
+    check(
+      "카테고리 트리가 온다",
+      d.categories.length > 0,
+      `${d.categories.length}개`
+    );
+    check(
+      "하위분류도 온다",
+      d.categories.some((c) => c.children.length > 0)
+    );
   }
 
   console.log("\n★ API-104 등록 — 웹과 같은 zod 를 지난다 (FR-CLI-005)");
@@ -227,7 +258,8 @@ async function run() {
      */
     check(
       "자료 URL 이 절대 주소다",
-      created.url.startsWith("http") && created.url.includes("/resources/ai-material/"),
+      created.url.startsWith("http") &&
+        created.url.includes("/resources/ai-material/"),
       created.url
     );
     // **건 작업만 담습니다** — GitHub 자료가 아니므로 비어 있는 것이 맞습니다
@@ -245,7 +277,11 @@ async function run() {
      * **등록 경로가 `MCP` 로 남습니다** (`FR-CLI-005`, `DEC-029`).
      * 검수를 폐기하며 「구분은 `source_channel` 이 한다」로 정했고 그 값입니다.
      */
-    check("source_channel 이 MCP 다", row.sourceChannel === "MCP", row.sourceChannel);
+    check(
+      "source_channel 이 MCP 다",
+      row.sourceChannel === "MCP",
+      row.sourceChannel
+    );
     check("등록자는 키 소유자다", row.authorId === author.id);
 
     const detail = await db.aiMaterial.findUnique({
@@ -302,7 +338,9 @@ async function run() {
      * **문구가 아니라 «본문»에 담겨 있어야 합니다.** 문장을 파싱하게 두면
      * 문구를 다듬는 순간 에이전트가 깨집니다.
      */
-    const dupData = again.body.data as { duplicate?: { id: string; url: string } };
+    const dupData = again.body.data as {
+      duplicate?: { id: string; url: string };
+    };
     check(
       "기존 자료를 본문에 담아 준다",
       dupData?.duplicate?.id === madeResources[0],
@@ -358,7 +396,8 @@ async function run() {
       }),
     });
     check("토큰을 «설명하는» 자료는 통과한다", r.status === 201, `${r.status}`);
-    if (r.status === 201) madeResources.push((r.body.data as { id: string }).id);
+    if (r.status === 201)
+      madeResources.push((r.body.data as { id: string }).id);
 
     // 수정으로 나중에 붙이는 경로도 막혀야 한다
     const patch = await call(`/resources/${madeResources[0]}`, KEY, {
@@ -372,15 +411,23 @@ async function run() {
   {
     const r = await call("/search?q=" + encodeURIComponent("P7 CLI"), KEY);
     const items = r.body.data as { id: string; title: string }[];
-    check("검색으로 찾힌다", items.some((i) => i.id === madeResources[0]));
+    check(
+      "검색으로 찾힌다",
+      items.some((i) => i.id === madeResources[0])
+    );
 
     const one = await call(`/resources/${madeResources[0]}`, KEY);
-    const d = one.body.data as { detail: { type: string }; sourceChannel: string };
+    const d = one.body.data as {
+      detail: { type: string };
+      sourceChannel: string;
+    };
     check("상세가 타입 상세를 싣는다", d.detail.type === "AI_MATERIAL");
     check("등록 경로도 보인다", d.sourceChannel === "MCP");
   }
 
-  console.log("\n★ API-105 보강 — 한 칸을 고쳐도 나머지가 안 지워진다 (FR-CLI-006)");
+  console.log(
+    "\n★ API-105 보강 — 한 칸을 고쳐도 나머지가 안 지워진다 (FR-CLI-006)"
+  );
   {
     const r = await call(`/resources/${madeResources[0]}`, KEY, {
       method: "PATCH",
@@ -397,7 +444,11 @@ async function run() {
      * 받으므로 라우트가 지금 값을 먼저 읽어 합칩니다 — `P5` 에서 실측한
      * `upsert.update` 의 `undefined` 함정과 같은 자리입니다.
      */
-    check("안 보낸 칸은 그대로다", detail.sourceName === "arXiv", detail.sourceName ?? "");
+    check(
+      "안 보낸 칸은 그대로다",
+      detail.sourceName === "arXiv",
+      detail.sourceName ?? ""
+    );
     const res = await db.resource.findUniqueOrThrow({
       where: { id: madeResources[0] },
       select: { title: true },
@@ -405,27 +456,34 @@ async function run() {
     check("제목도 그대로다", res.title === "P7 CLI 등록 자료", res.title);
   }
 
-  console.log("\n★ 스코프 — 역할이 내려가면 키도 좁아진다 (DEC-037 · NFR-SEC-017)");
+  console.log("\n★ 스코프 — 키마다 할 수 있는 일이 다르다 (DEC-037 · DEC-077)");
   {
-    const member = await mkUser("member", "MEMBER");
-    const memberKey = await apiKeyService.issue(
-      { id: member.id, username: member.username, role: "MEMBER", via: "WEB" },
-      "MEMBER 키",
+    /*
+     * 🔄 제목이 **「역할이 내려가면 키도 좁아진다」**였고 `MEMBER` 로 강등하는
+     *    시나리오였습니다. `DEC-077` 로 등급이 사라진 뒤에도 **이 검증의 값은
+     *    그대로입니다** — 오히려 지금이 더 중요합니다: 헤르메스와 오픈클로가
+     *    «같은 계정»의 키로 붙으므로, 둘을 가르는 것이 스코프 하나뿐입니다.
+     *
+     *    그래서 같은 사람이 **좁은 키**를 하나 더 발급해 그 키가 막히는 것을 봅니다.
+     */
+    const narrow = await apiKeyService.issue(
+      { id: author.id, username: author.username, via: "WEB" },
+      "읽기·쓰기만 주는 키",
       ["resources:read", "resources:write"]
     );
 
     const r = await call(
       `/resources/${madeResources[0]}/archive`,
-      memberKey.plaintext,
+      narrow.plaintext,
       { method: "POST" }
     );
     check(
-      "MEMBER 키는 archive:run 이 없어 403",
+      "archive:run 이 없는 키는 403",
       r.status === 403,
       `${r.status} ${r.body.error?.code ?? ""}`
     );
 
-    const who = await call("/whoami", memberKey.plaintext);
+    const who = await call("/whoami", narrow.plaintext);
     const d = who.body.data as { scopes: string[] };
     check(
       "whoami 도 그 스코프를 안 보여준다",

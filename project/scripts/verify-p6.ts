@@ -63,18 +63,16 @@ async function mkUser(tag: string) {
       passwordHash: await hashPassword("Verify!12345"),
       name: `P6검증-${tag}`,
       status: "ACTIVE",
-      role: "MEMBER",
     },
-    select: { id: true, username: true, role: true },
+    select: { id: true, username: true },
   });
   madeUsers.push(u.id);
   return u;
 }
 
-const actorOf = (u: { id: string; username: string; role: string }): Actor => ({
+const actorOf = (u: { id: string; username: string }): Actor => ({
   id: u.id,
   username: u.username,
-  role: u.role as Actor["role"],
   via: "WEB",
 });
 
@@ -358,7 +356,9 @@ async function run() {
      */
     const rateLimited = (again.errorMessage ?? "").includes("한도");
     if (rateLimited) {
-      console.log("       (GitHub 한도로 건너뜀 — 404 를 받아야 판정되는 검사입니다)");
+      console.log(
+        "       (GitHub 한도로 건너뜀 — 404 를 받아야 판정되는 검사입니다)"
+      );
     } else {
       check("못 읽으면 isGone 이 선다", row.isGone === true);
       check("한 번도 못 읽었으므로 stars 가 비어 있다", row.stars === null);
@@ -401,7 +401,11 @@ async function run() {
       "메타 수집 검증 — 논문",
       "https://arxiv.org/abs/1706.03762"
     );
-    check("처리기가 등록돼 있다", paper.job.status !== "FAILED", paper.job.errorMessage ?? "");
+    check(
+      "처리기가 등록돼 있다",
+      paper.job.status !== "FAILED",
+      paper.job.errorMessage ?? ""
+    );
 
     if (paper.job.status === "DONE") {
       const row = await db.resource.findUniqueOrThrow({
@@ -465,10 +469,17 @@ async function run() {
     const r = await resourceWrite.create(actorOfId(user.id), p.data);
     madeResources.push(r.id);
 
-    const j = await jobService.enqueue({ type: "ARCHIVE_URL", resourceId: r.id });
+    const j = await jobService.enqueue({
+      type: "ARCHIVE_URL",
+      resourceId: r.id,
+    });
     await jobService.runNow(j.id);
     const done = await jobOf(j.id);
-    check("보관 작업이 끝난다", done.status === "DONE", done.errorMessage ?? "");
+    check(
+      "보관 작업이 끝난다",
+      done.status === "DONE",
+      done.errorMessage ?? ""
+    );
 
     const file = await githubService.archivedFile(r.id);
     check("보관본이 생긴다", file !== null, file?.name ?? "");
@@ -500,8 +511,12 @@ async function run() {
        * **내려받기가 GitHub 자료만 열어 줬습니다.** `github_repos` 행이 없으면
        * 「자료를 찾을 수 없습니다」였는데, 문서 사이트에는 그 행이 없습니다.
        */
-      const dl = await githubService.archiveForDownload(r.id, actorOfId(user.id));
-      check("저장소가 아닌 자료도 내려받을 수 있다", dl.sizeBytes > 0, dl.filename);
+      const dl = await githubService.archiveForDownload(r.id);
+      check(
+        "저장소가 아닌 자료도 내려받을 수 있다",
+        dl.sizeBytes > 0,
+        dl.filename
+      );
       /*
        * **형식을 라우트가 정하고 있었습니다** — `application/gzip` 이 박혀
        * 있었고, tarball 뿐이던 시절의 값입니다. `.mhtml` 을 gzip 이라고 말하면
@@ -530,12 +545,16 @@ async function run() {
     if (!p.ok) throw new Error(JSON.stringify(p.fieldErrors));
     const r = await resourceWrite.create(actorOfId(user.id), p.data);
     madeResources.push(r.id);
-    const j = await jobService.enqueue({ type: "ARCHIVE_URL", resourceId: r.id });
+    const j = await jobService.enqueue({
+      type: "ARCHIVE_URL",
+      resourceId: r.id,
+    });
     await jobService.runNow(j.id);
     const done = await jobOf(j.id);
     check(
       "사내 주소는 보관하지 않는다",
-      done.status === "FAILED" && (done.errorMessage ?? "").includes("내부 주소"),
+      done.status === "FAILED" &&
+        (done.errorMessage ?? "").includes("내부 주소"),
       done.errorMessage ?? done.status
     );
     check(
@@ -656,35 +675,35 @@ async function run() {
       select: { storageKey: true },
     });
     madeKeys.push(k2.storageKey);
-    m = await msg(() => fileService.detach(actorOf(stranger), att2.id));
-    check("남의 첨부는 못 지운다", m.includes("권한이 없습니다"), m);
 
     /*
-     * **초안의 첨부가 새면 안 됩니다.** 자료 자체는 `getBySlug` 가 막는데
-     * 파일 경로는 `deletedAt: null` 만 보고 있었습니다 — 지금은 전부
-     * `PUBLISHED` 라 잠복이지만 `P7` 의 CLI 가 초안을 밀어 넣으면 열립니다.
+     * 🔄 **초안 첨부의 범위 검증이 여기 있었습니다** — 「남의 초안 첨부는 못 받고,
+     *    작성자와 `EDITOR` 이상은 받는다」. `DEC-077` 로 등급이 사라져
+     *    `file.service.draftScope` 가 없어졌고, **로그인한 사람이면 초안 첨부도
+     *    받습니다.** 남은 관문은 라우트의 `requireActor()` 이고, 그건
+     *    `checkScreens` 의 「로그인 없이 못 받는다」가 봅니다.
      */
     await db.resource.update({
       where: { id: res.id },
       data: { status: "DRAFT" },
     });
-    m = await msg(() => fileService.forDownload(att2.id, actorOf(stranger)));
-    check("남의 초안 첨부는 못 받는다", m.includes("찾을 수 없습니다"), m);
     check(
-      "작성자는 자기 초안 첨부를 받는다",
-      (await msg(() => fileService.forDownload(att2.id, actor))) ===
-        "(오류 없음)"
-    );
-    const editor = { ...actorOf(stranger), role: "EDITOR" as const };
-    check(
-      "EDITOR 는 초안 첨부를 받는다",
-      (await msg(() => fileService.forDownload(att2.id, editor))) ===
-        "(오류 없음)"
+      "초안이어도 첨부를 받는다 (DEC-077)",
+      (await msg(() => fileService.forDownload(att2.id))) === "(오류 없음)"
     );
     await db.resource.update({
       where: { id: res.id },
       data: { status: "PUBLISHED" },
     });
+
+    /*
+     * 🔄 **「남의 첨부는 못 지운다」**였습니다(`canEditResource`). `DEC-077` 로
+     *    그 판정이 사라졌습니다. **순서를 바꿨습니다** — 지우기가 이제 성공하므로
+     *    위의 내려받기 검사보다 «뒤»에 와야 합니다. 안 그러면 없는 파일을 받으려다
+     *    엉뚱한 이유로 실패합니다.
+     */
+    m = await msg(() => fileService.detach(actorOf(stranger), att2.id));
+    check("남의 첨부도 지운다 (DEC-077)", m === "(오류 없음)", m);
   }
 
   console.log("\n★ 동시 실행 상한 — P7 의 대량 유입에 대비 (DEC-053)");
@@ -776,14 +795,18 @@ async function run() {
       })) === 1
     );
 
+    /*
+     * 🔄 **「남의 연결은 못 끊는다」**였습니다 — 「만든 쪽 자료를 못 고치면 거부」
+     *    (`canEditResource`). `DEC-077` 로 사라졌습니다.
+     *
+     *    **반대쪽에서 끊어도 된다**(한 행이므로)는 성질은 그대로이고, 그것을
+     *    이 한 번의 끊기가 함께 봅니다 — `b → a` 로 걸고 `b, a` 로 끊습니다.
+     */
     const stranger = await mkUser("rel-stranger");
     m = await msg(() =>
       relationService.unlink(actorOf(stranger), b.id, a.id, "SUPERSEDES")
     );
-    check("남의 연결은 못 끊는다", m.includes("권한이 없습니다"), m);
-
-    // 반대쪽에서 끊어도 된다 — 한 행이므로
-    await relationService.unlink(actor, b.id, a.id, "SUPERSEDES");
+    check("남도 연결을 끊는다 (DEC-077)", m === "(오류 없음)", m);
     check(
       "끊으면 양쪽에서 사라진다",
       (await relationService.listFor(a.id)).length === 0
@@ -828,7 +851,7 @@ async function checkScreens(userId: string) {
   const { issue } = await import("@/server/auth/session");
   const { token } = await issue(userId, { userAgent: "verify-p6" });
   const cookie = `${process.env.SESSION_COOKIE_NAME || "nw_session"}=${token}`;
-    const NOT_FOUND = "NEXT_HTTP_ERROR_FALLBACK;404";
+  const NOT_FOUND = "NEXT_HTTP_ERROR_FALLBACK;404";
 
   /**
    * dev 서버는 **첫 컴파일에서 간헐적으로 500** 을 냅니다(Turbopack 이 청크를
@@ -965,7 +988,11 @@ async function checkScreens(userId: string) {
     );
 
     const files = Array.isArray(row.fileTree) ? row.fileTree : [];
-    check("최상위 파일 목록을 받아 왔다", files.length > 0, `${files.length}개`);
+    check(
+      "최상위 파일 목록을 받아 왔다",
+      files.length > 0,
+      `${files.length}개`
+    );
     check(
       "파일 이름이 화면에 나온다",
       html.includes("README.md"),
@@ -1060,7 +1087,6 @@ async function checkScreens(userId: string) {
 const actorOfId = (id: string): Actor => ({
   id,
   username: "verify",
-  role: "MEMBER",
   via: "WEB",
 });
 

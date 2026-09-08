@@ -6,7 +6,6 @@ import type {
   RelationType,
   ResourceStatus,
   ResourceType,
-  Role,
   SourceChannel,
   UsageStatus,
   UserStatus,
@@ -31,14 +30,13 @@ import type {
  * 그때 `@/types` 를 고치면 됩니다. 조용히 갈라지지 않습니다.
  *
  * > `JobType` 과 `RelationType` 을 `P6` 에서 새로 적으면서 이 구멍이
- * > **세 번째**가 됐습니다(`ResourceType`·`Role`… 은 처음부터 있었습니다).
+ * > **세 번째**가 됐습니다(`ResourceType`·`UserStatus`… 은 처음부터 있었습니다).
  * > 규칙을 「기억하기」로 두지 않고 기계에 넘깁니다.
  */
 
 /** 양방향 포함 관계 — 한쪽만 보면 «빠진 값»을 못 잡습니다 */
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 
-type _Role = Same<Role, $Enums.Role>;
 type _UserStatus = Same<UserStatus, $Enums.UserStatus>;
 type _ResourceType = Same<ResourceType, $Enums.ResourceType>;
 type _ResourceStatus = Same<ResourceStatus, $Enums.ResourceStatus>;
@@ -54,7 +52,6 @@ type _JobStatus = Same<JobStatus, $Enums.JobStatus>;
  * 어긋나면 `never` 라 `true` 를 대입할 수 없어 여기서 실패합니다.
  */
 export const ENUMS_MATCH: [
-  _Role,
   _UserStatus,
   _ResourceType,
   _ResourceStatus,
@@ -63,4 +60,4 @@ export const ENUMS_MATCH: [
   _RelationType,
   _JobType,
   _JobStatus,
-] = [true, true, true, true, true, true, true, true, true];
+] = [true, true, true, true, true, true, true, true];

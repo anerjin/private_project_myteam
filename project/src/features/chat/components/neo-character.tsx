@@ -55,8 +55,22 @@ interface Pose {
 
 const POSES: Record<VoicePhase, Pose> = {
   idle: { lean: 0, tilt: 0, rotor: 3, gaze: 0, scale: 1, ears: 0.04 },
-  listening: { lean: 0.14, tilt: 0.1, rotor: 8, gaze: 0.02, scale: 1.04, ears: 0.22 },
-  thinking: { lean: -0.06, tilt: 0.24, rotor: 18, gaze: 0.1, scale: 1, ears: 0.06 },
+  listening: {
+    lean: 0.14,
+    tilt: 0.1,
+    rotor: 8,
+    gaze: 0.02,
+    scale: 1.04,
+    ears: 0.22,
+  },
+  thinking: {
+    lean: -0.06,
+    tilt: 0.24,
+    rotor: 18,
+    gaze: 0.1,
+    scale: 1,
+    ears: 0.06,
+  },
   speaking: { lean: 0.04, tilt: 0, rotor: 5, gaze: 0, scale: 1.02, ears: 0.1 },
 };
 
@@ -92,8 +106,15 @@ interface Rig {
 function build(spec: Spec): Rig {
   const head = new THREE.Group();
   const own: { dispose(): void }[] = [];
-  const mat = (color: string, extra?: Partial<THREE.MeshStandardMaterialParameters>) => {
-    const m = new THREE.MeshStandardMaterial({ color, roughness: 0.6, ...extra });
+  const mat = (
+    color: string,
+    extra?: Partial<THREE.MeshStandardMaterialParameters>
+  ) => {
+    const m = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.6,
+      ...extra,
+    });
     own.push(m);
     return m;
   };
@@ -143,16 +164,60 @@ function build(spec: Spec): Rig {
   const pupils = new THREE.Group();
   head.add(eyes, pupils);
   for (const s of [-1, 1]) {
-    put(eyes, new THREE.Mesh(ball(0.25, 24), white), s * 0.38, 0.1, 0.86, 1, 1.35, 0.55);
-    put(pupils, new THREE.Mesh(ball(0.17, 24), dark), s * 0.38, 0.1, 0.98, 1, 1.3, 0.5);
+    put(
+      eyes,
+      new THREE.Mesh(ball(0.25, 24), white),
+      s * 0.38,
+      0.1,
+      0.86,
+      1,
+      1.35,
+      0.55
+    );
+    put(
+      pupils,
+      new THREE.Mesh(ball(0.17, 24), dark),
+      s * 0.38,
+      0.1,
+      0.98,
+      1,
+      1.3,
+      0.5
+    );
     put(pupils, new THREE.Mesh(ball(0.06, 12), white), s * 0.32, 0.22, 1.1);
-    put(head, new THREE.Mesh(ball(0.16, 20), cheek), s * 0.66, -0.16, 0.72, 1, 0.7, 0.35); // 볼
+    put(
+      head,
+      new THREE.Mesh(ball(0.16, 20), cheek),
+      s * 0.66,
+      -0.16,
+      0.72,
+      1,
+      0.7,
+      0.35
+    ); // 볼
   }
   put(head, new THREE.Mesh(ball(0.08, 16), dark), 0, -0.08, 1.0, 1.2, 0.8, 0.8); // 코
-  const mouth = put(head, new THREE.Mesh(ball(0.14, 20), dark), 0, -0.33, 0.93, 1.2, 0.3, 0.5);
+  const mouth = put(
+    head,
+    new THREE.Mesh(ball(0.14, 20), dark),
+    0,
+    -0.33,
+    0.93,
+    1.2,
+    0.3,
+    0.5
+  );
 
   // 프로펠러 모자 — 머리 위쪽만 덮는 구면 조각
-  const capGeo = new THREE.SphereGeometry(1.06, 40, 24, 0, Math.PI * 2, 0, 0.95);
+  const capGeo = new THREE.SphereGeometry(
+    1.06,
+    40,
+    24,
+    0,
+    Math.PI * 2,
+    0,
+    0.95
+  );
   own.push(capGeo);
   put(head, new THREE.Mesh(capGeo, cap), 0, 0.02, 0);
   const mastGeo = new THREE.CylinderGeometry(0.05, 0.07, 0.3, 12);
@@ -240,7 +305,14 @@ export function NeoCharacter({
     // 커서가 무대의 어디에 있는가 — 가운데가 0, 가장자리가 ±1. 없으면 0
     const hover = { x: 0, y: 0 };
     // 끌어서 돌린 각. 놓은 시각을 보고 «아직 사람 것»인지 판단합니다
-    const drag = { on: false, yaw: 0, pitch: 0, lastX: 0, lastY: 0, releasedAt: -Infinity };
+    const drag = {
+      on: false,
+      yaw: 0,
+      pitch: 0,
+      lastX: 0,
+      lastY: 0,
+      releasedAt: -Infinity,
+    };
 
     const onMove = (e: PointerEvent) => {
       const r = el.getBoundingClientRect();
@@ -248,7 +320,10 @@ export function NeoCharacter({
       hover.y = clamp(((e.clientY - r.top) / r.height) * 2 - 1, 1);
       if (!drag.on) return;
       drag.yaw = clamp(drag.yaw + (e.clientX - drag.lastX) * 0.012, MAX_YAW);
-      drag.pitch = clamp(drag.pitch + (e.clientY - drag.lastY) * 0.01, MAX_PITCH);
+      drag.pitch = clamp(
+        drag.pitch + (e.clientY - drag.lastY) * 0.01,
+        MAX_PITCH
+      );
       drag.lastX = e.clientX;
       drag.lastY = e.clientY;
     };
@@ -337,8 +412,18 @@ export function NeoCharacter({
       }
 
       // 눈동자는 머리보다 먼저 커서를 봅니다 — 그래서 «살아 있는» 눈이 됩니다
-      rig.pupils.position.x = damp(rig.pupils.position.x, mine ? 0 : hover.x * 0.1, 8, dt);
-      rig.pupils.position.y = damp(rig.pupils.position.y, cur.gaze - (mine ? 0 : hover.y * 0.08), 8, dt);
+      rig.pupils.position.x = damp(
+        rig.pupils.position.x,
+        mine ? 0 : hover.x * 0.1,
+        8,
+        dt
+      );
+      rig.pupils.position.y = damp(
+        rig.pupils.position.y,
+        cur.gaze - (mine ? 0 : hover.y * 0.08),
+        8,
+        dt
+      );
 
       // 입 — 말할 때만 열립니다. 움직임 줄이기면 «반쯤 연 채» 멈춥니다
       const open = speaking
@@ -384,5 +469,11 @@ export function NeoCharacter({
   }, [spec]);
 
   // `touch-none` — 끄는 동안 화면이 스크롤되지 않게
-  return <div ref={box} className={`touch-none ${className ?? ""}`} aria-hidden="true" />;
+  return (
+    <div
+      ref={box}
+      className={`touch-none ${className ?? ""}`}
+      aria-hidden="true"
+    />
+  );
 }

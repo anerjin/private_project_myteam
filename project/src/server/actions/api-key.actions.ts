@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { createApiKeySchema } from "@/features/members/api-key.schema";
 import { guard, ok, validationError, type ActionResult } from "@/lib/result";
-import { requireActor, requireAdminActor } from "@/server/auth/guards";
+import { requireActor } from "@/server/auth/guards";
 import * as apiKeyService from "@/server/services/api-key.service";
 
 /**
@@ -62,7 +62,7 @@ export async function revokeMemberApiKeysAction(
   userId: unknown
 ): Promise<ActionResult<{ revoked: number }>> {
   return guard(async () => {
-    const actor = await requireAdminActor();
+    const actor = await requireActor();
     const parsed = z.string().min(1).safeParse(userId);
     if (!parsed.success) return validationError(parsed.error);
 

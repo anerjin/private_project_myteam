@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/common/page-header";
 import { ResourceForm } from "@/features/resources/components/resource-form";
 import { getContentTypeBySlug } from "@/features/resources/content-types";
 import { AppError } from "@/lib/errors";
-import { canEditResource } from "@/server/auth/actor";
-import { requireActiveUser, toActor } from "@/server/auth/guards";
+import { requireActiveUser } from "@/server/auth/guards";
 import * as categoryService from "@/server/services/category.service";
 import * as resourceService from "@/server/services/resource.service";
 import { decodeSegment } from "@/lib/route-params";
@@ -38,19 +37,18 @@ export default async function EditResourcePage({
 
   let resource;
   try {
-    resource = await resourceService.getBySlug(
-      slug,
-      session.userId,
-      session.role
-    );
+    resource = await resourceService.getBySlug(slug, session.userId);
   } catch (e) {
     if (e instanceof AppError && e.code === "NOT_FOUND") notFound();
     throw e;
   }
   if (resource.type !== meta.code) notFound();
 
-  if (!canEditResource(await toActor(session), resource.author.id))
-    redirect("/403");
+  /*
+   * 🔄 `canEditResource(actor, resource.author.id)` 가 아니면 `/403` 으로 보냈습니다.
+   *    `DEC-077` 로 그 판정이 사라졌습니다 — **남의 자료도 고칩니다.**
+   *    남은 문은 위의 `requireActiveUser()` 이고, 실제 차단은 `resource.write` 가 합니다.
+   */
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">

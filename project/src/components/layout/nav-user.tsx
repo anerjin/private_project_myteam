@@ -24,8 +24,13 @@ export interface NavUserData {
   username: string;
   /** DB 에서 nullable 이다 (TBL-users). 없는 사람이 있다 */
   department?: string;
-  roleLabel: string;
 }
+
+/*
+ * `roleLabel` 이 여기 있었고 아이디 옆에 「@master · 관리자」로 붙었습니다.
+ * **지웠습니다** (`DEC-077`) — 모두가 같은 하나이면 그 자리는 아무도 구분하지
+ * 않으면서 자리만 차지합니다. 소속은 아래 드롭다운이 이미 보여 줍니다.
+ */
 
 /** 표현 전용. 사용자 데이터는 라우트 레이아웃에서 주입한다 (DEV-06 · 6.9절) */
 export function NavUser({ user }: { user: NavUserData }) {
@@ -48,7 +53,7 @@ export function NavUser({ user }: { user: NavUserData }) {
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
                 <span className="text-muted-foreground truncate text-xs">
-                  @{user.username} · {user.roleLabel}
+                  @{user.username}
                 </span>
               </div>
               <ChevronsUpDown className="ml-auto size-4" />

@@ -62,11 +62,9 @@ const LABEL_REVERSE: Record<RelationType, string> = {
 export function LinkedResources({
   resourceId,
   items,
-  canEdit,
 }: {
   resourceId: string;
   items: LinkedItem[];
-  canEdit: boolean;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
@@ -77,7 +75,11 @@ export function LinkedResources({
   >([]);
   const [pending, startTransition] = useTransition();
 
-  if (items.length === 0 && !canEdit) return null;
+  /*
+   * 🔄 `items.length === 0 && !canEdit` 였습니다 — 「고칠 수 없는 사람에게는
+   *    빈 카드를 안 보여준다」. `DEC-077` 로 그 판정이 사라져 **언제나 그립니다**
+   *    (빈 카드에도 「잇기」 단추가 있습니다).
+   */
 
   function search(value: string) {
     setQ(value);
@@ -129,16 +131,14 @@ export function LinkedResources({
           <Link2 className="size-4" />이 자료와 이어진 것{" "}
           {items.length > 0 && `(${items.length})`}
         </CardTitle>
-        {canEdit && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setAdding((v) => !v)}
-          >
-            <Plus className="size-4" />
-            잇기
-          </Button>
-        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setAdding((v) => !v)}
+        >
+          <Plus className="size-4" />
+          잇기
+        </Button>
       </CardHeader>
       <CardContent className="space-y-3">
         {adding && (
@@ -217,17 +217,15 @@ export function LinkedResources({
                   >
                     {it.title}
                   </Link>
-                  {canEdit && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="연결 끊기"
-                      disabled={pending}
-                      onClick={() => unlink(it.id, it.relationType)}
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="연결 끊기"
+                    disabled={pending}
+                    onClick={() => unlink(it.id, it.relationType)}
+                  >
+                    <X className="size-4" />
+                  </Button>
                 </li>
               );
             })}

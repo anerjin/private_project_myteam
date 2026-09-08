@@ -8,18 +8,19 @@ import {
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
-import { isAdmin, type Actor } from "@/server/auth/actor";
+import type { Actor } from "@/server/auth/actor";
 import * as audit from "@/server/services/audit.service";
 
 /**
  * 시스템 설정 (`system_settings`, `FR-ADM-015`).
  *
- * ## 같은 이름을 두 곳에서 읽고 있었습니다
+ * ## 같은 이름을 두 곳에서 읽으면 안 됩니다
  *
- * `auth.service.signUp` 이 `signup.enabled` 를 읽어 가입을 막고,
- * `admin/settings` **page 가 Prisma 를 직접 불러** 같은 행을 읽어 스위치를
- * 그렸습니다. 이름 문자열이 두 곳에 있으면 한쪽 오타가 「설정 없음」이 되고,
- * 그러면 화면은 꺼진 것처럼 보이는데 가입은 열려 있습니다.
+ * 전에 `signup.enabled` 가 그랬습니다 — `auth.service.signUp` 과 `admin/settings`
+ * page 가 **각자** 같은 행을 읽었고(page 는 Prisma 를 직접 불렀습니다), 이름
+ * 문자열이 두 곳에 있으니 한쪽 오타가 「설정 없음」이 됐습니다. 그 키는
+ * 가입 절차와 함께 없어졌지만(`DEC-077`) **규칙은 남습니다**: 설정을 읽는 문은
+ * 이 파일 하나입니다.
  *
  * ## 행이 있으면 DB 가 이기고, 없으면 **환경변수**입니다
  *
@@ -27,18 +28,18 @@ import * as audit from "@/server/services/audit.service";
  * 건드린 값에 대해 「DB 에 행이 없다」와 「0 으로 정했다」를 구별해야 하고,
  * 기본값을 코드에 또 적으면 세 번째 출처가 생깁니다.
  *
- * ## 「없음」의 안전한 쪽 (`DEC-040` 계열)
+ * ## 「없음」의 안전한 쪽
  *
- * `signup.enabled` 는 **행이 없으면 켜진 것**입니다(기본은 가입 허용).
- * 숫자 설정은 행이 없으면 `.env` 값입니다 — 둘 다 「설정하지 않았다」가
- * 서비스를 멈추지 않게 하는 쪽입니다.
+ * 행이 없으면 `.env` 값입니다 — 「설정하지 않았다」가 서비스를 멈추지 않게
+ * 하는 쪽입니다. 지금 남은 설정은 전부 숫자라 `SettingRow.value` 의 `boolean`
+ * 갈래는 **당장은 아무도 쓰지 않습니다.** 타입은 그대로 둡니다: 다음 스위치가
+ * 들어올 때 `SETTING_SCHEMA` 한 줄로 끝나야 하고, 좁혀 놨다가 되돌리면
+ * 화면(`system-settings.tsx`)의 Switch 분기까지 함께 되살려야 합니다.
  */
 
 /** 행이 없을 때의 값 — **여기가 아니라 `.env` 가 정합니다** */
 function fallback(key: SettingKey): boolean | number {
   switch (key) {
-    case "signup.enabled":
-      return true;
     case "upload.maxMb":
       return env.MAX_UPLOAD_MB;
     case "archive.maxMb":
@@ -98,17 +99,6 @@ export async function get<T extends boolean | number>(
   return (parsed.success ? parsed.data : fallback(key)) as T;
 }
 
-/**
- * 신규 가입을 받는가.
- *
- * **`auth.service.signUp` 과 화면이 같은 함수를 지납니다.** 전에는 page 가
- * Prisma 를 직접 불러 같은 행을 읽었습니다 — 이름 문자열이 두 곳에 있었고,
- * 화면은 `db` 를 직접 만지고 있었습니다 (`DEV-06 · 6.6` 위반).
- */
-export async function isSignupEnabled(): Promise<boolean> {
-  return get<boolean>("signup.enabled");
-}
-
 /** 첨부 파일 상한 (바이트) — `.env` 기본값 위에 DB 가 얹힌다 */
 export async function maxUploadBytes(): Promise<number> {
   return (await get<number>("upload.maxMb")) * 1024 * 1024;
@@ -125,24 +115,22 @@ export async function minFreeGb(): Promise<number> {
 }
 
 /**
- * 값 바꾸기 — **`ADMIN` 만** (`FR-ADM-015`).
+ * 값 바꾸기 (`FR-ADM-015`).
  *
- * 분류 편집은 `EDITOR` 도 하지만(`DEC-057`) 시스템 설정은 다릅니다 —
- * 가입을 막거나 업로드 상한을 0 에 가깝게 만드는 것은 **서비스 전체**에
- * 걸리는 조작입니다.
+ * 🔄 **`ADMIN` 만**이었습니다. 등급이 사라져(`DEC-077`) 그 검사가 언제나 통과가
+ *    되어 지웠습니다. 이 조작이 **서비스 전체에 걸린다**는 사실은 그대로입니다 —
+ *    업로드 상한을 0 에 가깝게 만들면 아무도 파일을 못 올립니다. 달라진 것은
+ *    그것을 할 수 있는 사람이 「관리자」에서 「로그인한 사람」이 된 것뿐이고,
+ *    지금 그 둘은 같은 집합입니다.
  *
- * 무엇이 무엇으로 바뀌었는지 감사 로그에 남깁니다 — 「어제부터 업로드가
- * 안 된다」의 답이 여기 있어야 합니다.
+ * 그래서 **감사 로그가 더 중요해집니다** — 무엇이 무엇으로 바뀌었는지 남깁니다.
+ * 「어제부터 업로드가 안 된다」의 답이 여기 있어야 합니다.
  */
 export async function set(
   actor: Actor,
   key: SettingKey,
   value: unknown
 ): Promise<void> {
-  if (!isAdmin(actor)) {
-    throw new AppError("FORBIDDEN", "시스템 설정은 관리자만 바꿀 수 있습니다.");
-  }
-
   const parsed = SETTING_SCHEMA[key].safeParse(value);
   if (!parsed.success) {
     throw new AppError(

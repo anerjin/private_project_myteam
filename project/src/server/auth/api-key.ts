@@ -24,10 +24,12 @@ import { effectiveScopes } from "@/server/services/api-key.service";
  * 매 요청 «판정»합니다.** 폐기하면 `SUSPENDED → ACTIVE` 로 돌아왔을 때 되살릴 수
  * 없고(`REQ-02 · 2.3`), 무효화 호출을 빠뜨리면 조용히 뚫립니다.
  *
- * ## 권한은 **지금** 역할로 계산합니다
+ * ## 권한은 **키의 스코프**입니다 (`DEC-077`)
  *
- * 실제 권한 = `키 스코프 ∩ 지금 역할이 가질 수 있는 것`. 키에 역할 사본을 두지
- * 않으므로 강등이 즉시 반영되고, 승격하면 키가 그대로 다시 넓어집니다.
+ * 사람의 등급이 사라진 뒤 이 키가 무엇을 하는지는 **오직 스코프**가 정합니다 —
+ * 헤르메스에게 「읽기만」, 오픈클로에게 「쓰기까지」를 다르게 줄 수 있는 자리가
+ * 여기 하나입니다. `effectiveScopes` 는 DB 에 적힌 문자열을 **지금 있는 목록**으로
+ * 거릅니다: 옛 키에 남은 없어진 스코프가 되살아나지 않게 하는 것이 그 일입니다.
  *
  * ## 여기 없는 것 (`P7`)
  *
@@ -74,7 +76,7 @@ export async function verifyKey(raw: string): Promise<VerifiedKey> {
       expiresAt: true,
       lastUsedAt: true,
       user: {
-        select: { id: true, username: true, role: true, status: true },
+        select: { id: true, username: true, status: true },
       },
     },
   });
@@ -86,7 +88,6 @@ export async function verifyKey(raw: string): Promise<VerifiedKey> {
   }
   /*
    * **소유자 상태가 세 번째 조건입니다** (`NFR-SEC-017`).
-   * `PENDING` 도 막습니다 — 승인 전에는 서비스를 쓸 수 없고(`DEC-040`),
    * 웹에서 못 하는 일을 키로 할 수 있으면 `NFR-SEC-018`(같은 인가 계층)이 깨집니다.
    */
   if (key.user.status !== "ACTIVE") {
@@ -102,19 +103,18 @@ export async function verifyKey(raw: string): Promise<VerifiedKey> {
     actor: {
       id: key.user.id,
       username: key.user.username,
-      role: key.user.role,
       via: "MCP",
       apiKeyId: key.id,
     },
-    // **발급 시점이 아니라 지금** 역할로 계산한다 (DEC-037)
-    scopes: effectiveScopes(key.scopes, key.user.role),
+    // **키에 적힌 것을 그대로 믿지 않는다** — 지금 있는 스코프만 (DEC-037·DEC-077)
+    scopes: effectiveScopes(key.scopes),
   };
 }
 
 /**
  * 이 요청이 해당 스코프를 가졌는지. 없으면 `SCOPE_INSUFFICIENT`.
  *
- * `verifyKey` 가 이미 «지금 역할»로 교집합을 냈으므로, 여기서 역할을 다시 보지
+ * `verifyKey` 가 이미 «지금 있는 목록»으로 걸렀으므로 여기서 다시 거르지
  * 않습니다 — 규칙이 두 곳에 생깁니다.
  */
 export function assertScope(verified: VerifiedKey, scope: Scope): void {

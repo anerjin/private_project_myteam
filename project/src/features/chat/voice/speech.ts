@@ -237,20 +237,22 @@ export function synthesisSupported(): boolean {
  * 굵게 별표 별표」가 됩니다.
  */
 export function speakable(markdown: string): string {
-  return markdown
-    .replace(/```[\s\S]*?```/g, " 코드 생략 ")
-    .replace(/`([^`]*)`/g, "$1")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/^\s*(?:[-*+]|\d+\.)\s+/gm, "")
-    .replace(/^\s*>\s?/gm, "")
-    // 표의 구분줄 `| --- | --- |` — 읽으면 「대시 대시 대시」입니다
-    .replace(/^\s*\|?[\s|:-]*-{2,}[\s|:-]*$/gm, "")
-    .replace(/\|/g, " ")
-    .replace(/[*_~]{1,3}/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return (
+    markdown
+      .replace(/```[\s\S]*?```/g, " 코드 생략 ")
+      .replace(/`([^`]*)`/g, "$1")
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/^\s*(?:[-*+]|\d+\.)\s+/gm, "")
+      .replace(/^\s*>\s?/gm, "")
+      // 표의 구분줄 `| --- | --- |` — 읽으면 「대시 대시 대시」입니다
+      .replace(/^\s*\|?[\s|:-]*-{2,}[\s|:-]*$/gm, "")
+      .replace(/\|/g, " ")
+      .replace(/[*_~]{1,3}/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 /**
@@ -277,7 +279,9 @@ function chunks(text: string): string[] {
 function koreanVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis.getVoices();
   return (
-    voices.find((v) => v.lang.toLowerCase().startsWith("ko") && v.localService) ??
+    voices.find(
+      (v) => v.lang.toLowerCase().startsWith("ko") && v.localService
+    ) ??
     voices.find((v) => v.lang.toLowerCase().startsWith("ko")) ??
     null
   );
@@ -288,7 +292,10 @@ export interface SpeakHandle {
 }
 
 /** 브라우저 내장 목소리 — 서버 목소리가 없거나 실패했을 때의 뒷길 */
-function speakViaBrowser(parts: string[], onEnd: () => void): SpeakHandle | null {
+function speakViaBrowser(
+  parts: string[],
+  onEnd: () => void
+): SpeakHandle | null {
   if (!synthesisSupported()) return null;
   const synth = window.speechSynthesis;
   // 앞의 말이 남아 있으면 겹칩니다

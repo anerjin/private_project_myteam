@@ -18,21 +18,31 @@ import { fileURLToPath } from "node:url";
 
 const APP = fileURLToPath(new URL("../src/app/", import.meta.url));
 
-/** 라우트 그룹별로 요구하는 가드 */
+/**
+ * 라우트 그룹별로 요구하는 가드.
+ *
+ * 🔄 `(admin)` 은 `requireRole("ADMIN")` 을 요구했습니다. `DEC-077` 로 사람의
+ *    등급이 사라져 두 그룹이 **같은 가드**를 요구합니다 — 두 그룹을 가르는 것은
+ *    이제 권한이 아니라 셸입니다.
+ *
+ *    표를 한 줄로 합치지 않은 이유: 이 검사가 지키는 것은 「그룹마다 무엇을
+ *    요구하는가」이고, 지금 두 값이 같은 것은 **우연이 아니라 오늘의 사실**입니다.
+ *    한 줄로 접으면 다시 갈라야 할 날 그룹별 표를 새로 만들게 됩니다.
+ */
 const REQUIRED = [
-  { group: "(service)", guards: ["requireActiveUser", "requireRole"] },
-  { group: "(admin)", guards: ["requireRole"] },
+  { group: "(service)", guards: ["requireActiveUser"] },
+  { group: "(admin)", guards: ["requireActiveUser"] },
 ];
 
 /**
  * 공개 화면은 제외한다. `(public)` 그룹과 오류 화면은 로그인 없이 보여야 한다.
  * `change-password` 는 `(public)` 에 있지만 **로그인은 되어 있어야** 하므로
  * 별도로 확인한다 (아래 SPECIAL).
+ *
+ * `pending` 이 여기 있었다. 가입 승인 절차와 함께 화면이 사라졌다 (`DEC-077`).
  */
 const SPECIAL = {
   "(public)/change-password/page.tsx": ["getSession", "requireActiveUser"],
-  // PENDING 은 유효한 세션이지만 서비스에 못 들어온다 (DEC-040)
-  "(public)/pending/page.tsx": ["requirePendingUser"],
 };
 
 function pages(dir, base = "", out = []) {

@@ -15,7 +15,6 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -106,9 +105,6 @@ export function AppSidebar({
                         <span>{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
-                    {item.badge ? (
-                      <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
-                    ) : null}
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
@@ -129,9 +125,6 @@ export function AppSidebar({
                         <span>{adminEntry.title}</span>
                       </Link>
                     </SidebarMenuButton>
-                    {adminEntry.badge ? (
-                      <SidebarMenuBadge>{adminEntry.badge}</SidebarMenuBadge>
-                    ) : null}
                   </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>

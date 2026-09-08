@@ -34,7 +34,17 @@ import { db } from "@/lib/db";
 const APPLY = process.argv.includes("--apply");
 
 /** 검증 스크립트가 만드는 계정의 접두사 — 각 `verify-*.ts` 의 `mkUser` 와 같은 것 */
-const TEST_PREFIXES = ["vp3_", "vp4_", "vp5_", "vp6_", "vp7_", "vp7m_", "vp8_", "vempty_", "probe_"];
+const TEST_PREFIXES = [
+  "vp3_",
+  "vp4_",
+  "vp5_",
+  "vp6_",
+  "vp7_",
+  "vp7m_",
+  "vp8_",
+  "vempty_",
+  "probe_",
+];
 
 /** 개발용 가짜 사람 — 시드가 `SEED_DEV_USERS=true` 일 때만 만든다 */
 const DEV_USERNAMES = ["minsu", "seoyeon"];
@@ -83,12 +93,12 @@ async function main() {
          * 사라지면 안 됩니다.
          */
         const keeper = await db.user.findFirst({
-          where: { role: "ADMIN", status: "ACTIVE", username: { notIn: DEV_USERNAMES } },
+          where: { status: "ACTIVE", username: { notIn: DEV_USERNAMES } },
           select: { id: true },
         });
         if (!keeper) {
           throw new Error(
-            "옮겨 둘 ADMIN 계정이 없습니다. 개발용 계정을 지우면 자료가 고아가 됩니다."
+            "옮겨 둘 계정이 없습니다. 개발용 계정을 지우면 자료가 고아가 됩니다."
           );
         }
         await db.resource.updateMany({
@@ -110,7 +120,8 @@ async function main() {
     plans.push({
       label: "작업 기록",
       count: jobs,
-      detail: "전부 검증이 만든 것. 스케줄의 «마지막 실행»도 함께 사라져 다음 실행이 밀린 것으로 잡힙니다",
+      detail:
+        "전부 검증이 만든 것. 스케줄의 «마지막 실행»도 함께 사라져 다음 실행이 밀린 것으로 잡힙니다",
       run: async () => {
         await db.job.deleteMany({});
       },
@@ -123,7 +134,8 @@ async function main() {
     plans.push({
       label: "감사 로그",
       count: audit,
-      detail: "오픈 전이라 전부 검증 기록입니다. **오픈 뒤에는 이 스크립트를 쓰지 마십시오** — 보존 1년은 배치가 지킵니다",
+      detail:
+        "오픈 전이라 전부 검증 기록입니다. **오픈 뒤에는 이 스크립트를 쓰지 마십시오** — 보존 1년은 배치가 지킵니다",
       run: async () => {
         await db.auditLog.deleteMany({});
       },
@@ -152,7 +164,9 @@ async function main() {
       count: orphanKeys.length,
       detail: orphanKeys.join(", "),
       run: async () => {
-        await db.systemSetting.deleteMany({ where: { key: { in: orphanKeys } } });
+        await db.systemSetting.deleteMany({
+          where: { key: { in: orphanKeys } },
+        });
       },
     });
   }
@@ -191,7 +205,9 @@ async function main() {
   }
 
   /* ── 보고 ───────────────────────────────────────────────────────── */
-  console.log(APPLY ? "목업 데이터를 지웁니다\n" : "미리보기 — 아무것도 지우지 않습니다\n");
+  console.log(
+    APPLY ? "목업 데이터를 지웁니다\n" : "미리보기 — 아무것도 지우지 않습니다\n"
+  );
 
   if (plans.length === 0) {
     console.log("  지울 것이 없습니다.");
@@ -220,13 +236,15 @@ async function main() {
    * **마지막에 다시 셉니다.** 「지웠다」가 아니라 **「지금 어떤가」**를
    * 보여줍니다 — 지우는 도중에 무언가 막혔어도 숫자가 말해 줍니다.
    */
-  const admins = await db.user.count({ where: { role: "ADMIN", status: "ACTIVE" } });
-  if (admins === 0) {
+  const active = await db.user.count({ where: { status: "ACTIVE" } });
+  if (active === 0) {
     throw new Error(
-      "활성 관리자가 0명이 됐습니다. 시드로 관리자를 다시 만드십시오: npx prisma db seed"
+      "활성 계정이 0개가 됐습니다. 시드로 관리자를 다시 만드십시오: npx prisma db seed"
     );
   }
-  console.log(`\n끝. 활성 관리자 ${admins}명 · ${JSON.stringify(await keepSummary())}`);
+  console.log(
+    `\n끝. 활성 계정 ${active}개 · ${JSON.stringify(await keepSummary())}`
+  );
 
   await db.$disconnect();
   process.exit(0);
@@ -264,7 +282,12 @@ async function keepSummary(): Promise<Record<string, number>> {
     db.category.count(),
     db.contentTypeSetting.count(),
   ]);
-  return { 계정: users, 자료: resources, 카테고리: categories, 타입설정: types };
+  return {
+    계정: users,
+    자료: resources,
+    카테고리: categories,
+    타입설정: types,
+  };
 }
 
 main().catch(async (e) => {

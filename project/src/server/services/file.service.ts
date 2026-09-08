@@ -5,7 +5,7 @@ import { getDiskStatus } from "@/lib/disk";
 import { AppError } from "@/lib/errors";
 import { extensionOf, verify } from "@/lib/file-type";
 import * as storage from "@/lib/storage";
-import { canEditResource, type Actor } from "@/server/auth/actor";
+import type { Actor } from "@/server/auth/actor";
 import * as audit from "@/server/services/audit.service";
 import * as settingsService from "@/server/services/settings.service";
 
@@ -49,9 +49,10 @@ export async function attach(
     select: { id: true, authorId: true, title: true },
   });
   if (!target) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
-  if (!canEditResource(actor, target.authorId)) {
-    throw new AppError("FORBIDDEN", "이 자료에 첨부할 권한이 없습니다.");
-  }
+  /*
+   * 🔄 `canEditResource(actor, target.authorId)` 가 여기 있었습니다 —
+   *    「작성자 또는 `EDITOR` 이상」. `DEC-077` 로 통째로 참이 되어 지웠습니다.
+   */
 
   /*
    * **상한과 임계치를 설정에서 읽습니다** (`FR-ADM-015`). 전에는 `.env` 상수라
@@ -169,16 +170,18 @@ export async function listFor(resourceId: string): Promise<Attachment[]> {
   }));
 }
 
-/**
- * 초안을 볼 수 있는 범위 — `resource.service.getBySlug` 와 **같은 규칙**입니다.
- * 작성자와 `EDITOR` 이상만 보고, 나머지는 게시된 것만 봅니다.
+/*
+ * `draftScope(viewer)` 가 여기 있었습니다 — 「작성자와 `EDITOR` 이상은 초안도,
+ * 나머지는 게시된 것만」. **지웠습니다** (`DEC-077`).
+ *
+ * `resource.service.getBySlug` 와 **같은 규칙**이라는 점은 그대로입니다:
+ * 그쪽도 이제 「로그인했는가」 하나를 봅니다. 이 경로(`forDownload`·`github.service`)는
+ * `Actor` 가 있어야만 들어오므로 **그 조건이 이미 충족돼 있고**, 조건을 더 걸 것이
+ * 없어서 `where` 에서 통째로 빠졌습니다.
+ *
+ * ⚠️ 첨부 파일이 **로그인 없이** 나가는 길은 여전히 없어야 합니다 — 그것을 지키는
+ *    것은 이 함수가 아니라 `forDownload` 가 `Actor` 를 요구한다는 사실입니다.
  */
-export function draftScope(viewer: Actor) {
-  if (viewer.role === "EDITOR" || viewer.role === "ADMIN") return {};
-  return {
-    OR: [{ status: "PUBLISHED" as const }, { authorId: viewer.id }],
-  };
-}
 
 export interface Downloadable {
   storageKey: string;
@@ -190,28 +193,23 @@ export interface Downloadable {
 /**
  * 내려받을 수 있는가 (`NFR-SEC-021`).
  *
- * **로그인·권한을 거친 요청만** 파일을 받습니다. `public/` 에 두지 않는
- * 이유이고, 그래서 이 함수가 라우트의 유일한 관문입니다.
+ * **로그인을 거친 요청만** 파일을 받습니다. `public/` 에 두지 않는 이유이고,
+ * 그 판정은 **라우트**(`/api/files/[id]`)의 `requireActor()` 가 합니다.
  *
- * 자료는 승인 회원 전원이 봅니다(`DEC-018`). 그래서 「이 파일이 살아 있는
+ * 🔄 `viewer: Actor` 를 받아 초안 범위(`draftScope`)를 걸었습니다. `DEC-077` 로
+ *    그 범위가 없어져 **인자가 쓰이지 않게 되어 지웠습니다.** 「로그인해야 부른다」는
+ *    보증을 타입으로 들고 있던 자리라, 그것이 이제 라우트 한 줄에만 있습니다 —
+ *    ⚠️ `requireActor()` 를 그 라우트에서 빼면 첨부가 로그인 없이 나갑니다.
+ *
+ * 자료는 로그인한 사람 전원이 봅니다(`DEC-018`). 그래서 「이 파일이 살아 있는
  * 자료에 붙어 있는가」만 봅니다 — 지운 자료의 첨부는 안 나갑니다.
  */
-export async function forDownload(
-  fileId: string,
-  viewer: Actor
-): Promise<Downloadable> {
+export async function forDownload(fileId: string): Promise<Downloadable> {
   const link = await db.resourceFile.findFirst({
     where: {
       fileId,
       resource: {
         deletedAt: null,
-        /*
-         * **초안의 첨부는 새면 안 됩니다.** 자료 자체는 `getBySlug` 가
-         * 「작성자·`EDITOR` 이상만」으로 막는데(`P4` 의 M3), 파일 경로는
-         * `deletedAt: null` 만 보고 있었습니다 — 지금은 전부 `PUBLISHED` 라
-         * 무해하지만 **`P7` 의 CLI 가 초안으로 밀어 넣는 순간 열립니다.**
-         */
-        ...draftScope(viewer),
       },
     },
     select: {
@@ -251,9 +249,7 @@ export async function detach(actor: Actor, fileId: string): Promise<void> {
     },
   });
   if (!link) throw new AppError("NOT_FOUND", "첨부를 찾을 수 없습니다.");
-  if (!canEditResource(actor, link.resource.authorId)) {
-    throw new AppError("FORBIDDEN", "이 첨부를 지울 권한이 없습니다.");
-  }
+  /* 🔄 `canEditResource` 판정이 여기 있었습니다 (`DEC-077` 로 지움 — 위 `attach` 참고) */
 
   const orphan = await db.$transaction(async (tx) => {
     /*

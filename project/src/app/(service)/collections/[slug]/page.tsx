@@ -8,7 +8,7 @@ import { EditCollectionButtons } from "@/features/collections/components/collect
 import { getContentType } from "@/features/resources/content-types";
 import { AppError } from "@/lib/errors";
 import { decodeSegment } from "@/lib/route-params";
-import { requireActiveUser, toActor } from "@/server/auth/guards";
+import { requireActiveUser } from "@/server/auth/guards";
 import * as collectionService from "@/server/services/collection.service";
 
 /*
@@ -33,34 +33,28 @@ export async function generateMetadata({
  * 여기에는 읽기 경로만 있었습니다 — 담기·빼기·순서가 없어서 버튼도 두지
  * 않았고, 그게 그때는 정직했습니다 (`DEC-045`).
  *
- * ## 「고칠 수 있는가」는 **서버가** 판정합니다
+ * ## 「고칠 수 있는가」가 없어졌습니다 (`DEC-077`)
  *
- * 본인 + `EDITOR` 이상입니다 (`REQ-02 · 2.5`). 읽기 판정과 같은 규칙이고,
- * 화면은 그 결과를 받아 버튼을 그릴지만 정합니다 — 실제 차단은 액션이
- * 지나는 service 가 다시 합니다.
+ * 🔄 「본인 + `EDITOR` 이상」이었고 그 값을 `CollectionItems` 에 넘겼습니다.
+ *    등급이 사라져 판정이 통째로 참이 됐습니다 — 읽기 판정(`collection.service`)과
+ *    **같은 규칙**이라는 점은 그대로이고, 그쪽도 함께 접혔습니다.
  */
 export default async function CollectionDetailPage({
   params,
 }: PageProps<"/collections/[slug]">) {
-  const session = await requireActiveUser();
+  // 반환값은 안 씁니다 — 「들어와도 되는가」만 묻습니다 (`DEC-035`)
+  await requireActiveUser();
   const { slug: rawSlug } = await params;
   const slug = decodeSegment(rawSlug);
-  const actor = await toActor(session);
 
   let data;
   try {
-    data = await collectionService.getBySlug(slug, actor);
+    data = await collectionService.getBySlug(slug);
   } catch (e) {
     if (e instanceof AppError && e.code === "NOT_FOUND") notFound();
     throw e;
   }
   const { collection, items } = data;
-
-  // 읽기 판정과 **같은 규칙** — 본인 또는 `EDITOR` 이상
-  const canEdit =
-    collection.owner.id === session.userId ||
-    session.role === "EDITOR" ||
-    session.role === "ADMIN";
 
   return (
     <>
@@ -68,16 +62,14 @@ export default async function CollectionDetailPage({
         description={collection.description}
         count={items.length}
         action={
-          canEdit ? (
-            <EditCollectionButtons
-              collection={{
-                slug: collection.slug,
-                name: collection.name,
-                description: collection.description,
-                visibility: collection.visibility,
-              }}
-            />
-          ) : undefined
+          <EditCollectionButtons
+            collection={{
+              slug: collection.slug,
+              name: collection.name,
+              description: collection.description,
+              visibility: collection.visibility,
+            }}
+          />
         }
       />
 
@@ -99,7 +91,6 @@ export default async function CollectionDetailPage({
 
       <CollectionItems
         slug={collection.slug}
-        canEdit={canEdit}
         items={items.map((r) => {
           /*
            * 주소 세그먼트·라벨·색은 **레지스트리가 압니다.** 클라이언트가

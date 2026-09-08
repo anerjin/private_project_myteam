@@ -18,7 +18,6 @@ import path from "node:path";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/server/auth/password";
 import * as apiKeyService from "@/server/services/api-key.service";
-import type { Role } from "@/types";
 
 const SERVER = path.join(
   process.cwd(),
@@ -41,14 +40,13 @@ function check(label: string, ok: boolean, detail = "") {
 const madeUsers: string[] = [];
 const madeResources: string[] = [];
 
-async function mkUser(tag: string, role: Role) {
+async function mkUser(tag: string) {
   const u = await db.user.create({
     data: {
       username: `vp7m_${tag}_${randomBytes(4).toString("hex")}`,
       passwordHash: await hashPassword("Verify!12345"),
       name: `P7MCP-${tag}`,
       status: "ACTIVE",
-      role,
     },
     select: { id: true, username: true },
   });
@@ -163,9 +161,9 @@ function parse(res: ToolResult): unknown {
 }
 
 async function run() {
-  const author = await mkUser("author", "EDITOR");
+  const author = await mkUser("author");
   const issued = await apiKeyService.issue(
-    { id: author.id, username: author.username, role: "EDITOR", via: "WEB" },
+    { id: author.id, username: author.username, via: "WEB" },
     "P7 MCP 검증",
     ["resources:read", "resources:write", "archive:run"]
   );
@@ -272,7 +270,9 @@ async function run() {
         detail?.sourceName === "Example",
         detail?.sourceName ?? ""
       );
-      const tags = await db.resourceTag.count({ where: { resourceId: data.id } });
+      const tags = await db.resourceTag.count({
+        where: { resourceId: data.id },
+      });
       check("배열로 준 태그가 두 개 붙는다", tags === 2, `${tags}개`);
     }
 
@@ -283,7 +283,10 @@ async function run() {
       });
       const d = parse(dup) as { duplicate: { id: string } | null };
       check("중복 확인은 오류가 아니다", !dup.isError);
-      check("추적 파라미터를 걷고 같은 것으로 본다", d.duplicate?.id === createdId);
+      check(
+        "추적 파라미터를 걷고 같은 것으로 본다",
+        d.duplicate?.id === createdId
+      );
 
       const again = await callTool(rpc, "nwwork_create_resource", {
         type: "AI_MATERIAL",
@@ -293,7 +296,10 @@ async function run() {
       });
       check("등록은 isError 로 거절된다", again.isError === true);
       const text = again.content?.[0]?.text ?? "";
-      check("무엇과 겹쳤는지 문구로 말한다", text.includes("MCP 로 등록한 자료"));
+      check(
+        "무엇과 겹쳤는지 문구로 말한다",
+        text.includes("MCP 로 등록한 자료")
+      );
       /*
        * **문구뿐 아니라 «자료»가 실려 옵니다** — 에이전트가 문장을 파싱하지
        * 않고도 건너뛸지 보강할지 정할 수 있어야 합니다.
@@ -313,7 +319,11 @@ async function run() {
       });
       check("isError 다", res.isError === true);
       const text = res.content?.[0]?.text ?? "";
-      check("어느 칸이 문제인지 말한다", text.includes("skillName"), text.slice(0, 90));
+      check(
+        "어느 칸이 문제인지 말한다",
+        text.includes("skillName"),
+        text.slice(0, 90)
+      );
     }
 
     console.log("\n★ 보강 — 보낸 칸만 바뀐다 (FR-CLI-006)");
@@ -337,8 +347,14 @@ async function run() {
         results: { id: string; url: string }[];
         searchTruncated?: boolean;
       };
-      check("찾힌다", d.results.some((r) => r.id === createdId));
-      check("Neowave Work 안의 주소를 함께 준다", d.results[0]?.url?.startsWith("http") === true);
+      check(
+        "찾힌다",
+        d.results.some((r) => r.id === createdId)
+      );
+      check(
+        "Neowave Work 안의 주소를 함께 준다",
+        d.results[0]?.url?.startsWith("http") === true
+      );
       /*
        * **`meta` 를 버리지 않습니다** (`DEC-048`). 봉투를 벗겨 `data` 만 주면
        * 「없다」와 「안 보여준다」의 구별이 조용히 사라집니다.
@@ -351,7 +367,10 @@ async function run() {
 
       const tax = await callTool(rpc, "nwwork_list_taxonomy", {});
       const t = parse(tax) as { categories: unknown[] };
-      check("분류가 온다", Array.isArray(t.categories) && t.categories.length > 0);
+      check(
+        "분류가 온다",
+        Array.isArray(t.categories) && t.categories.length > 0
+      );
     }
 
     console.log("\n★ 아카이브는 GitHub 자료에만 (FR-CLI-008)");
@@ -385,12 +404,12 @@ async function run() {
   console.log("\n★ 폐기한 키로는 즉시 실패한다 (M3 DoD)");
   {
     const disposable = await apiKeyService.issue(
-      { id: author.id, username: author.username, role: "EDITOR", via: "WEB" },
+      { id: author.id, username: author.username, via: "WEB" },
       "곧 폐기할 키",
       ["resources:read"]
     );
     await apiKeyService.revoke(
-      { id: author.id, username: author.username, role: "EDITOR", via: "WEB" },
+      { id: author.id, username: author.username, via: "WEB" },
       disposable.id
     );
 

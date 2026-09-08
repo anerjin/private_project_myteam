@@ -14,16 +14,27 @@
  */
 
 export const AUDIT_ACTIONS = [
+  /*
+   * **여기부터 둘은 «역사 전용» 입니다** (`DEC-077`).
+   *
+   * 가입 신청·승인을 걷어내서 **이 둘을 «만드는» 코드는 없습니다.** 그런데도
+   * 남기는 이유는 `audit_logs` 에 실제 행이 있기 때문입니다 — 실측 시점에
+   * `USER_SIGNUP` 12행, `USER_APPROVE` 4행. 목록에서 빼면 그 행들이 필터
+   * 드롭다운에서 사라지고 라벨 대신 대문자 코드가 뜹니다.
+   *
+   * **기록을 지우는 것은 기록을 고치는 것입니다.** 감사 로그는 「그때 실제로
+   * 있었던 일」이고, 기능이 없어졌다고 과거가 없어지지 않습니다.
+   *
+   * 반대로 `USER_REJECT`·`USER_REOPEN` 은 **뺐습니다** — 그 둘은 실제로 한 번도
+   * 일어난 적이 없어(0행) 남길 역사가 없습니다.
+   */
   "USER_SIGNUP",
+  "USER_APPROVE",
   "USER_SIGNIN",
   "USER_SIGNIN_FAILED",
   /** 비밀번호는 맞았지만 계정 상태로 막힌 경우 — 자격 증명 유출 신호 */
   "USER_SIGNIN_BLOCKED",
   "USER_SIGNOUT",
-  "USER_APPROVE",
-  "USER_REJECT",
-  /** 거부를 되돌려 재검토 대기로 (`DEC-042`) */
-  "USER_REOPEN",
   "USER_SUSPEND",
   "USER_REACTIVATE",
   "USER_ROLE_CHANGE",
@@ -100,14 +111,13 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number];
  * 못 고릅니다.
  */
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
+  // 역사 전용 — 만드는 코드는 없습니다 (`DEC-077`, 위 배열 주석)
   USER_SIGNUP: "가입 신청",
+  USER_APPROVE: "가입 승인",
   USER_SIGNIN: "로그인",
   USER_SIGNIN_FAILED: "로그인 실패",
   USER_SIGNIN_BLOCKED: "로그인 차단",
   USER_SIGNOUT: "로그아웃",
-  USER_APPROVE: "가입 승인",
-  USER_REJECT: "가입 거부",
-  USER_REOPEN: "재검토",
   USER_SUSPEND: "정지",
   USER_REACTIVATE: "정지 해제",
   USER_ROLE_CHANGE: "역할 변경",

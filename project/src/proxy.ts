@@ -22,13 +22,7 @@ import { sessionCookieName } from "@/lib/session-cookie";
  */
 
 /** 로그인하지 않아도 되는 경로 */
-const PUBLIC_PATHS = [
-  "/login",
-  "/signup",
-  "/pending",
-  "/change-password",
-  "/403",
-];
+const PUBLIC_PATHS = ["/login", "/change-password", "/403"];
 
 function isPublic(pathname: string): boolean {
   if (pathname === "/") return true;
@@ -52,7 +46,7 @@ const isDev = process.env.NODE_ENV === "development";
  *
  * 대가는 **정적 렌더 포기**입니다. Next 는 요청 헤더의 nonce 를 보고 스크립트
  * 태그에 심으므로 빌드 시점에 만들 수 없습니다. 이 앱은 빌드 결과가 이미
- * 거의 전부 `ƒ`(동적)이고 잃는 것은 `/signup`·`/signup/complete` 둘뿐입니다.
+ * 거의 전부 `ƒ`(동적)이라 잃을 정적 페이지가 남아 있지 않습니다.
  * CDN 도 없습니다 (개발 PC 한 대, `DEC-017`).
  *
  * ## `upgrade-insecure-requests` 를 «일부러» 뺐습니다

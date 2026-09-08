@@ -18,9 +18,10 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> }
 ): Promise<Response> {
   try {
-    const actor = await requireActor();
+    // ⚠️ 로그인 판정이 이 한 줄에만 있습니다 (`DEC-077` — `/api/files/[id]` 머리말)
+    await requireActor();
     const { id } = await ctx.params;
-    const archive = await githubService.archiveForDownload(id, actor);
+    const archive = await githubService.archiveForDownload(id);
     /*
      * **형식을 여기서 정하지 않습니다.**
      *

@@ -2,7 +2,7 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { canEditResource, type Actor } from "@/server/auth/actor";
+import type { Actor } from "@/server/auth/actor";
 import * as audit from "@/server/services/audit.service";
 import type { RelationType, ResourceType } from "@/types";
 
@@ -122,7 +122,9 @@ export async function searchTargets(
       deletedAt: null,
       status: "PUBLISHED",
       id: { notIn: [...exclude] },
-      ...(q.trim() ? { title: { contains: q.trim(), mode: "insensitive" } } : {}),
+      ...(q.trim()
+        ? { title: { contains: q.trim(), mode: "insensitive" } }
+        : {}),
     },
     select: { id: true, title: true, type: true },
     orderBy: { createdAt: "desc" },
@@ -162,9 +164,7 @@ export async function link(
     }),
   ]);
   if (!from || !to) throw new AppError("NOT_FOUND", "자료를 찾을 수 없습니다.");
-  if (!canEditResource(actor, from.authorId)) {
-    throw new AppError("FORBIDDEN", "이 자료를 수정할 권한이 없습니다.");
-  }
+  /* 🔄 `canEditResource(actor, from.authorId)` 판정이 있었습니다 (`DEC-077` 로 지움) */
 
   /*
    * **이미 이어져 있으면 조용히 넘어갑니다.** 두 사람이 같은 연결을 만드는 것은
@@ -220,12 +220,10 @@ export async function unlink(
   if (!row) throw new AppError("NOT_FOUND", "연결을 찾을 수 없습니다.");
 
   /*
-   * **만든 쪽 자료의 소유권**을 봅니다. 반대쪽에서 끊으려는 사람이 그 자료를
-   * 못 고치면 거부합니다 — 안 그러면 남의 자료에 붙은 연결을 아무나 끊습니다.
+   * 🔄 **만든 쪽 자료의 소유권**을 봤습니다 — 「반대쪽에서 끊으려는 사람이 그
+   *    자료를 못 고치면 거부한다」. `DEC-077` 로 자료 편집 판정 자체가 사라져
+   *    이 검사도 함께 사라졌습니다. `row.from` 은 아래 감사 로그가 계속 씁니다.
    */
-  if (!canEditResource(actor, row.from.authorId)) {
-    throw new AppError("FORBIDDEN", "이 연결을 끊을 권한이 없습니다.");
-  }
 
   await db.$transaction(async (tx) => {
     await tx.resourceRelation.delete({ where: { id: row.id } });

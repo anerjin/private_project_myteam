@@ -266,8 +266,8 @@ export function countTrashed(): Promise<number> {
 /**
  * 상세 — 타입별 상세 테이블을 함께 읽는다 (REQ-04 · 4.4).
  *
- * **`status` 는 여기서 거르지 않습니다.** 초안은 「작성자와 `EDITOR` 이상은 본다」라
- * 역할을 알아야 판정할 수 있고, 그건 service 의 일입니다 (`DEV-06 · 6.6`).
+ * **`status` 는 여기서 거르지 않습니다.** 초안을 누가 보는지는 «보는 사람»을
+ * 알아야 판정할 수 있고, 그건 service 의 일입니다 (`DEV-06 · 6.6`).
  * 그래서 `status` 를 **선택해서 올려 보냅니다** — 전에는 select 에도 없어서
  * mapper 가 `"PUBLISHED"` 를 박아 넣고 있었습니다.
  */

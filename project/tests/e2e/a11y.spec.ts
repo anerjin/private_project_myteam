@@ -56,7 +56,10 @@ async function scan(page: Page, label: string) {
     );
     console.log(`\n✗ ${label}\n${lines.join("\n")}`);
   }
-  expect(violations, `${label}: ${violations.map((v) => v.id).join(", ")}`).toEqual([]);
+  expect(
+    violations,
+    `${label}: ${violations.map((v) => v.id).join(", ")}`
+  ).toEqual([]);
 
   /*
    * **「위반 0건」이 증거가 되려면 axe 가 뭔가를 «보긴» 했어야 합니다**
@@ -66,15 +69,19 @@ async function scan(page: Page, label: string) {
    * 「접근성이 좋다」가 아니라 **「아무것도 안 봤다」**를 말하고 있습니다.
    * 통과한 규칙 수를 함께 봅니다.
    */
-  expect(passes.length, `${label}: axe 가 아무 규칙도 못 봤습니다`).toBeGreaterThan(5);
+  expect(
+    passes.length,
+    `${label}: axe 가 아무 규칙도 못 봤습니다`
+  ).toBeGreaterThan(5);
 }
 
 /* ── 비로그인 화면 ──────────────────────────────────────────────── */
 
-for (const [label, path] of [
-  ["로그인", "/login"],
-  ["가입 신청", "/signup"],
-] as const) {
+/*
+ * **가입 신청 화면이 있었습니다.** 절차와 함께 사라졌습니다 (`DEC-077`) —
+ * 비로그인으로 볼 수 있는 화면은 이제 로그인 하나입니다.
+ */
+for (const [label, path] of [["로그인", "/login"]] as const) {
   for (const scheme of ["light", "dark"] as const) {
     test(`${label} (${scheme})`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: scheme });
@@ -95,7 +102,7 @@ for (const scheme of ["light", "dark"] as const) {
 }
 
 async function runLoggedInScan(page: Page, scheme: string) {
-  const user = await makeUser({ tag: `a11y${scheme}`, role: "ADMIN" });
+  const user = await makeUser({ tag: `a11y${scheme}` });
   await signIn(page, user.username);
 
   /*
@@ -145,7 +152,7 @@ async function runLoggedInScan(page: Page, scheme: string) {
 /* ── 키보드 (NFR-A11Y-002) — axe 가 못 보는 부분 ─────────────────── */
 
 test("키보드만으로 로그인까지 간다", async ({ page }) => {
-  const user = await makeUser({ tag: "kbd", role: "MEMBER" });
+  const user = await makeUser({ tag: "kbd" });
   await page.goto("/login");
   await page.waitForLoadState("networkidle");
 
@@ -167,7 +174,12 @@ test("키보드만으로 로그인까지 간다", async ({ page }) => {
       const byFor = el.id
         ? document.querySelector(`label[for="${el.id}"]`)?.textContent
         : null;
-      return byFor ?? el.closest("label")?.textContent ?? el.getAttribute("aria-label") ?? "";
+      return (
+        byFor ??
+        el.closest("label")?.textContent ??
+        el.getAttribute("aria-label") ??
+        ""
+      );
     });
     if (label.includes("아이디")) {
       reached = true;
@@ -185,7 +197,8 @@ test("키보드만으로 로그인까지 간다", async ({ page }) => {
     const el = document.activeElement as HTMLElement | null;
     if (!el) return false;
     const s = getComputedStyle(el);
-    const hasOutline = s.outlineStyle !== "none" && parseFloat(s.outlineWidth) > 0;
+    const hasOutline =
+      s.outlineStyle !== "none" && parseFloat(s.outlineWidth) > 0;
     const hasRing = s.boxShadow !== "none" && s.boxShadow !== "";
     return hasOutline || hasRing;
   });

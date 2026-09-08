@@ -1,13 +1,7 @@
 ﻿import "server-only";
 
 import { spawn } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  rmSync,
-  statSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { ASSISTANT } from "@/features/chat/assistant";
@@ -436,17 +430,13 @@ export const withShotsForTest = withShots;
  */
 export async function listTools(): Promise<string[]> {
   const bin = findBinary();
-  if (!bin) throw new AppError("INTERNAL_ERROR", "Claude Code CLI 를 찾지 못했습니다.");
+  if (!bin)
+    throw new AppError("INTERNAL_ERROR", "Claude Code CLI 를 찾지 못했습니다.");
 
   // 「무엇을 쥐고 있나」를 물으려면 그 서버도 떠 있어야 합니다
   await ensureBrowserServer();
 
-  const args = [
-    ...baseArgs(),
-    "--output-format",
-    "stream-json",
-    "--verbose",
-  ];
+  const args = [...baseArgs(), "--output-format", "stream-json", "--verbose"];
 
   return new Promise<string[]>((resolve, reject) => {
     const child = spawn(bin, args, {
@@ -464,7 +454,10 @@ export async function listTools(): Promise<string[]> {
       fn();
     };
     const timer = setTimeout(
-      () => done(() => reject(new AppError("UPSTREAM_ERROR", "도구 목록을 받지 못했습니다."))),
+      () =>
+        done(() =>
+          reject(new AppError("UPSTREAM_ERROR", "도구 목록을 받지 못했습니다."))
+        ),
       30_000
     );
 
@@ -491,10 +484,21 @@ export async function listTools(): Promise<string[]> {
       }
     });
     child.on("error", (e) =>
-      done(() => reject(new AppError("UPSTREAM_ERROR", `CLI 를 띄우지 못했습니다: ${e.message}`)))
+      done(() =>
+        reject(
+          new AppError(
+            "UPSTREAM_ERROR",
+            `CLI 를 띄우지 못했습니다: ${e.message}`
+          )
+        )
+      )
     );
     child.on("close", () =>
-      done(() => reject(new AppError("UPSTREAM_ERROR", "CLI 가 도구 목록 없이 끝났습니다.")))
+      done(() =>
+        reject(
+          new AppError("UPSTREAM_ERROR", "CLI 가 도구 목록 없이 끝났습니다.")
+        )
+      )
     );
 
     // 답을 받을 생각이 없지만, stdin 을 닫아야 CLI 가 뜹니다
@@ -537,7 +541,9 @@ export function shotsDir(): string {
  * 자리를 남기지 않는 것이, 뒤에서 걸러 내는 것보다 낫습니다 (`NFR-SEC-019`).
  */
 export function isShotName(name: string): boolean {
-  return /^[A-Za-z0-9._-]{1,120}\.(png|jpe?g)$/i.test(name) && !name.includes("..");
+  return (
+    /^[A-Za-z0-9._-]{1,120}\.(png|jpe?g)$/i.test(name) && !name.includes("..")
+  );
 }
 
 /**
@@ -617,17 +623,20 @@ function linkShots(text: string): string {
    * 모델이 `E:\…\shot-x.png` 를 그대로 쓰는 날이 옵니다. 그때 화면에
    * 파일 경로가 글자로 남는 것보다 그림이 뜨는 편이 낫습니다.
    */
-  return text.replace(/[^\s()[\]]*[A-Za-z0-9._-]+\.(?:png|jpe?g)/gi, (token) => {
-    // 이미 마크다운 이미지/링크 안이면 앞에 `(` 가 있습니다 — 건드리지 않습니다
-    const name = token.split(/[\\/]/).pop() ?? "";
-    if (!isShotName(name)) return token;
-    try {
-      if (!statSync(path.join(dir, name)).isFile()) return token;
-    } catch {
-      return token;
+  return text.replace(
+    /[^\s()[\]]*[A-Za-z0-9._-]+\.(?:png|jpe?g)/gi,
+    (token) => {
+      // 이미 마크다운 이미지/링크 안이면 앞에 `(` 가 있습니다 — 건드리지 않습니다
+      const name = token.split(/[\\/]/).pop() ?? "";
+      if (!isShotName(name)) return token;
+      try {
+        if (!statSync(path.join(dir, name)).isFile()) return token;
+      } catch {
+        return token;
+      }
+      return `\n\n${shotImage(name)}\n\n`;
     }
-    return `\n\n${shotImage(name)}\n\n`;
-  });
+  );
 }
 
 /** 답에 캡처를 실어 준다 — 이름을 적었으면 그 자리에, 아니면 끝에 */
@@ -899,7 +908,6 @@ async function waitForPort(port: number, timeoutMs: number): Promise<void> {
   );
 }
 
-
 /**
  * 검증이 문구를 읽을 수 있게 열어 둡니다.
  *
@@ -1049,14 +1057,18 @@ function run(bin: string, args: string[], stdin: string): Promise<string> {
     let err = "";
     const timer = setTimeout(() => {
       child.kill();
-      reject(new AppError("UPSTREAM_ERROR", "대답이 너무 오래 걸려 중단했습니다."));
+      reject(
+        new AppError("UPSTREAM_ERROR", "대답이 너무 오래 걸려 중단했습니다.")
+      );
     }, TIMEOUT_MS);
 
     child.stdout.on("data", (d: Buffer) => (out += d.toString("utf8")));
     child.stderr.on("data", (d: Buffer) => (err += d.toString("utf8")));
     child.on("error", (e) => {
       clearTimeout(timer);
-      reject(new AppError("UPSTREAM_ERROR", `CLI 를 띄우지 못했습니다: ${e.message}`));
+      reject(
+        new AppError("UPSTREAM_ERROR", `CLI 를 띄우지 못했습니다: ${e.message}`)
+      );
     });
     child.on("close", (code) => {
       clearTimeout(timer);

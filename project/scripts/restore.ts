@@ -91,7 +91,9 @@ function latestDump(): string {
     .sort()
     .reverse();
   if (files.length === 0) {
-    throw new Error(`${DB_DIR} 에 덤프가 없습니다. 먼저 npm run backup 을 돌리십시오.`);
+    throw new Error(
+      `${DB_DIR} 에 덤프가 없습니다. 먼저 npm run backup 을 돌리십시오.`
+    );
   }
   return files[0]!;
 }
@@ -171,7 +173,9 @@ async function restoreAndCheck(
       `/tmp/${dump}`,
     ]);
   } catch {
-    console.log("  (pg_restore 가 경고와 함께 끝났습니다 — 아래 숫자로 판정합니다)");
+    console.log(
+      "  (pg_restore 가 경고와 함께 끝났습니다 — 아래 숫자로 판정합니다)"
+    );
   }
 
   /* ── 무엇이 들어왔는지 «세어» 봅니다 ────────────────────────────── */
@@ -197,13 +201,19 @@ async function restoreAndCheck(
   let categories = 0;
 
   if (tables < 20) {
-    problems.push(`테이블이 ${tables}개뿐입니다 (28 근처여야 합니다) — 덤프가 잘렸거나 못 읽었습니다`);
+    problems.push(
+      `테이블이 ${tables}개뿐입니다 (28 근처여야 합니다) — 덤프가 잘렸거나 못 읽었습니다`
+    );
   } else {
     const count = (table: string) =>
       Number(psql(target, `SELECT count(*) FROM ${table}`, user).trim());
     users = count("users");
     admins = Number(
-      psql(target, "SELECT count(*) FROM users WHERE role='ADMIN' AND status='ACTIVE'", user).trim()
+      psql(
+        target,
+        "SELECT count(*) FROM users WHERE role='ADMIN' AND status='ACTIVE'",
+        user
+      ).trim()
     );
     resources = count("resources");
     categories = count("categories");
@@ -213,12 +223,16 @@ async function restoreAndCheck(
      * **관리자가 없으면 복구가 아닙니다.** 데이터가 다 돌아와도 아무도 못
      * 들어가면 서비스는 멈춘 것입니다.
      */
-    if (admins === 0) problems.push("활성 관리자가 0명입니다 — 복구해도 못 들어갑니다");
-    if (categories === 0) problems.push("카테고리가 0개입니다 — 분류가 통째로 비었습니다");
+    if (admins === 0)
+      problems.push("활성 관리자가 0명입니다 — 복구해도 못 들어갑니다");
+    if (categories === 0)
+      problems.push("카테고리가 0개입니다 — 분류가 통째로 비었습니다");
   }
 
   console.log("\n  들어온 것");
-  console.log(`    테이블 ${tables} · 계정 ${users} · 자료 ${resources} · 카테고리 ${categories}`);
+  console.log(
+    `    테이블 ${tables} · 계정 ${users} · 자료 ${resources} · 카테고리 ${categories}`
+  );
 
   if (problems.length > 0) {
     console.log("\n✗ 이 백업으로는 복구할 수 없습니다");

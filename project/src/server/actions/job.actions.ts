@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { AppError } from "@/lib/errors";
 import { type ActionResult, guard, ok } from "@/lib/result";
-import { requireAdminActor, requireRole } from "@/server/auth/guards";
+import { requireActiveUser, requireActor } from "@/server/auth/guards";
 import * as audit from "@/server/services/audit.service";
 import * as jobService from "@/server/services/job.service";
 
@@ -30,7 +30,7 @@ export async function retryJobAction(
   return guard(async () => {
     // 옮겨 오면서 **가드를 바꾸지 않았습니다** — 옮기는 일이 동작을 바꾸면
     // 나중에 문제가 생겼을 때 「옮겨서인지 고쳐서인지」를 알 수 없습니다
-    await requireRole("ADMIN");
+    await requireActiveUser();
     if (typeof jobId !== "string") {
       throw new AppError("VALIDATION_ERROR", "잘못된 요청입니다.");
     }
@@ -64,7 +64,7 @@ export async function deleteJobAction(
   jobId: unknown
 ): Promise<ActionResult<void>> {
   return guard(async () => {
-    await requireAdminActor();
+    await requireActor();
     if (typeof jobId !== "string") {
       throw new AppError("VALIDATION_ERROR", "잘못된 요청입니다.");
     }
@@ -83,7 +83,7 @@ export async function deleteJobAction(
 /** 끝난 기록을 한 번에 정리. 지운 건수를 감사 로그에 남깁니다 */
 export async function purgeJobsAction(): Promise<ActionResult<{ n: number }>> {
   return guard(async () => {
-    const actor = await requireAdminActor();
+    const actor = await requireActor();
     const n = await jobService.purgeFinished();
     if (n > 0) {
       await audit.logDetached(actor, {

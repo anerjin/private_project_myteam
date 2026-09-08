@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 
-import type { Prisma, Role } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import {
   MAX_KEYS_PER_USER,
@@ -17,16 +17,23 @@ import * as audit from "@/server/services/audit.service";
 /**
  * 개인 API 키 (FR-USER-008, REQ-02 · 2.8절, DEV-08 · 8.6절).
  *
- * ## 키는 역할을 복제하지 않습니다 (`DEC-037`)
+ * ## 키가 답하는 질문 — 「이 키가 무엇까지 하는가」 (`DEC-037`·`DEC-077`)
  *
- * 실제 권한 = **`키 스코프 ∩ 현재 역할이 할 수 있는 것`**, 매 요청 계산.
- * 역할이 강등돼도 **키를 폐기하지 않습니다** — 폐기하면 승격해도 돌아오지 않고,
+ * 사람의 등급이 사라진 뒤(`DEC-077`) **이 표가 이 시스템에 남은 유일한 권한
+ * 구분**입니다. 헤르메스와 오픈클로가 같은 계정의 키로 붙지만, 하나에는
+ * 「읽기만」을 주고 다른 하나에는 「쓰기까지」를 줄 수 있어야 합니다.
+ * 그래서 **스코프 3종은 그대로 남습니다** — 없어진 것은 역할이 스코프를
+ * «제한»하던 쪽이고, 키마다 스코프를 «고르는» 쪽이 아닙니다.
+ *
+ * ## 상태는 폐기가 아니라 판정입니다
+ *
+ * 정지돼도 **키를 폐기하지 않습니다** — 폐기하면 정지를 풀어도 돌아오지 않고,
  * 무효화 호출을 빠뜨리면 조용히 뚫립니다. `DEC-029`·`DEC-032`·`DEC-035` 가 세 번
  * 폐기한 «한 사실을 두 곳에» 구조입니다.
  *
- * - 정지·거부 → **판정**(키를 건드리지 않음). `SUSPENDED → ACTIVE` 시 다시 유효해져야 하고
- *   (`REQ-02 · 2.3`), 폐기하면 되돌릴 수 없습니다.
- * - 탈퇴·관리자 강제 폐기 → **실제 폐기**(`revoked_at` 기록). 돌아오는 전이가 없습니다.
+ * - 정지 → **판정**(키를 건드리지 않음). `SUSPENDED → ACTIVE` 시 다시 유효해져야 하고
+ *   (`REQ-02 · 2.3`), 폐기하면 되돌릴 수 없습니다. 판정은 `auth/api-key.verifyKey`.
+ * - 탈퇴·강제 폐기 → **실제 폐기**(`revoked_at` 기록). 돌아오는 전이가 없습니다.
  */
 
 /**
@@ -37,31 +44,28 @@ import * as audit from "@/server/services/audit.service";
 export { SCOPES, type Scope } from "@/features/members/api-key.schema";
 
 /**
- * 이 역할이 가질 수 있는 스코프 (`DEC-037`, `REQ-02 · 2.2`·`2.8`).
+ * 키가 실제로 행사할 수 있는 권한 — **DB 에 적힌 것을 지금의 목록으로 거릅니다.**
  *
- * **`archive:run` 은 `EDITOR` 이상입니다.** `REQ-02 · 2.2` 와 `DEC-029` 영향 란이
- * `EDITOR` 의 존재 이유를 **「모든 자료 수정 · 분류 정리 · 아카이브 실행」** 셋으로
- * 못 박았습니다 — 아카이브 실행은 그 셋 중 하나입니다.
+ * ## 여기 `scopesAllowedFor(role)` 이 있었습니다 (`DEC-077` 로 지웠습니다)
  *
- * > 전에 이 자리에는 *"오늘은 항상 전량을 돌려줍니다 — 역할 전용이 없습니다
- * > (`MEMBER` 도 … 아카이브 실행이 가능합니다)"* 라고 적혀 있었는데 **규격과 반대**였고,
- * > 그 결과 `MEMBER` 가 `archive:run` 키를 발급받을 수 있었습니다 —
- * > `NFR-SEC-017`「발급자의 역할을 넘는 권한 부여 금지」 위반입니다.
- * > 「비어 있는 자리」가 아니라 **미이행**이었습니다.
+ * 그 함수는 「이 «역할»이 가질 수 있는 스코프」였고, `MEMBER` 에게서
+ * `archive:run` 을 뺐습니다. 역할이 없어지면 그 뺄셈의 근거도 없어집니다 —
+ * 그래서 **함수를 「전부 돌려주는 함수」로 남기지 않고 지웠습니다.** 언제나
+ * 같은 값을 돌려주는 필터는 다음 사람에게 「무언가 거르고 있다」고 말합니다.
  *
- * 발급 시 선택 목록과 요청 시 교집합이 **같은 함수**를 쓰므로 고칠 곳은 한 곳입니다.
+ * `NFR-SEC-017`「발급자의 역할을 넘는 권한 부여 금지」가 지키려던 것은
+ * **「키가 그 주인이 못 하는 일을 하게 되지 않는다」** 였습니다. 주인이 할 수
+ * 있는 일에 등급 차가 없어진 지금 그 부등식은 자동으로 성립합니다 — 남은 것은
+ * 아래 한 줄, **「목록에 없는 스코프는 권한이 아니다」** 입니다.
+ *
+ * 이 필터는 「없는 검사」가 아닙니다. `api_keys.scopes` 는 `String[]` 이라
+ * **옛 키에 지금은 없는 스코프 문자열이 남아 있을 수 있고**, 그것을 그대로
+ * 믿으면 지운 권한이 옛 키로 되살아납니다. 타입도 여기서 좁혀집니다
+ * (`string[]` → `Scope[]`).
  */
-export function scopesAllowedFor(role: Role): readonly Scope[] {
-  if (role === "MEMBER") {
-    return SCOPES.filter((s) => s !== "archive:run");
-  }
-  return SCOPES;
-}
-
-/** 키가 실제로 행사할 수 있는 권한 — 발급 시점이 아니라 **지금** 역할로 계산한다 */
-export function effectiveScopes(keyScopes: string[], role: Role): Scope[] {
-  const allowed = new Set<string>(scopesAllowedFor(role));
-  return keyScopes.filter((s): s is Scope => allowed.has(s));
+export function effectiveScopes(keyScopes: string[]): Scope[] {
+  const known = new Set<string>(SCOPES);
+  return keyScopes.filter((s): s is Scope => known.has(s));
 }
 
 const PREFIX_LENGTH = 8;
@@ -96,14 +100,19 @@ export async function issue(
   name: string,
   scopes: string[]
 ): Promise<IssuedKey> {
-  // 발급 상한도 같은 함수로 본다 (DEC-037). 락 밖에서 미리 걸러도 되는 검사다.
-  const allowed = new Set<string>(scopesAllowedFor(actor.role));
-  const invalid = scopes.filter((s) => !allowed.has(s));
+  /*
+   * **발급도 `SCOPES` 를 봅니다** — 요청 때 거르는 `effectiveScopes` 와 같은 목록.
+   * 액션이 zod 로 이미 걸렀지만 **화면도 액션도 방어선이 아닙니다** (`DEC-035`):
+   * service 를 직접 부르는 스크립트가 이미 여럿 있습니다(`scripts/verify-p3-keys`).
+   * 걸러지지 않으면 목록에 없는 문자열이 `api_keys.scopes` 에 그대로 저장됩니다.
+   */
+  const known = new Set<string>(SCOPES);
+  const invalid = scopes.filter((s) => !known.has(s));
   if (invalid.length > 0) {
     throw new AppError(
       "VALIDATION_ERROR",
-      `이 역할로는 선택할 수 없는 스코프입니다: ${invalid.join(", ")}`,
-      { scopes: [`선택할 수 없는 스코프: ${invalid.join(", ")}`] }
+      `없는 스코프입니다: ${invalid.join(", ")}`,
+      { scopes: [`없는 스코프: ${invalid.join(", ")}`] }
     );
   }
   // 같은 스코프를 여러 번 넣어도 한 번만 저장한다
@@ -184,17 +193,20 @@ export function listFor(userId: string) {
   });
 }
 
-/** 본인 또는 관리자가 폐기 (FR-USER-008 · FR-ADM-016) */
+/**
+ * 키 하나 폐기 (`FR-USER-008` · `FR-ADM-016`).
+ *
+ * **「본인 또는 `ADMIN`」이었습니다.** `DEC-077` 로 사람이 전부 관리자가 되면서
+ * 뒤쪽 항이 언제나 참이 되어 검사 전체가 접혔습니다 — `FR-ADM-016`(강제 폐기)은
+ * 「관리자는 남의 키도 폐기한다」이고, 그 관리자가 이제 로그인한 사람 전부입니다.
+ * 접힌 조건을 남겨 두면 다음 사람이 없는 등급을 찾습니다.
+ */
 export async function revoke(actor: Actor, keyId: string): Promise<void> {
   const key = await db.apiKey.findUnique({
     where: { id: keyId },
     select: { id: true, userId: true, name: true, revokedAt: true },
   });
   if (!key) throw new AppError("NOT_FOUND", "키를 찾을 수 없습니다.");
-
-  if (key.userId !== actor.id && actor.role !== "ADMIN") {
-    throw new AppError("FORBIDDEN", "이 키를 폐기할 권한이 없습니다.");
-  }
 
   await db.$transaction(async (tx) => {
     /*
@@ -235,20 +247,14 @@ export async function revoke(actor: Actor, keyId: string): Promise<void> {
  * **이름이 같고 인자 순서가 달랐습니다.** 검색이 갈라지고, 잘못 부르면 타입이 맞아
  * 조용히 통과합니다 (`bumpGeneration` 별칭을 없앤 것과 같은 이유).
  *
- * 인가를 **여기서** 봅니다. 전에는 액션의 `requireAdminActor()` 하나가 유일한 문이었는데:
- * - 같은 파일의 `revoke()` 는 소유권·관리자 판정을 service 에서 합니다 — 규칙이 두 갈래였습니다
- * - `actor.ts` 가 *「소유권은 데이터를 봐야 알 수 있으므로 service 에서 판정한다」* 고 못 박았습니다
- * - **다음 호출자는 관리자가 아닙니다** — `P8` 의 탈퇴는 본인이 부릅니다.
- *   액션에 두면 그때 두 번째 인가 구멍이 생기거나 검사를 복제하게 됩니다.
+ * 인가 검사가 여기 있었습니다 — 「`ADMIN` 이거나 본인」. `DEC-077` 로 사람이
+ * 전부 관리자가 되면서 통째로 접혔습니다(`revoke()` 와 같은 이유·같은 자리).
+ * **남은 문은 로그인**입니다: 이 함수를 부르는 액션은 `requireActor()` 를 지납니다.
  */
 export async function revokeAllKeysFor(
   actor: Actor,
   userId: string
 ): Promise<number> {
-  if (actor.role !== "ADMIN" && actor.id !== userId) {
-    throw new AppError("FORBIDDEN", "이 회원의 키를 폐기할 권한이 없습니다.");
-  }
-
   return db.$transaction(async (tx) => {
     // **무엇을 지웠는지 먼저 읽습니다.** 개수만 남기면 회원이 「내 키가 왜 죽었냐」고
     // 물었을 때 답이 「3개」뿐입니다 — 단건 폐기는 이름을 남기는데(아래) 강제 폐기가

@@ -56,7 +56,8 @@ export function PurgeJobsButton({ count }: { count: number }) {
           <AlertDialogHeader>
             <AlertDialogTitle>끝난 기록 {count}건을 지울까요?</AlertDialogTitle>
             <AlertDialogDescription>
-              완료·실패한 작업 기록만 지웁니다. <b>대기·실행 중인 작업은 그대로</b>
+              완료·실패한 작업 기록만 지웁니다.{" "}
+              <b>대기·실행 중인 작업은 그대로</b>
               두므로 예정된 일이 사라지지 않습니다. 자료와 파일은 건드리지
               않습니다. 몇 건을 정리했는지는 감사 로그에 남습니다.
             </AlertDialogDescription>
@@ -64,7 +65,7 @@ export function PurgeJobsButton({ count }: { count: number }) {
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90 text-white"
               onClick={() => {
                 setOpen(false);
                 startTransition(async () => {

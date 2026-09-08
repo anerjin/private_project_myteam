@@ -1,7 +1,6 @@
 "use client";
 
 import { AlertCircle } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -33,6 +32,7 @@ import { signInAction } from "@/server/actions/auth.actions";
  *   · "비밀번호를 잊으셨나요?" 링크 제거 + 안내 문구 (DEC-015)
  *   · 로그인 상태 유지 체크박스 (FR-AUTH-008)
  *   · 폼 상단 오류 Alert 영역 (SCR-001)
+ *   · "계정이 없으신가요? 회원가입" 링크 제거 (`DEC-077`) — 가입할 곳이 없습니다
  *
  * 인증은 `signInAction`(API-004)이 합니다. 이 컴포넌트는 **결과를 보여주기만** 합니다 —
  * 아이디·비밀번호 판정, 시도 제한, 상태 차단은 전부 서버의 일입니다 (`NFR-SEC-006`).
@@ -140,9 +140,6 @@ export function LoginForm({ next }: { next?: string }) {
                 <Button type="submit" disabled={pending}>
                   {pending ? "로그인 중…" : "로그인"}
                 </Button>
-                <FieldDescription className="text-center">
-                  계정이 없으신가요? <Link href="/signup">회원가입</Link>
-                </FieldDescription>
               </Field>
             </FieldGroup>
           </form>

@@ -17,8 +17,7 @@ export interface Profile {
   name: string;
   department: string | null;
   bio: string | null;
-  role: "MEMBER" | "EDITOR" | "ADMIN";
-  status: "PENDING" | "ACTIVE" | "REJECTED" | "SUSPENDED" | "WITHDRAWN";
+  status: "ACTIVE" | "SUSPENDED" | "WITHDRAWN";
   createdAt: Date;
   lastLoginAt: Date | null;
 }
@@ -34,7 +33,6 @@ export async function getProfile(userId: string): Promise<Profile> {
     name: user.name,
     department: user.department,
     bio: user.bio,
-    role: user.role,
     status: user.status,
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt,

@@ -13,7 +13,7 @@ import { CategoryManager } from "@/features/admin/components/category-manager";
 import { getContentType } from "@/features/resources/content-types";
 import { TagManager } from "@/features/admin/components/tag-manager";
 import { TypeSettings } from "@/features/admin/components/type-settings";
-import { requireRole } from "@/server/auth/guards";
+import { requireActiveUser } from "@/server/auth/guards";
 import * as categoryService from "@/server/services/category.service";
 import * as contentTypeService from "@/server/services/content-type.service";
 import * as resourceService from "@/server/services/resource.service";
@@ -24,14 +24,15 @@ export const metadata: Metadata = { title: "분류 · 타입 관리" };
 /**
  * SCR-231 분류 · 콘텐츠 타입 관리 (`FR-ADM-012`·`013`·`014`).
  *
- * ## `ADMIN` 전용입니다 (`DEC-057`, `OPEN-016` 해소)
+ * ## 🔄 `ADMIN` 전용이었습니다 (`DEC-057` → `DEC-077`)
  *
- * `REQ-02` 권한 매트릭스는 「카테고리 생성」·「카테고리 체계 관리」를
- * `EDITOR` 에 주는데, 이 화면을 `EDITOR` 에게 열어 봤더니 **관리 영역 전체의
- * 차단이 약해졌습니다** — 레이아웃이 먼저 스트리밍돼 `ADMIN` 전용 화면이
- * `307` 대신 `200 + 클라이언트 리다이렉트`가 됐습니다(실측). 그래서
- * 매트릭스 쪽을 고쳤습니다. `EDITOR` 는 **자료를 등록·수정하며 태그를
- * 만드는 일**을 계속하고, 「정리」만 `ADMIN` 입니다.
+ * `EDITOR` 에게 이 화면을 열어 봤다가 되돌린 기록이 여기 있었습니다 —
+ * 레이아웃이 먼저 스트리밍돼 `ADMIN` 전용 화면이 `307` 대신
+ * `200 + 클라이언트 리다이렉트`가 됐기 때문입니다(실측). **그 실측은 여전히
+ * 유효하지만**(`(admin)/layout.tsx` 머리말에 규칙으로 남겼습니다) `DEC-077` 로
+ * 낮출 등급이 없어져 재현할 수 없습니다.
+ *
+ * 지금 이 화면의 문은 아래 `requireActiveUser()` 하나입니다.
  *
  * > **이 파일에 `SUBCATEGORIES` 상수가 있었습니다.** `src/mocks/` 를 지우고
  * > 「목 부채 0」이라고 셌지만 그 게이트는 **import 형태**를 셌고, 목은 죽지 않고
@@ -40,7 +41,7 @@ export const metadata: Metadata = { title: "분류 · 타입 관리" };
  */
 export default async function AdminTaxonomyPage() {
   // 실제 인가는 여기서 한다 — 레이아웃이 아니라 page 다 (DEC-035)
-  await requireRole("ADMIN");
+  await requireActiveUser();
 
   /*
    * **자료를 전부 읽어 태그를 세지 않습니다.** 1만 건이면 매 요청 1만 행을 읽고
@@ -82,7 +83,7 @@ export default async function AdminTaxonomyPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <CategoryManager categories={categories} canEdit />
+              <CategoryManager categories={categories} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -97,35 +98,35 @@ export default async function AdminTaxonomyPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <TagManager tags={tags} unusedCount={unusedCount} canEdit />
+              <TagManager tags={tags} unusedCount={unusedCount} />
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="type" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">콘텐츠 타입</CardTitle>
-                <CardDescription>
-                  타입의 <b>필드 구조는 코드</b>에 있습니다. 여기서는 노출
-                  설정만 바꿉니다.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <TypeSettings
-                  types={typeSettings.map((t) => ({
-                    code: t.code,
-                    label: t.label,
-                    // 색은 레지스트리가 압니다 — 서버가 꺼내 넘깁니다 (`DEC-032`)
-                    badgeClass: getContentType(t.code).badgeClass,
-                    description: t.description,
-                    isActive: t.isActive,
-                    showInNav: t.showInNav,
-                    count: typeCounts[t.code] ?? 0,
-                  }))}
-                />
-              </CardContent>
-            </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">콘텐츠 타입</CardTitle>
+              <CardDescription>
+                타입의 <b>필드 구조는 코드</b>에 있습니다. 여기서는 노출 설정만
+                바꿉니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TypeSettings
+                types={typeSettings.map((t) => ({
+                  code: t.code,
+                  label: t.label,
+                  // 색은 레지스트리가 압니다 — 서버가 꺼내 넘깁니다 (`DEC-032`)
+                  badgeClass: getContentType(t.code).badgeClass,
+                  description: t.description,
+                  isActive: t.isActive,
+                  showInNav: t.showInNav,
+                  count: typeCounts[t.code] ?? 0,
+                }))}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </>

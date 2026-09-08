@@ -332,8 +332,6 @@ export function ProjectsView({
   projects,
   trash,
   today,
-  viewerId,
-  viewerIsAdmin,
 }: {
   projects: ProjectSummary[];
   /** 휴지통 탭인가 — 카드가 하는 일이 통째로 달라집니다(열리지 않고, 되살립니다) */
@@ -341,9 +339,6 @@ export function ProjectsView({
   /** 오늘(YYYY-MM-DD). **서버가 한 번 정합니다** — 카드마다 `new Date()` 를 부르면
       자정 근처에서 서버가 그린 HTML 과 갈리고, 시간대가 다른 기기에서 하루가 밀립니다 */
   today: string;
-  /** 삭제 단추를 그릴지 정하는 값 — ⚠️ **관문이 아닙니다**(service 의 `assertCanDelete`) */
-  viewerId: string;
-  viewerIsAdmin: boolean;
 }) {
   const router = useRouter();
   const [creating, setCreating] = React.useState(false);
@@ -351,8 +346,11 @@ export function ProjectsView({
   const [deleting, setDeleting] = React.useState<ProjectSummary | null>(null);
   const [busy, setBusy] = React.useState(false);
 
-  const canDelete = (p: ProjectSummary) =>
-    viewerIsAdmin || p.owner.id === viewerId;
+  /*
+   * 🔄 `canDelete(p) = viewerIsAdmin || p.owner.id === viewerId` 가 여기 있었습니다.
+   *    `DEC-077` 로 `project.service.assertCanDelete` 가 사라져 **언제나 참**이 됐고,
+   *    화면이 흉내 내던 그 식도 함께 사라졌습니다(흉내는 원본이 있을 때만 뜻이 있습니다).
+   */
 
   const create = async (v: FormValue) => {
     const r = await createProjectAction({
@@ -499,7 +497,6 @@ export function ProjectsView({
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={!canDelete(p)}
                     onClick={() => void restore(p)}
                   >
                     <Undo2 className="size-4" />
@@ -507,9 +504,10 @@ export function ProjectsView({
                   </Button>
                 </div>
               ) : (
-                /* 🔄 **수정은 전원이 합니다** (`DEC-018`) — 원본은 이 메뉴를
-                   소유자에게만 그립니다. 삭제만 소유자·`ADMIN` 이라, 못 누를
-                   줄은 안 그립니다. ⚠️ 관문은 service 입니다. */
+                /* 🔄 **수정도 삭제도 전원이 합니다** (`DEC-018`·`DEC-077`) —
+                   원본은 이 메뉴를 소유자에게만 그립니다. 삭제가 소유자·`ADMIN`
+                   이던 시절에는 못 누를 줄을 안 그렸는데, 이제 가릴 것이 없습니다.
+                   ⚠️ 관문은 여전히 service 입니다. */
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -525,14 +523,12 @@ export function ProjectsView({
                     <DropdownMenuItem onSelect={() => setEditing(p)}>
                       수정
                     </DropdownMenuItem>
-                    {canDelete(p) && (
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={() => setDeleting(p)}
-                      >
-                        휴지통으로
-                      </DropdownMenuItem>
-                    )}
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onSelect={() => setDeleting(p)}
+                    >
+                      휴지통으로
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}

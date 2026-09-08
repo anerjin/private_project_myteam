@@ -38,7 +38,6 @@ export function ProjectDetailView({
   items,
   people,
   today,
-  canDelete,
 }: {
   project: {
     id: string;
@@ -58,7 +57,6 @@ export function ProjectDetailView({
   /** 오늘(YYYY-MM-DD). 서버가 정해 내려보냅니다 — 목록과 같은 규약 */
   today: string;
   /** 휴지통 버튼을 그릴지 — ⚠️ **관문이 아닙니다**(service 의 `assertCanDelete`) */
-  canDelete: boolean;
 }) {
   const span = projectSpan(project.start, project.end, today);
 
@@ -131,12 +129,10 @@ export function ProjectDetailView({
           />
           {/* 🔴 **삭제만 소유자·`ADMIN` 입니다** (`FR-PROJ-004`) — 못 누를 버튼은
               안 그립니다. ⚠️ 관문은 service 의 `assertCanDelete` 입니다. */}
-          {canDelete && (
-            <ProjectTrashButton
-              projectId={project.id}
-              projectName={project.name}
-            />
-          )}
+          <ProjectTrashButton
+            projectId={project.id}
+            projectName={project.name}
+          />
         </div>
       </header>
 

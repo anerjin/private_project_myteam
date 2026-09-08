@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 
-import type { Prisma, Role, UserStatus } from "@prisma/client";
+import type { Prisma, UserStatus } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { SESSION_TTL_MS } from "@/lib/env";
@@ -14,7 +14,7 @@ import { redis } from "@/lib/redis";
  * 쿠키에는 **불투명 난수 토큰**만 담고, DB에는 그 **SHA-256 해시**만 저장합니다.
  * DB 덤프가 유출돼도 그것만으로 남의 세션을 위조할 수 없어야 합니다 (API 키와 같은 원칙).
  *
- * **`status`·`role` 을 쿠키에 싣지 않습니다.** 실으면 DB 와 두 개의 출처가 되고
+ * **`status` 를 쿠키에 싣지 않습니다.** 실으면 DB 와 두 개의 출처가 되고
  * 서명 키가 필요해져 `DEC-030` 이 깨집니다.
  *
  * ## 캐시 무효화 — 세대(generation) 카운터
@@ -46,7 +46,6 @@ export interface SessionUser {
    * `?? undefined` 를 붙이지 않도록 **경계에서 한 번만** 바꿉니다.
    */
   department?: string;
-  role: Role;
   status: UserStatus;
   mustChangePassword: boolean;
 }
@@ -63,13 +62,12 @@ interface CachedSession extends SessionUser {
 
 /**
  * 세션이 즉시 죽어야 하는 계정 상태 (`DEC-040`).
- * `PENDING` 은 여기 없습니다 — 유효한 세션이고 DAL 이 `/pending` 으로 보냅니다.
+ *
+ * 가입 승인 절차가 사라지면서(`DEC-077`) `ACTIVE` 가 아닌 상태는 **전부** 여기
+ * 있습니다. 전에는 `PENDING` 이 「유효하지만 못 들어오는」 세 번째 부류였고,
+ * 그 판정을 DAL 이 했습니다 — 이제 그 부류가 없습니다.
  */
-const BLOCKED_STATUSES = new Set<UserStatus>([
-  "REJECTED",
-  "SUSPENDED",
-  "WITHDRAWN",
-]);
+const BLOCKED_STATUSES = new Set<UserStatus>(["SUSPENDED", "WITHDRAWN"]);
 
 /** 유휴 만료 — 환경 변수로 빼지 않는다 (변수 증식 방지). REQ-02 · 2.7절 */
 const IDLE_TIMEOUT_MS = 12 * 60 * 60 * 1000;
@@ -152,7 +150,6 @@ export async function resolve(token: string): Promise<SessionUser | null> {
           username: true,
           name: true,
           department: true,
-          role: true,
           status: true,
           mustChangePassword: true,
         },
@@ -183,9 +180,7 @@ export async function resolve(token: string): Promise<SessionUser | null> {
   if (
     row.expires.getTime() <= now ||
     now - idleSince.getTime() > IDLE_TIMEOUT_MS ||
-    // **차단 3상태만** 세션 계층에서 즉사시킨다 (DEC-040).
-    // `PENDING` 은 「로그인은 됐지만 아직 들어올 수 없는」 유효한 세션이고,
-    // 그 판정은 DAL(`guards.ts`)이 한다 — 세션은 «누구인지», 가드는 «무엇을 할 수 있는지».
+    // 차단 상태는 세션 계층에서 즉사시킨다 (DEC-040)
     BLOCKED_STATUSES.has(row.user.status)
   ) {
     await destroyByHash(tokenHash, row.userId);
@@ -198,7 +193,6 @@ export async function resolve(token: string): Promise<SessionUser | null> {
     username: row.user.username,
     name: row.user.name,
     department: row.user.department ?? undefined,
-    role: row.user.role,
     status: row.user.status,
     mustChangePassword: row.user.mustChangePassword,
     gen: gen ?? 0,
@@ -235,7 +229,6 @@ function toDto(c: CachedSession | SessionUser): SessionUser {
     username,
     name,
     department,
-    role,
     status,
     mustChangePassword,
   } = c;
@@ -245,7 +238,6 @@ function toDto(c: CachedSession | SessionUser): SessionUser {
     username,
     name,
     department,
-    role,
     status,
     mustChangePassword,
   };

@@ -17,16 +17,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ReasonDialog } from "@/features/members/components/reason-dialog";
 import { canAttempt, type MemberStatus } from "@/features/members/schema";
 import {
-  changeRoleAction,
   reactivateMemberAction,
   resetMemberPasswordAction,
   revokeMemberKeysAction,
@@ -45,9 +41,9 @@ import {
  * ## 화면은 «정적» 판정만 합니다
  *
  * 「`SUSPEND` 는 `ACTIVE` 에서만」은 `TRANSITION_FROM` 한 벌을 봅니다
- * (`DEC-045`). 「마지막 관리자인가」·「방금 다른 관리자가 처리했는가」는
- * **화면이 알 수 없고 흉내내면 틀립니다** — 서버가 `LAST_ADMIN` 으로 답하고
- * 그 문구를 그대로 띄웁니다.
+ * (`DEC-045`). 「이 계정이 마지막 하나인가」·「방금 다른 창에서 처리했는가」는
+ * **화면이 알 수 없고 흉내내면 틀립니다** — 서버가 `LAST_ACTIVE_ACCOUNT` 로
+ * 답하고 그 문구를 그대로 띄웁니다.
  *
  * ## 되돌릴 수 없는 것은 사유를 받습니다
  *
@@ -81,7 +77,6 @@ export function MemberActions({
     id: string;
     name: string;
     username: string;
-    role: "MEMBER" | "EDITOR" | "ADMIN";
     status: MemberStatus;
     activeKeys: number;
   };
@@ -91,7 +86,10 @@ export function MemberActions({
   const [dialog, setDialog] = useState<Kind | null>(null);
 
   /** 액션 하나를 돌리고 결과를 알린다 — 여섯 곳에 같은 코드를 두지 않는다 */
-  function run(fn: () => Promise<{ ok: boolean; message?: string }>, done: string) {
+  function run(
+    fn: () => Promise<{ ok: boolean; message?: string }>,
+    done: string
+  ) {
     startTransition(async () => {
       const r = await fn();
       if (!r.ok) {
@@ -155,42 +153,14 @@ export function MemberActions({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="sm" variant="outline" disabled={busy}>
-              <MoreHorizontal className="size-4" />
-              더 보기
+              <MoreHorizontal className="size-4" />더 보기
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            {canAttempt("CHANGE_ROLE", member.status) && (
-              <>
-                <DropdownMenuLabel>역할</DropdownMenuLabel>
-                {/*
-                  현재 역할에 표시를 남깁니다 — 「무엇으로 바꾸나」보다
-                  「지금 무엇인가」를 먼저 봅니다. 같은 역할을 다시 고르면
-                  서버가 「이미 그 상태입니다」로 막습니다 (`DEC-042`).
-                */}
-                <DropdownMenuRadioGroup
-                  value={member.role}
-                  onValueChange={(role) =>
-                    run(
-                      () =>
-                        changeRoleAction({
-                          id: member.id,
-                          role: role as typeof member.role,
-                        }),
-                      `${member.name} 님의 역할을 ${role} 로 바꿨습니다.`
-                    )
-                  }
-                >
-                  {(["MEMBER", "EDITOR", "ADMIN"] as const).map((r) => (
-                    <DropdownMenuRadioItem key={r} value={r}>
-                      {r}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-                <DropdownMenuSeparator />
-              </>
-            )}
-
+            {/*
+              🔄 여기 **역할 바꾸기**(`DropdownMenuRadioGroup`)가 있었습니다.
+                 `DEC-077` 로 등급이 사라져 통째로 지웠습니다 — 바꿀 값이 없습니다.
+            */}
             <DropdownMenuItem
               disabled={member.activeKeys === 0}
               onSelect={() =>

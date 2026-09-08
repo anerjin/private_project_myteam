@@ -1,7 +1,13 @@
 import { z } from "zod";
 
 /**
- * 회원 관리 입력 규칙 (FR-ADM-004 · REQ-02 · 2.4절).
+ * 회원 관리 입력 규칙 (`FR-ADM-005`·`FR-ADM-008` · REQ-02 · 2.4절).
+ *
+ * > 여기 적혀 있던 번호는 「승인 / 거부」 요구사항이었습니다. 그 요구사항은
+ * > 통째로 가입 승인 절차의 것이고 `DEC-077` 로 사라졌습니다. 사유 10자 규칙은
+ * > 남지만 **그것을 요구하는 주체가 정지·탈퇴로 바뀌었습니다.**
+ * > 없어진 번호는 여기 다시 적지 않습니다 — `check:fr` 은 번호가 코드에 있으면
+ * > 「만들었다」로 세므로, 설명하려고 적으면 그 자리가 곧 거짓 초록이 됩니다.
  *
  * **서버와 화면이 같은 값을 봅니다.** 전에는 액션이 `min(2)`, 다이얼로그가
  * `length < 2` 로 **같은 규칙을 두 곳에** 두고 있었고, 둘 다 규격의 10자와 달랐습니다.
@@ -11,7 +17,7 @@ import { z } from "zod";
  * (`features/auth/schema.ts` 와 같은 자리).
  */
 
-/** 거부·정지 사유 최소 길이. `FR-ADM-004` 수용 기준이 10자입니다. */
+/** 정지·탈퇴 사유 최소 길이. 수용 기준이 10자입니다 (`REQ-02 · 2.4`). */
 export const REASON_MIN_LENGTH = 10;
 export const REASON_MAX_LENGTH = 500;
 
@@ -20,7 +26,7 @@ export const reasonSchema = z
   .trim()
   /*
    * **문구가 중립입니다.** 전에는 「본인에게 그대로 전달됩니다」가 붙어 있었는데,
-   * 이 스키마를 거부와 정지가 함께 쓰기 때문에 **정지 다이얼로그에서도** 그 말이 떴습니다 —
+   * 이 스키마를 여러 처리가 함께 쓰기 때문에 **정지 다이얼로그에서도** 그 말이 떴습니다 —
    * 바로 위 안내는 「본인에게는 전달되지 않습니다」라고 옳게 적혀 있어서
    * **한 화면 안의 두 문장이 서로를 부정**했습니다 (`DEC-041` 이 걷어낸 거짓 안내가
    * 공유 스키마를 타고 되돌아온 것입니다).
@@ -38,30 +44,23 @@ export function isReasonLongEnough(reason: string): boolean {
 /**
  * 비밀번호 초기화가 의미 있는 상태 (`REQ-02 · 2.3`, `FR-ADM-007`).
  *
- * `REJECTED`·`WITHDRAWN` 은 **로그인 자체가 막힌 계정**입니다. 초기화해 봐야 쓸 수 없고,
+ * `WITHDRAWN` 은 **로그인 자체가 막힌 계정**입니다. 초기화해 봐야 쓸 수 없고,
  * 「1년 후 익명화(해시 무효화)」 대상 계정에 새 해시를 찍어 되살리는 셈이 됩니다.
+ * `SUSPENDED` 는 남습니다 — 정지는 되돌아오는 전이가 있습니다.
  *
  * **서버(`member.service`)와 메뉴(`member-table`)가 이 배열 하나를 함께 봅니다.**
  * 화면이 서버 판정을 흉내내는 것이 아니라 **같은 표를 보는** 것입니다 —
  * 표를 두 벌 두면 한쪽만 고치는 날이 옵니다.
  */
-const RESETTABLE_STATUSES = new Set<string>(["ACTIVE", "PENDING", "SUSPENDED"]);
+const RESETTABLE_STATUSES = new Set<string>(["ACTIVE", "SUSPENDED"]);
 
 export function isResettableStatus(status: string): boolean {
   return RESETTABLE_STATUSES.has(status);
 }
 
-export type MemberStatus =
-  "PENDING" | "ACTIVE" | "REJECTED" | "SUSPENDED" | "WITHDRAWN";
+export type MemberStatus = "ACTIVE" | "SUSPENDED" | "WITHDRAWN";
 
-export type TransitionKind =
-  | "APPROVE"
-  | "REJECT"
-  | "REOPEN"
-  | "SUSPEND"
-  | "REACTIVATE"
-  | "CHANGE_ROLE"
-  | "WITHDRAW";
+export type TransitionKind = "SUSPEND" | "REACTIVATE" | "WITHDRAW";
 
 /**
  * 각 전이가 허용되는 «현재» 상태 (`REQ-02 · 2.3`, `DEC-042`).
@@ -69,11 +68,11 @@ export type TransitionKind =
  * ## 화면과 서버가 **같은 표**를 봅니다 — 복제가 아니라 공유입니다
  *
  * `DEC-036` 의 *"판정을 화면에서 미리 하지 않는다"* 는 **동적 사실**을 겨눈 것입니다:
- * 「이 관리자가 마지막인가」·「방금 다른 관리자가 처리했는가」는 화면이 알 수 없고
- * 흉내내면 틀립니다. 그래서 `LAST_ADMIN`·동시성 판정은 여전히 서버 몫입니다.
+ * 「이 계정이 마지막 하나인가」·「방금 다른 창에서 처리했는가」는 화면이 알 수 없고
+ * 흉내내면 틀립니다. 그래서 `LAST_ACTIVE_ACCOUNT`·동시성 판정은 여전히 서버 몫입니다.
  *
  * 반면 「`SUSPEND` 는 `ACTIVE` 에서만」은 **정적 사실**입니다. 이것까지 서버에만 두면
- * 화면은 `REJECTED` 회원에게 「정지」를 띄우고, 관리자는 눌러서 `INVALID_STATE` 를 받습니다 —
+ * 화면은 탈퇴한 회원에게 「정지」를 띄우고, 관리자는 눌러서 `INVALID_STATE` 를 받습니다 —
  * **판정을 «안 하는» 게 아니라 «틀리게 하는» 것**입니다.
  *
  * 표를 여기 둔 이유는 `member.service` 가 `server-only` 라 화면이 못 읽기 때문입니다.
@@ -83,21 +82,16 @@ export type TransitionKind =
  */
 export const TRANSITION_FROM: Record<TransitionKind, readonly MemberStatus[]> =
   {
-    APPROVE: ["PENDING"],
-    REJECT: ["PENDING"],
-    REOPEN: ["REJECTED"],
     SUSPEND: ["ACTIVE"],
     REACTIVATE: ["SUSPENDED"],
-    CHANGE_ROLE: ["ACTIVE"],
     /*
-     * 강제 탈퇴 (`FR-ADM-008`).
+     * 강제 탈퇴 (`FR-ADM-008`) — **되돌리는 전이가 없습니다.**
      *
-     * **`PENDING`·`REJECTED` 는 대상이 아닙니다.** 그쪽의 답은 「거부」이고,
-     * 거부는 `REOPEN` 으로 되돌릴 수 있습니다(`DEC-042`). 탈퇴는 되돌리는 전이가
-     * 없으므로, 되돌릴 수 있는 길이 있는 상태를 여기로 보내면 안 됩니다.
+     * 가입 신청·승인이 사라지면서(`DEC-077`) 남은 상태는 셋뿐이고, 탈퇴가
+     * 갈 수 있는 곳은 `ACTIVE`·`SUSPENDED` 둘입니다.
      *
      * **아이디는 돌려주지 않습니다** (`DEC-021`) — `users` 행이 남아 유니크가
-     * 유지되므로 남이 같은 아이디로 가입해 옛 감사 로그를 물려받는 일이 없습니다.
+     * 유지되므로 남이 같은 아이디를 물려받아 옛 감사 로그의 주체가 되는 일이 없습니다.
      */
     WITHDRAW: ["ACTIVE", "SUSPENDED"],
   };

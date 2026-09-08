@@ -9,7 +9,7 @@ import {
 } from "@/features/projects/schema";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { isAdmin, type Actor } from "@/server/auth/actor";
+import type { Actor } from "@/server/auth/actor";
 import * as audit from "@/server/services/audit.service";
 
 /**
@@ -28,9 +28,13 @@ import * as audit from "@/server/services/audit.service";
  * 정반대입니다. 거기서는 `where` 에 `ownerId` 를 넣는 것이 규칙이고,
  * 여기서는 **넣지 않는 것**이 규칙입니다.
  *
- * `ownerId` 는 **지울 권한에만** 씁니다. 고치는 것도 전원입니다 —
- * 20명이 한 팀이고, 「내가 만든 프로젝트만 내가 고친다」는 그 규모에서
- * 서로를 기다리게 만듭니다.
+ * 🔄 `ownerId` 는 **지울 권한에만** 썼습니다 — 「소유자와 `ADMIN`」이었습니다.
+ *    `DEC-077` 로 사람이 전부 관리자가 되면서 그 식이 통째로 참이 되어
+ *    **판정을 지웠습니다**(`assertCanDelete`). 지금 `ownerId` 가 답하는 것은
+ *    「누가 만들었나」 하나이고, 그 값은 화면과 감사 로그가 씁니다.
+ *
+ *    지우는 힘은 여기서 나오지 않게 됐지만, **휴지통은 그대로입니다**
+ *    (`FR-PROJ-004`) — 되돌릴 수 있는 것이 이 변경의 안전장치입니다.
  *
  * 🔴 **원본(Orbee)과 정확히 여기서 갈립니다.** 그쪽은 사용자별 격리 SaaS 라
  *    조회마다 `userId` 로 좁히고, 참가자 표(`ProjectMember`)와 초대가 그
@@ -192,7 +196,6 @@ async function uniqueSlug(name: string): Promise<string> {
   return `${base}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-
 /** 프로젝트를 만든다 (`FR-PROJ-002` — 이름 필수 · 설명 · 시작 · 종료 · 상태) */
 export async function create(
   actor: Actor,
@@ -306,32 +309,27 @@ export async function updateSpan(
   });
 }
 
-/**
- * 지울 수 있는가 — **소유자와 `ADMIN`** (`FR-PROJ-004`).
+/*
+ * `assertCanDelete(actor, ownerId)` 가 여기 있었습니다 — 「소유자 또는 `ADMIN`」
+ * (`FR-PROJ-004`). **지웠습니다** (`DEC-077`): 사람이 전부 관리자면 뒤쪽 항이 언제나
+ * 참이라 식 전체가 참입니다.
  *
- * 고치는 것과 다릅니다. 삭제는 **남의 일정을 함께 감춥니다** — 되돌릴 수
- * 있어도 그동안 아무도 못 봅니다.
+ * ⚠️ **댓글을 지우는 짝이 이것과 같았습니다**(`project-item-comment.service`).
+ *    거기서 「소유자 + `ADMIN`」을 고른 근거가 *"이 저장소에 이미 있는 짝"* 이었고,
+ *    그 짝이 여기였습니다 — **두 곳을 같은 커밋에서 함께** 지웁니다. 한쪽만 고치면
+ *    그쪽 머리말이 없는 규칙을 가리킵니다.
  *
- * ⚠️ **댓글을 지우는 짝이 이것과 같습니다**(`project-item-comment.service`).
- *    거기서 「소유자 + `ADMIN`」을 고른 근거가 *"이 저장소에 이미 있는 짝"* 인데,
- *    그 짝이 여기입니다 — 한쪽을 고치면 그쪽 머리말이 거짓이 됩니다.
+ * 삭제가 **남의 일정을 함께 감춘다**는 사실은 그대로입니다. 그것을 막던 것이
+ * 권한에서 **휴지통**(`FR-PROJ-004`)으로 옮겨 갔을 뿐입니다 — 되돌릴 수 있습니다.
  */
-function assertCanDelete(actor: Actor, ownerId: string): void {
-  if (actor.id === ownerId || isAdmin(actor)) return;
-  throw new AppError(
-    "FORBIDDEN",
-    "프로젝트는 만든 사람과 관리자만 삭제할 수 있습니다."
-  );
-}
 
 /** 휴지통으로 (`FR-PROJ-004`) — **지우지 않습니다** */
 export async function moveToTrash(actor: Actor, id: string): Promise<void> {
   const row = await db.project.findFirst({
     where: { id, deletedAt: null },
-    select: { id: true, name: true, ownerId: true },
+    select: { id: true, name: true },
   });
   if (!row) throw new AppError("NOT_FOUND", "프로젝트를 찾을 수 없습니다.");
-  assertCanDelete(actor, row.ownerId);
 
   await db.$transaction(async (tx) => {
     await tx.project.update({ where: { id }, data: { deletedAt: new Date() } });
@@ -351,10 +349,9 @@ export async function moveToTrash(actor: Actor, id: string): Promise<void> {
 export async function restore(actor: Actor, id: string): Promise<void> {
   const row = await db.project.findFirst({
     where: { id, deletedAt: { not: null } },
-    select: { id: true, name: true, ownerId: true },
+    select: { id: true, name: true },
   });
   if (!row) throw new AppError("NOT_FOUND", "프로젝트를 찾을 수 없습니다.");
-  assertCanDelete(actor, row.ownerId);
 
   await db.$transaction(async (tx) => {
     await tx.project.update({ where: { id }, data: { deletedAt: null } });
