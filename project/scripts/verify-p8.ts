@@ -790,11 +790,11 @@ async function run() {
     check("두 번 담아도 오류가 아니다", again.added === false);
     await collectionService.addItem(editorActor, c.slug, r2.id);
 
-    const before = await collectionService.getBySlug(c.slug);
+    const before = await collectionService.getBySlug(c.slug, editor.id);
     check("순서대로 온다", before.items[0]?.id === r1.id);
 
     await collectionService.reorderItems(editorActor, c.slug, [r2.id, r1.id]);
-    const after = await collectionService.getBySlug(c.slug);
+    const after = await collectionService.getBySlug(c.slug, editor.id);
     check("순서가 바뀐다", after.items[0]?.id === r2.id);
 
     const stale = await msg(() =>
@@ -807,25 +807,33 @@ async function run() {
     );
 
     // 팀 공개는 남도 본다 (FR-COLL-006)
-    const asMember = await collectionService.getBySlug(c.slug);
+    const asMember = await collectionService.getBySlug(c.slug, member.id);
     check("팀 공개는 남도 본다", asMember.items.length === 2);
 
     /*
-     * 🔄 여기서 **「비공개로 바꾸면 남은 못 본다」**와 **「남의 컬렉션은 못 고친다」**를
-     *    봤습니다. 둘 다 「소유자 또는 `EDITOR` 이상」 판정이었고 `DEC-077` 로
-     *    사라졌습니다 — `PRIVATE` 은 이제 «남에게 안 보이는 것»이 아니라 「팀」
-     *    목록과 「내 것」 목록을 가르는 표시입니다(`collection.service` 머리말).
+     * **비공개로 바꾸면 남은 못 봅니다** (`OPEN-021` 로 되살린 판정).
      *
-     *    ⚠️ 「나만 보는」이 필요한 자리는 **개인 메모**이고, 그건 `verify:notes` 가
-     *       봅니다 — 거기는 `ownerId` 로 막고 등급이 있던 적이 없습니다.
+     * 🔄 `DEC-077` 이 등급을 걷을 때 이 판정도 함께 걷혀 한동안 로그인한 사람이
+     *    전부 봤습니다. 그런데 화면은 그때도 **「나만 봅니다」**라고 적고
+     *    있었습니다 — 말과 사실이 어긋난 자리라 되돌렸습니다. 없앤 것은
+     *    «등급»이지 «소유권»이 아닙니다.
+     *
+     * **못 보는 것은 `NOT_FOUND` 입니다** — 「권한이 없습니다」로 답하면 그 slug 가
+     * 존재한다는 사실이 새어 나갑니다.
      */
     await collectionService.update(editorActor, c.slug, {
       visibility: "PRIVATE",
     });
-    const stillVisible = await collectionService.getBySlug(c.slug);
     check(
-      "비공개로 바꿔도 로그인한 사람은 본다 (DEC-077)",
-      stillVisible.items.length === 2
+      "비공개로 바꾸면 남은 못 본다",
+      (await msg(() => collectionService.getBySlug(c.slug, member.id))) ===
+        "컬렉션을 찾을 수 없습니다."
+    );
+    const asOwner = await collectionService.getBySlug(c.slug, editor.id);
+    check("주인은 그대로 본다", asOwner.items.length === 2);
+    check(
+      "이름도 남에게는 안 나온다 (탭 제목으로 새지 않게)",
+      (await collectionService.nameBySlug(c.slug, member.id)) === null
     );
 
     const byOther = await msg(() =>
@@ -835,7 +843,7 @@ async function run() {
     await collectionService.update(editorActor, c.slug, { name: "P8 컬렉션" });
 
     await collectionService.removeItem(editorActor, c.slug, r1.id);
-    const left = await collectionService.getBySlug(c.slug);
+    const left = await collectionService.getBySlug(c.slug, editor.id);
     check("뺀다", left.items.length === 1);
 
     const picker = await collectionService.listForPicker(editorActor, r2.id);

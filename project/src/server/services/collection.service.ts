@@ -65,15 +65,17 @@ function toCollection(c: Row): Collection {
 /**
  * 목록 — 팀 공개 + 내 것.
  *
- * 🔄 **`PRIVATE` 이 「소유자와 `EDITOR` 이상에게만」이었습니다.** `DEC-077` 로
- *    등급이 사라져 **로그인한 사람은 전부 봅니다** — 관리자가 이미 전부 보고
- *    있었고, 이제 모두가 관리자입니다.
+ * ## 「비공개」는 **소유자만** 봅니다 (`FR-COLL-006`)
  *
- *    ⚠️ 그래서 `collections.visibility` 의 `PRIVATE` 은 지금 **아무도 못 보게
- *    하지 않습니다.** 남아 있는 뜻은 두 가지입니다: ① 「팀」 목록과 「내 것」
- *    목록을 나누는 표시 ② 탈퇴 시 비공개만 지운다는 규칙(`member.service`).
- *    「나만 보는」이 필요하면 그 자리는 **개인 메모**입니다(`note.service` —
- *    거기는 `ownerId` 로 막고, 등급이 있던 적이 없습니다).
+ * 🔄 원래는 「소유자와 `EDITOR` 이상」이었습니다. `DEC-077` 로 등급이 사라지자
+ *    **판정 전체가 함께 걷혔고**, 그 결과 「비공개」가 로그인한 사람 모두에게
+ *    보였습니다. 화면은 그동안에도 **「나만 봅니다」**라고 적고 있었습니다
+ *    (`collection-form`) — 말과 사실이 어긋난 자리라 되살렸습니다 (`OPEN-021`).
+ *
+ * **`DEC-077` 이 없앤 것은 «등급»이지 «소유권»이 아닙니다.** 개인 메모가
+ * `ownerId` 로 막는 것과 같은 결이고, 그쪽은 등급이 있던 적이 없어 이번
+ * 변경의 영향을 받은 적도 없습니다. 사라진 것은 **`EDITOR` 라는 예외 하나**뿐이고,
+ * 그래서 지금 규칙은 전보다 **좁습니다** — 소유자 한 사람입니다.
  */
 export async function listFor(actor: Actor): Promise<{
   team: Collection[];
@@ -81,8 +83,16 @@ export async function listFor(actor: Actor): Promise<{
 }> {
   const [team, mine] = await Promise.all([
     db.collection.findMany({
-      // 남의 것은 비공개까지 전부 「팀」 목록에 보인다 (`DEC-077`)
-      where: { deletedAt: null, NOT: { ownerId: actor.id } },
+      /*
+       * 남의 것 중 **팀 공개만** 보입니다. 남의 「비공개」는 목록에 오르지
+       * 않습니다 — 화면에서 거르지 않는 이유는 아래 상세와 같습니다: 서버가
+       * 보내 놓고 안 그리면 **RSC 페이로드에 실려 나갑니다.**
+       */
+      where: {
+        deletedAt: null,
+        NOT: { ownerId: actor.id },
+        visibility: "TEAM",
+      },
       select: COLLECTION_SELECT,
       orderBy: { updatedAt: "desc" },
     }),
@@ -95,27 +105,32 @@ export async function listFor(actor: Actor): Promise<{
   return { team: team.map(toCollection), mine: mine.map(toCollection) };
 }
 
-/** 상세 — 담긴 자료를 순서대로 */
+/**
+ * 상세 — 담긴 자료를 순서대로.
+ *
+ * **목록(`listFor`)과 같은 규칙입니다** — 남의 「비공개」는 못 봅니다.
+ * 두 곳이 갈리면 목록에 안 보이는 것을 주소로 열 수 있게 됩니다.
+ */
 export async function getBySlug(
-  slug: string
+  slug: string,
+  viewerId?: string
 ): Promise<{ collection: Collection; items: Resource[] }> {
   const row = await db.collection.findFirst({
     where: { slug, deletedAt: null },
-    select: COLLECTION_SELECT,
+    select: { ...COLLECTION_SELECT, ownerId: true },
   });
   if (!row) throw new AppError("NOT_FOUND", "컬렉션을 찾을 수 없습니다.");
 
   /*
-   * 🔄 「비공개는 소유자와 `EDITOR` 이상만」 판정이 여기 있었고, 못 보는 경우
-   *    `FORBIDDEN` 이 아니라 **`NOT_FOUND` 로 위장**했습니다(존재 여부를 slug 로
-   *    캐내지 못하게). `DEC-077` 로 등급이 사라져 판정이 통째로 참이 됐습니다 —
-   *    목록(`listFor`)과 **같은 규칙**이라 둘이 어긋나지 않습니다.
+   * **못 보는 것은 `FORBIDDEN` 이 아니라 `NOT_FOUND` 입니다.**
    *
-   *    그래서 **`actor` 파라미터도 함께 뺐습니다.** 판정이 없는데 `Actor` 를
-   *    받으면 「여기서 인가를 한다」고 말하는 서명이 됩니다 — 다음 사람이
-   *    그 말을 믿고 판정을 안 넣습니다. 들어와도 되는지는 page 의
-   *    `requireActiveUser()` 가 이미 물었습니다.
+   * 「권한이 없습니다」라고 답하면 **그 slug 가 존재한다**는 사실이 새어 나갑니다 —
+   * 이름을 하나씩 넣어 보며 남의 비공개 컬렉션 목록을 캐낼 수 있습니다.
+   * 없는 것과 못 보는 것을 **같은 답**으로 덮습니다.
    */
+  if (row.visibility === "PRIVATE" && row.ownerId !== viewerId) {
+    throw new AppError("NOT_FOUND", "컬렉션을 찾을 수 없습니다.");
+  }
 
   const items = await db.collectionItem.findMany({
     where: { collectionId: row.id, resource: { deletedAt: null } },
@@ -130,12 +145,24 @@ export async function getBySlug(
 }
 
 /** 빵부스러기 라벨용 이름 한 개 — `resource.service.titleBySlug` 와 같은 자리·같은 이유 */
-export async function nameBySlug(slug: string): Promise<string | null> {
+/**
+ * 제목만 — `generateMetadata` 용.
+ *
+ * **`viewerId` 를 받습니다.** 이 함수는 `generateMetadata` 가 부르는데, 거기서
+ * 걸러지지 않으면 남의 비공개 컬렉션 이름이 **`<title>` 로 샙니다** — 화면은
+ * `notFound()` 로 막혀도 탭 제목과 검색 미리보기에는 남습니다.
+ */
+export async function nameBySlug(
+  slug: string,
+  viewerId?: string
+): Promise<string | null> {
   const c = await db.collection.findUnique({
     where: { slug },
-    select: { name: true },
+    select: { name: true, visibility: true, ownerId: true },
   });
-  return c?.name ?? null;
+  if (!c) return null;
+  if (c.visibility === "PRIVATE" && c.ownerId !== viewerId) return null;
+  return c.name;
 }
 
 /* ────────────────────────────────────────────────────────────────────────

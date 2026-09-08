@@ -20,6 +20,15 @@ import * as collectionService from "@/server/services/collection.service";
 export async function generateMetadata({
   params,
 }: PageProps<"/collections/[slug]">): Promise<Metadata> {
+  /*
+   * **`viewerId` 를 안 넘깁니다 — 그래서 비공개는 이름이 안 나옵니다.**
+   *
+   * 이 함수는 인가 게이트 **밖**에서 불립니다(`resources/[type]/[slug]` 의
+   * `generateMetadata` 와 같은 자리). 넘길 세션이 없으니 「모르는 사람」으로
+   * 묻고, 서비스가 비공개를 `null` 로 답합니다 — 안 그러면 남의 비공개
+   * 컬렉션 이름이 **탭 제목**으로 샙니다. 화면은 `notFound()` 로 막혀도
+   * `<title>` 은 그 전에 그려집니다.
+   */
   const { slug: rawSlug } = await params;
   const name = await collectionService.nameBySlug(decodeSegment(rawSlug));
   return { title: name ? `${name} · 컬렉션` : "컬렉션" };
@@ -42,14 +51,17 @@ export async function generateMetadata({
 export default async function CollectionDetailPage({
   params,
 }: PageProps<"/collections/[slug]">) {
-  // 반환값은 안 씁니다 — 「들어와도 되는가」만 묻습니다 (`DEC-035`)
-  await requireActiveUser();
+  /*
+   * **반환값을 씁니다** — 「비공개는 소유자만」 판정에 보는 사람이 누구인지가
+   * 필요합니다 (`OPEN-021` · `collection.service.getBySlug`).
+   */
+  const session = await requireActiveUser();
   const { slug: rawSlug } = await params;
   const slug = decodeSegment(rawSlug);
 
   let data;
   try {
-    data = await collectionService.getBySlug(slug);
+    data = await collectionService.getBySlug(slug, session.userId);
   } catch (e) {
     if (e instanceof AppError && e.code === "NOT_FOUND") notFound();
     throw e;
