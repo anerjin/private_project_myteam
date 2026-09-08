@@ -7,7 +7,7 @@ import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 
 /**
- * 디오의 목소리 — **이 PC 에서 도는 Supertonic** (`DEC-072`).
+ * 네오의 목소리 — **이 PC 에서 도는 Supertonic** (`DEC-072`).
  *
  * ## 왜 서버에서 만드는가
  *

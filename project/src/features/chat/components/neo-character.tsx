@@ -3,11 +3,11 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
-import type { DioCharacter as Spec } from "@/features/chat/characters";
+import type { NeoCharacter as Spec } from "@/features/chat/characters";
 import type { VoicePhase } from "@/features/chat/voice/use-voice";
 
 /**
- * 디오의 얼굴 — three.js. **동물의 숲 풍** (`characters.ts` 주석).
+ * 네오의 얼굴 — three.js. **동물의 숲 풍** (`characters.ts` 주석).
  *
  * ## 얼굴만 나옵니다
  *
@@ -182,7 +182,7 @@ function build(spec: Spec): Rig {
   };
 }
 
-export function DioCharacter({
+export function NeoCharacter({
   spec,
   phase,
   className,

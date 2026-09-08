@@ -1,6 +1,6 @@
 export const SITE = {
   name: "Neowave Work",
-  description: "DOI 개발팀 정보 시스템",
+  description: "네오웨이브 운영 시스템",
 } as const;
 
 export const ROLE_LABEL: Record<string, string> = {

@@ -44,5 +44,28 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "off",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        /*
+         * **온전한 Chromium 을 씁니다** (`OPEN-019`).
+         *
+         * 안 적으면 Playwright 는 `chromium_headless_shell` — 헤드리스 전용으로
+         * 깎아 낸 바이너리 — 를 고릅니다. 그것이 **로그인 직후 `/dashboard`
+         * 에서 렌더러째 죽습니다**: `Navigation failed because page crashed!`.
+         *
+         * 실측(2026-09-08): 기본값이면 17건 중 **10건 실패**, 이 한 줄을 더하면
+         * **5건**으로 줍니다. 같은 탐침을 `channel: "chromium"` 으로 돌리면
+         * 로그인 → 대시보드 → `networkidle` 이 그대로 통과합니다.
+         *
+         * **이 줄이 없는 동안 `npm run e2e` 는 빨간 채로 방치돼 있었습니다** —
+         * `P9` 가 「E2E 6종 통과」로 닫힌 뒤 아무도 안 돌렸습니다. 게이트는
+         * 돌려야 게이트입니다.
+         */
+        channel: "chromium",
+      },
+    },
+  ],
 });

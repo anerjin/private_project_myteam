@@ -194,8 +194,8 @@ model User {
   /// 프로젝트 (`FR-PROJ-*`). 자료와 달리 **소유자는 지울 권한만** 갖습니다 —
   /// 보는 것도 고치는 것도 승인된 회원 전원입니다 (`DEC-018`·`DEC-069`)
   ownedProjects     Project[]          @relation("ProjectOwner")
-  projectDocs       ProjectDoc[]       @relation("ProjectDocAuthor")
-  assignedTasks     ProjectTask[]      @relation("TaskAssignee")
+  assignedItems     ProjectItem[]      @relation("ItemAssignee")
+  itemComments      ProjectItemComment[] @relation("ProjectItemCommentAuthor")
 
   @@index([status])
   @@index([role])
@@ -717,28 +717,6 @@ enum ProjectStatus {
   DONE
 }
 
-/// 프로젝트 안의 문서 구획. **표가 아니라 enum 입니다** — 셋이 고정이고
-/// 운영자가 늘리는 물건이 아닙니다. 표로 두면 「구획 관리」 화면이 따라오고
-/// 그건 아무도 안 여는 화면이 됩니다 (`DEC-069`).
-enum ProjectSection {
-  PLAN
-  DESIGN
-  DEV
-}
-
-enum TaskStatus {
-  TODO
-  DOING
-  DONE
-  HOLD
-}
-
-/// 1차는 「끝나야 시작」 하나뿐입니다. 나머지 셋(SS·FF·SF)은 개발 일정에서
-/// 드물고, 넣는 순간 간트의 검증 규칙이 네 배가 됩니다.
-enum TaskLinkType {
-  FINISH_TO_START
-}
-
 model Project {
   id          String        @id @default(cuid())
   slug        String        @unique
@@ -755,8 +733,7 @@ model Project {
   deletedAt   DateTime?     @map("deleted_at")
 
   owner User          @relation("ProjectOwner", fields: [ownerId], references: [id])
-  docs  ProjectDoc[]
-  tasks ProjectTask[]
+  items ProjectItem[]
 
   /// `visibility` 가 **없습니다.** 승인된 회원 전원이 전부 봅니다 (`DEC-018`).
   /// 미리 두면 조회마다 조건이 붙고, 정작 필요한 날에는 **아무도 그 값을
@@ -765,100 +742,59 @@ model Project {
   @@map("projects")
 }
 
-model ProjectDoc {
-  id        String         @id @default(cuid())
-  projectId String         @map("project_id")
-  section   ProjectSection
-  title     String
-  /// 마크다운. 자료 본문과 같은 상한(10만 자)을 zod 가 겁니다
-  body      String?
-  /// 구획 «안»의 순서 (`FR-PROJ-007`)
-  sortOrder Int            @default(0) @map("sort_order")
-  authorId  String         @map("author_id")
-  createdAt DateTime       @default(now()) @map("created_at")
-  updatedAt DateTime       @updatedAt @map("updated_at")
-  /// 휴지통 (`FR-PROJ-008`)
-  deletedAt DateTime?      @map("deleted_at")
 
-  project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  author   User                @relation("ProjectDocAuthor", fields: [authorId], references: [id])
-  versions ProjectDocVersion[]
 
-  /// 화면이 언제나 «한 프로젝트의 한 구획을 순서대로» 부릅니다
-  @@index([projectId, section, sortOrder])
-  @@map("project_docs")
-}
-
-/// 문서 변경 이력 (`FR-PROJ-009`).
+/// 프로젝트 항목 (`DEC-075` — gboard(Orbee) 의 `ProjectItem` 형태 그대로).
 ///
-/// 자료는 감사 로그를 «자료 각도로» 돌려 이력을 만들었지만(`FR-RES-013`),
-/// 프로젝트 문서는 **감사 로그에 남기지 않습니다** — 팀에 영향을 주는 행위가
-/// 아니라 글쓰기입니다. 대신 판을 그대로 남깁니다.
-model ProjectDocVersion {
-  id        String   @id @default(cuid())
-  docId     String   @map("doc_id")
-  title     String
-  body      String?
-  /// 이 판을 만든 사람. 계정이 지워져도 이력은 남아야 하므로 이름을 «찍어» 둡니다
-  editedBy  String?  @map("edited_by")
-  createdAt DateTime @default(now()) @map("created_at")
+/// **간트의 막대 하나가 이 표의 한 줄입니다.** 계층·마일스톤·선후행은 두지
+/// 않습니다 — Orbee 에 없는 것이고, 운영자가 그 형태를 그대로 쓰기로
+/// 정했습니다(`DEC-075`). 진행률 하나로 상태를 나타냅니다.
+model ProjectItem {
+  id         String    @id @default(cuid())
+  projectId  String    @map("project_id")
+  title      String
+  startsOn   DateTime? @map("starts_on") @db.Date
+  endsOn     DateTime? @map("ends_on") @db.Date
+  progress   Int       @default(0)
+  /// 간트 막대 색. 비우면 벤더 기본색 (`DEC-074`)
+  color      String?
+  assigneeId String?   @map("assignee_id")
+  /// 화면에 보이는 차례. Orbee 의 `position` 과 같은 몫이다
+  sortOrder  Int       @default(0) @map("sort_order")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  doc ProjectDoc @relation(fields: [docId], references: [id], onDelete: Cascade)
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee User?   @relation("ItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
 
-  @@index([docId, createdAt(sort: Desc)])
-  @@map("project_doc_versions")
-}
+  comments ProjectItemComment[]
 
-model ProjectTask {
-  id          String     @id @default(cuid())
-  projectId   String     @map("project_id")
-  /// 하위 할 일 (`FR-PROJ-012`)
-  parentId    String?    @map("parent_id")
-  title       String
-  startsOn    DateTime?  @map("starts_on") @db.Date
-  endsOn      DateTime?  @map("ends_on") @db.Date
-  /// 마일스톤은 **한 점**입니다 — `startsOn` 과 `endsOn` 이 같습니다 (`FR-PROJ-017`)
-  isMilestone Boolean    @default(false) @map("is_milestone")
-  progress    Int        @default(0)
-  status      TaskStatus @default(TODO)
-  assigneeId  String?    @map("assignee_id")
-  sortOrder   Int        @default(0) @map("sort_order")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
-
-  project  Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent   ProjectTask?  @relation("TaskTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children ProjectTask[] @relation("TaskTree")
-  /// 담당자가 탈퇴하면 **할 일은 남고 담당만 비웁니다** — 일정이 사라지면 안 됩니다
-  assignee User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-
-  linksFrom ProjectTaskLink[] @relation("LinkFrom")
-  linksTo   ProjectTaskLink[] @relation("LinkTo")
-
-  /// **부모의 기간·진행률은 컬럼이 아닙니다.** 자식에서 굴러 올라온 값이라
-  /// 저장하면 곧 어긋납니다 — 자식을 옮길 때마다 부모를 다시 써야 하고,
-  /// 그 갱신을 한 번 빠뜨리면 화면이 조용히 거짓말합니다. 읽을 때 계산합니다.
   @@index([projectId, sortOrder])
   @@index([assigneeId])
-  @@map("project_tasks")
+  @@map("project_items")
 }
 
-/// 선후행 의존 (`FR-PROJ-016`).
+
+/// 항목 댓글 (`DEC-074` — gboard 의 `ProjectItemComment` 을 우리 모델에 맞춘 것).
 ///
-/// **순환은 DB 가 못 막습니다.** 「A→B→A」는 외래키에 안 걸립니다 — 만들 때
-/// service 가 검사해야 하고, 안 하면 롤업 계산이 무한히 돕니다.
-model ProjectTaskLink {
-  id         String       @id @default(cuid())
-  fromTaskId String       @map("from_task_id")
-  toTaskId   String       @map("to_task_id")
-  type       TaskLinkType @default(FINISH_TO_START)
-  createdAt  DateTime     @default(now()) @map("created_at")
+/// **`resources` 밖에 있습니다** (`DEC-069`). 자료의 댓글이 아니라 일정의 댓글이고,
+/// 검색 대상도 아닙니다.
+///
+/// 지우기는 **soft delete** 입니다 — 다른 표(`project_docs`·`project_tasks`)와
+/// 같은 규칙이라야 「지운 것」의 뜻이 표마다 갈라지지 않습니다.
+model ProjectItemComment {
+  id        String    @id @default(cuid())
+  itemId    String    @map("item_id")
+  authorId  String    @map("author_id")
+  body      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
-  from ProjectTask @relation("LinkFrom", fields: [fromTaskId], references: [id], onDelete: Cascade)
-  to   ProjectTask @relation("LinkTo", fields: [toTaskId], references: [id], onDelete: Cascade)
+  item   ProjectItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  author User        @relation("ProjectItemCommentAuthor", fields: [authorId], references: [id])
 
-  /// 같은 짝을 두 번 잇지 않는다
-  @@unique([fromTaskId, toTaskId])
-  @@index([toTaskId])
-  @@map("project_task_links")
+  /// 한 항목의 댓글을 시간순으로 — 목록이 유일한 읽기 경로다
+  @@index([itemId, deletedAt, createdAt])
+  @@map("project_item_comments")
 }

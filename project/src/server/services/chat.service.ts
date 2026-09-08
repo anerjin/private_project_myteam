@@ -144,7 +144,7 @@ const DENIED_TOOLS = [
  * 씁니다 — 구독은 CLI 의 로그인이지 browser-use 가 부를 수 있는 API 가
  * 아닙니다.
  *
- * Playwright MCP 를 **디오에게** 붙이면 판단하는 모델이 이미 붙어 있는
+ * Playwright MCP 를 **네오에게** 붙이면 판단하는 모델이 이미 붙어 있는
  * 셈이라, 키 없이 같은 일을 합니다.
  *
  * ## 이름을 여기 박아 두지 않습니다
@@ -525,7 +525,7 @@ export const SHOTS_PREFIX = "chat-shots";
  */
 const SHOT_KEEP_DAYS = 7;
 
-/** 디오의 브라우저가 남기는 것들 — 캡처·콘솔 로그 */
+/** 네오의 브라우저가 남기는 것들 — 캡처·콘솔 로그 */
 export function shotsDir(): string {
   return path.join(env.STORAGE_ROOT, SHOTS_PREFIX);
 }
@@ -545,8 +545,8 @@ export function isShotName(name: string): boolean {
  *
  * ## 왜 필요한가
  *
- * 디오의 브라우저는 서버 PC 안에서 돕니다. 사내망으로 들어온 팀원은 그 창을
- * 못 봅니다 — 운영자가 「브라우저를 못 띄우는데?」라고 물었고 디오는
+ * 네오의 브라우저는 서버 PC 안에서 돕니다. 사내망으로 들어온 팀원은 그 창을
+ * 못 봅니다 — 운영자가 「브라우저를 못 띄우는데?」라고 물었고 네오는
  * **「캡처해서 보여 드릴 수 있습니다」**라고 답했는데, 그럴 길이 없었습니다.
  * 약속만 있고 코드가 없던 자리입니다.
  *
@@ -666,7 +666,7 @@ function mcpConfig(): string {
      */
     /*
      * **`type` 이 있어야 붙습니다.** 서버가 알려 준 예시(`{"url": …}`)만 넣었더니
-     * CLI 가 도구를 하나도 안 들여왔고, 디오는 「이번 세션에는 브라우저 도구가
+     * CLI 가 도구를 하나도 안 들여왔고, 네오는 「이번 세션에는 브라우저 도구가
      * 등록돼 있지 않습니다」라고 답했습니다 — 서버는 멀쩡히 듣고 있었는데요.
      */
     servers.playwright = { type: "http", url: browserServerUrl() };
@@ -913,8 +913,8 @@ export function systemPromptFor(context: string): string {
 
 function systemPrompt(context: string, tools: boolean): string {
   return [
-    `당신의 이름은 «${ASSISTANT}» 입니다. 사내 자료 시스템 «Neowave Work» 의 도우미이고,`,
-    "DOI(드론 공간정보) 개발팀이 씁니다. 이름을 물으면 그렇게 답하십시오.",
+    `당신의 이름은 «${ASSISTANT}» 입니다 — 이 시스템 «Neowave Work» 의 «Neowave» 에서 딴 이름입니다.`,
+    "네오웨이브의 사내 자료 시스템이고, 네오웨이브 구성원이 씁니다. 이름을 물으면 그렇게 답하십시오.",
     "한국어로, 짧고 사실만 답하십시오. 모르면 모른다고 하십시오 — 지어내지 마십시오.",
     "",
     `사용자가 지금 보고 있는 화면: ${context}`,

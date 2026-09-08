@@ -5,7 +5,7 @@ import { requireActor } from "@/server/auth/guards";
 import * as ttsService from "@/server/services/tts.service";
 
 /**
- * 디오의 목소리 (`DEC-072`).
+ * 네오의 목소리 (`DEC-072`).
  *
  * - `GET`  — 서버 목소리가 있는지, 몇 개인지. 화면이 설정 창을 그릴 때 묻습니다
  * - `POST` — 글을 WAV 로. `{ text, voice }`

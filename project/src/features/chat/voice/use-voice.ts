@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { findCharacter, type DioCharacter } from "@/features/chat/characters";
+import { findCharacter, type NeoCharacter } from "@/features/chat/characters";
 import {
   listen,
   type ListenHandle,
@@ -22,8 +22,8 @@ import {
  *
  * 이 훅은 **말을 글로 바꾸고, 글을 소리로 바꾸는 것**만 합니다. 바뀐 글은
  * `onSend` 로 나가는데 그것이 채팅 모드의 `send` 와 **같은 함수**입니다 —
- * 디오가 할 수 있는 일도, 대화 기록도, 채팅과 하나입니다. 음성 모드에
- * 「두 번째 디오」를 두면 어느 쪽이 무엇을 기억하는지 아무도 모르게 됩니다.
+ * 네오가 할 수 있는 일도, 대화 기록도, 채팅과 하나입니다. 음성 모드에
+ * 「두 번째 네오」를 두면 어느 쪽이 무엇을 기억하는지 아무도 모르게 됩니다.
  *
  * ## 네 상태
  *
@@ -45,7 +45,7 @@ const CHARACTER_KEY = "qb.chat.voice.character";
 const SID_KEY = "qb.chat.voice.sid";
 
 /** 「들어 보기」가 읽는 문장 */
-const SAMPLE = "안녕하세요, 저는 디오입니다. 사내에 등록된 자료를 찾아 드립니다.";
+const SAMPLE = "안녕하세요, 저는 네오입니다. 사내에 등록된 자료를 찾아 드립니다.";
 
 export interface VoiceState {
   phase: VoicePhase;
@@ -63,7 +63,7 @@ export interface VoiceState {
   server: ServerVoices | null;
   /** 고른 서버 목소리 — `0 … voices-1` */
   voiceId: number;
-  character: DioCharacter;
+  character: NeoCharacter;
   /** 마이크 단추 — 상태에 따라 «시작·멈춤·조용히»가 됩니다 */
   press: () => void;
   /** 고른 목소리로 한 문장 — 설정 창의 「들어 보기」 */

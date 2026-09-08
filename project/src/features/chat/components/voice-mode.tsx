@@ -38,10 +38,10 @@ import { cn } from "@/lib/utils";
  * 음성 모드를 «켤 때» 내려받고, 서버 렌더에서는 아예 없습니다(WebGL 이
  * 없는 곳에서 `three` 를 import 하면 그 자리에서 죽습니다).
  */
-const DioCharacter = dynamic(
+const NeoCharacter = dynamic(
   () =>
-    import("@/features/chat/components/dio-character").then(
-      (m) => m.DioCharacter
+    import("@/features/chat/components/neo-character").then(
+      (m) => m.NeoCharacter
     ),
   {
     ssr: false,
@@ -68,7 +68,7 @@ export function VoiceStage({ voice }: { voice: VoiceState }) {
         // 무대는 넉넉하게 — 「더 크게」(운영자). 폭이 좁아도 세로는 그대로입니다
         className="bg-muted/30 relative h-72 overflow-hidden rounded-lg"
       >
-        <DioCharacter
+        <NeoCharacter
           spec={voice.character}
           phase={voice.phase}
           className="h-full w-full"
@@ -103,7 +103,7 @@ export function VoiceBar({
   disabled,
 }: {
   voice: VoiceState;
-  /** 디오 자체를 못 쓰는 상태 (CLI 없음) */
+  /** 네오 자체를 못 쓰는 상태 (CLI 없음) */
   disabled: boolean;
 }) {
   /** 브라우저나 주소가 막은 경우 — 그 이유를 단추 옆에 적습니다 */

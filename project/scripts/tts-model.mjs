@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 디오의 목소리 모델을 내려받습니다 (`DEC-072`).
+ * 네오의 목소리 모델을 내려받습니다 (`DEC-072`).
  *
  *   npm run tts:model            → <STORAGE_ROOT 의 옆>/models/ 에 풀어 둡니다
  *   npm run tts:model -- D:\somewhere

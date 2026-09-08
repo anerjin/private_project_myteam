@@ -13,7 +13,7 @@ import { isAdmin, type Actor } from "@/server/auth/actor";
 import * as audit from "@/server/services/audit.service";
 
 /**
- * 프로젝트 (`FR-PROJ-001`~`004` · `DEC-069`).
+ * 프로젝트 (`FR-PROJ-001`~`004` · `DEC-069` · `DEC-075`).
  *
  * ## 자료가 아닙니다
  *
@@ -28,14 +28,28 @@ import * as audit from "@/server/services/audit.service";
  * 정반대입니다. 거기서는 `where` 에 `ownerId` 를 넣는 것이 규칙이고,
  * 여기서는 **넣지 않는 것**이 규칙입니다.
  *
- * `ownerId` 는 **지울 권한에만** 쓰입니다. 고치는 것도 전원입니다 —
+ * `ownerId` 는 **지울 권한에만** 씁니다. 고치는 것도 전원입니다 —
  * 20명이 한 팀이고, 「내가 만든 프로젝트만 내가 고친다」는 그 규모에서
  * 서로를 기다리게 만듭니다.
  *
+ * 🔴 **원본(Orbee)과 정확히 여기서 갈립니다.** 그쪽은 사용자별 격리 SaaS 라
+ *    조회마다 `userId` 로 좁히고, 참가자 표(`ProjectMember`)와 초대가 그
+ *    위에 서 있습니다. 화면은 통째로 가져왔지만 **그 조건들은 하나도 안
+ *    가져왔습니다** — 우리에게는 참가자라는 개념이 없고, 흉내 내면 없는 개념을
+ *    하나 만드는 것이 됩니다.
+ *
+ * ## `DEC-075` 에서 세는 일이 사라졌습니다
+ *
+ * 옛 요약에는 `docCount`·`taskCount`·`doneCount` 셋이 있었고, 그것을 채우려고
+ * `groupBy` 를 세 번 돌렸습니다. 문서 표가 없어졌고 할 일 상태(`DONE`)도
+ * 없어졌으므로 셋 다 잴 것이 없습니다 — 카드가 그리는 것은 이제 **기간 안에서
+ * 오늘이 어디쯤인가**입니다(`features/projects/project-span.ts`). 그 값은 질의가
+ * 아니라 날짜 산수라 서버가 아무것도 더 세지 않습니다.
+ *
  * ## 감사 로그는 «그릇»만 남깁니다
  *
- * 만들고 지우는 것은 팀 모두에게 보이는 구조 변경이라 남깁니다. 안의 문서를
- * 고치는 것은 글쓰기라 남기지 않습니다 (`features/audit/actions` 주석).
+ * 만들고 지우는 것은 팀 모두에게 보이는 구조 변경이라 남깁니다. 안의 항목을
+ * 고치는 것은 계획을 세우는 일이라 남기지 않습니다 (`features/audit/actions` 주석).
  */
 
 export interface ProjectSummary {
@@ -44,13 +58,18 @@ export interface ProjectSummary {
   name: string;
   description?: string;
   status: string;
+  /** YYYY-MM-DD 또는 `undefined`(아직 안 정함) */
   startsOn?: string;
   endsOn?: string;
   owner: { id: string; name: string; username: string };
-  docCount: number;
-  taskCount: number;
-  /** 완료한 할 일 수 — 목록의 진행률이 이것으로 계산됩니다 */
-  doneCount: number;
+  /**
+   * 만든 날(YYYY-MM-DD).
+   *
+   * 🔴 `Date` 가 아니라 **이미 잘린 날짜 문자열**로 내려보냅니다. 브라우저에서
+   *    자르면 시간대가 다른 기기에서 하루가 밀립니다 — 컬럼은 `timestamp` 지만
+   *    화면이 쓰는 것은 날짜뿐이라 자르는 일을 서버가 한 번만 합니다.
+   */
+  createdAt: string;
   updatedAt: string;
   deletedAt?: string;
 }
@@ -63,6 +82,7 @@ const CARD = {
   status: true,
   startsOn: true,
   endsOn: true,
+  createdAt: true,
   updatedAt: true,
   deletedAt: true,
   owner: { select: { id: true, name: true, username: true } },
@@ -70,10 +90,7 @@ const CARD = {
 
 type Row = Prisma.ProjectGetPayload<{ select: typeof CARD }>;
 
-function toSummary(
-  p: Row,
-  counts: { docs: number; tasks: number; done: number }
-): ProjectSummary {
+function toSummary(p: Row): ProjectSummary {
   return {
     id: p.id,
     slug: p.slug,
@@ -83,51 +100,10 @@ function toSummary(
     startsOn: fromDate(p.startsOn),
     endsOn: fromDate(p.endsOn),
     owner: p.owner,
-    docCount: counts.docs,
-    taskCount: counts.tasks,
-    doneCount: counts.done,
+    createdAt: p.createdAt.toISOString().slice(0, 10),
     updatedAt: p.updatedAt.toISOString(),
     deletedAt: p.deletedAt?.toISOString(),
   };
-}
-
-/**
- * 세는 것을 **한 번에** 합니다.
- *
- * 카드마다 물으면 프로젝트 20개에 60번의 추가 질의가 됩니다(N+1). 자료 목록이
- * 북마크 여부를 `IN` 한 번으로 채우는 것과 같은 자리입니다
- * (`resource.service.bookmarkedIds`).
- *
- * 문서·할 일 각각 `groupBy` 를 한 번씩만 돌립니다.
- */
-async function countsFor(ids: string[]) {
-  const empty = { docs: 0, tasks: 0, done: 0 };
-  if (ids.length === 0) return new Map<string, typeof empty>();
-
-  const [docs, tasks, done] = await Promise.all([
-    db.projectDoc.groupBy({
-      by: ["projectId"],
-      where: { projectId: { in: ids }, deletedAt: null },
-      _count: { _all: true },
-    }),
-    db.projectTask.groupBy({
-      by: ["projectId"],
-      where: { projectId: { in: ids } },
-      _count: { _all: true },
-    }),
-    db.projectTask.groupBy({
-      by: ["projectId"],
-      where: { projectId: { in: ids }, status: "DONE" },
-      _count: { _all: true },
-    }),
-  ]);
-
-  const map = new Map<string, { docs: number; tasks: number; done: number }>();
-  for (const id of ids) map.set(id, { ...empty });
-  for (const r of docs) map.get(r.projectId)!.docs = r._count._all;
-  for (const r of tasks) map.get(r.projectId)!.tasks = r._count._all;
-  for (const r of done) map.get(r.projectId)!.done = r._count._all;
-  return map;
 }
 
 /** 목록 (`FR-PROJ-001`) — **전원이 전부 봅니다.** 휴지통은 `trash` 로 */
@@ -139,10 +115,7 @@ export async function list(trash = false): Promise<ProjectSummary[]> {
       : [{ status: "asc" }, { updatedAt: "desc" }],
     select: CARD,
   });
-  const counts = await countsFor(rows.map((r) => r.id));
-  return rows.map((r) =>
-    toSummary(r, counts.get(r.id) ?? { docs: 0, tasks: 0, done: 0 })
-  );
+  return rows.map(toSummary);
 }
 
 export async function countLive(): Promise<number> {
@@ -160,8 +133,7 @@ export async function getBySlug(slug: string): Promise<ProjectSummary> {
     select: CARD,
   });
   if (!row) throw new AppError("NOT_FOUND", "프로젝트를 찾을 수 없습니다.");
-  const counts = await countsFor([row.id]);
-  return toSummary(row, counts.get(row.id)!);
+  return toSummary(row);
 }
 
 /**
@@ -220,6 +192,8 @@ async function uniqueSlug(name: string): Promise<string> {
   return `${base}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+
+/** 프로젝트를 만든다 (`FR-PROJ-002` — 이름 필수 · 설명 · 시작 · 종료 · 상태) */
 export async function create(
   actor: Actor,
   input: ProjectInput
@@ -294,10 +268,53 @@ export async function update(
 }
 
 /**
+ * 기간만 바꿉니다 (`DEC-075` — 상세 머리말의 「기간 수정」).
+ *
+ * 🔴 **`update` 를 부를 수 없습니다.** 그쪽은 프로젝트 전체를 다시 쓰는데,
+ *    상세 머리말의 그 대화에는 **이름도 설명도 상태도 없습니다** — 없는 값을
+ *    기본값으로 채워 보내면 기간 하나 고치려다 설명이 지워집니다. 항목의
+ *    부분 갱신(`projectItemPatchSchema`)이 갈라져 있는 것과 같은 근거입니다.
+ * ⚠️ 감사 로그는 `PROJECT_UPDATE` 로 같습니다 — 사람에게는 둘 다 「프로젝트를
+ *    고쳤다」이고, 로그의 종류를 늘려도 읽는 사람이 갈라 볼 이유가 없습니다.
+ */
+export async function updateSpan(
+  actor: Actor,
+  id: string,
+  span: { startsOn: string | null; endsOn: string | null }
+): Promise<void> {
+  const row = await db.project.findFirst({
+    where: { id, deletedAt: null },
+    select: { id: true, name: true },
+  });
+  if (!row) throw new AppError("NOT_FOUND", "프로젝트를 찾을 수 없습니다.");
+
+  await db.$transaction(async (tx) => {
+    await tx.project.update({
+      where: { id },
+      data: { startsOn: toDate(span.startsOn), endsOn: toDate(span.endsOn) },
+    });
+    await audit.log(
+      actor,
+      {
+        action: "PROJECT_UPDATE",
+        targetType: "project",
+        targetId: id,
+        summary: `프로젝트 「${row.name}」 기간 수정`,
+      },
+      tx
+    );
+  });
+}
+
+/**
  * 지울 수 있는가 — **소유자와 `ADMIN`** (`FR-PROJ-004`).
  *
- * 고치는 것과 다릅니다. 삭제는 **남의 문서와 일정을 함께 감춥니다** —
- * 되돌릴 수 있어도 그동안 아무도 못 봅니다.
+ * 고치는 것과 다릅니다. 삭제는 **남의 일정을 함께 감춥니다** — 되돌릴 수
+ * 있어도 그동안 아무도 못 봅니다.
+ *
+ * ⚠️ **댓글을 지우는 짝이 이것과 같습니다**(`project-item-comment.service`).
+ *    거기서 「소유자 + `ADMIN`」을 고른 근거가 *"이 저장소에 이미 있는 짝"* 인데,
+ *    그 짝이 여기입니다 — 한쪽을 고치면 그쪽 머리말이 거짓이 됩니다.
  */
 function assertCanDelete(actor: Actor, ownerId: string): void {
   if (actor.id === ownerId || isAdmin(actor)) return;
@@ -358,13 +375,27 @@ export async function restore(actor: Actor, id: string): Promise<void> {
  * 담당자로 고를 수 있는 사람 (`FR-PROJ-013`).
  *
  * **승인된 계정만**입니다. 정지·탈퇴한 사람에게 일을 맡길 수는 없습니다.
+ *
+ * 🔴 **원본의 「참가자 명단」이 서는 자리입니다.** Orbee 는 이 목록을
+ *    `ProjectMember` 에서 뽑고, 그래서 프로젝트마다 다릅니다. 우리에게는 그
+ *    표가 없고(`DEC-075`) 승인 회원 전원이 모든 프로젝트를 보므로
+ *    (`DEC-018`) **명단이 곧 사내 전원**입니다 — 프로젝트별로 다를 값이
+ *    아니라서 `projectId` 를 받지 않습니다.
+ * ⚠️ 그래서 담당자 고르개에는 「이 프로젝트에 없는 사람」이라는 갈래가 없습니다.
+ *    `avatarUrl` 을 함께 싣는 것은 트리 줄의 얼굴이 그것을 쓰기 때문입니다.
  */
 export async function assignableMembers(): Promise<
-  { id: string; name: string; username: string }[]
+  { id: string; name: string; username: string; avatarUrl?: string }[]
 > {
-  return db.user.findMany({
+  const rows = await db.user.findMany({
     where: { status: "ACTIVE" },
     orderBy: { name: "asc" },
-    select: { id: true, name: true, username: true },
+    select: { id: true, name: true, username: true, avatarUrl: true },
   });
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    username: r.username,
+    avatarUrl: r.avatarUrl ?? undefined,
+  }));
 }

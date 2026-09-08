@@ -29,7 +29,7 @@ import { askChatAction, chatStatusAction } from "@/server/actions/chat.actions";
 import { deleteResourceAction } from "@/server/actions/resource.actions";
 
 /**
- * 오른쪽 도우미 패널 — 서비스 화면 전체. 도우미의 이름은 **「디오」**입니다.
+ * 오른쪽 도우미 패널 — 서비스 화면 전체. 도우미의 이름은 **「네오」**입니다.
  *
  * 이름은 `features/chat/assistant` 한 곳에 있습니다 — 화면 문구·`aria-label` ·
  * 프롬프트가 **같은 값**을 씁니다.
@@ -88,7 +88,7 @@ type PanelTheme = "dark" | "light";
 /**
  * 글로 묻는가, 말로 묻는가.
  *
- * **디오는 하나입니다.** 음성 모드는 입력 방식과 겉모습(캐릭터)만 바꾸고,
+ * **네오는 하나입니다.** 음성 모드는 입력 방식과 겉모습(캐릭터)만 바꾸고,
  * 말은 채팅과 **같은 `send`** 를 지나 같은 대화 기록에 쌓입니다. 밝기와 같은
  * 성질이라 같은 방식으로 이 브라우저에 남깁니다.
  */
@@ -216,6 +216,15 @@ export function ChatPanel({ userId }: { userId: string }) {
    * 그동안은 화면 크기에 따라 20rem·24rem 이 그대로 삽니다.
    */
   const [width, setWidth] = useState<number | null>(null);
+  /**
+   * **읽어 주기 전용으로 «지금 몇 px 인가»를 담습니다.**
+   *
+   * `width` 는 사람이 끌었을 때만 값이 생깁니다(그 전에는 CSS 가 20rem·24rem 을
+   * 정합니다 — `--chat-width`). 그런데 `aria-valuenow` 는 **끌기 전에도** 있어야
+   * 해서, 그 자리를 이 값이 메웁니다. **`--chat-width` 를 건드리지 않습니다** —
+   * 건드리면 아직 안 끌었는데 폭이 굳어 화면 크기를 안 따라갑니다.
+   */
+  const [measured, setMeasured] = useState<number | null>(null);
   const asideRef = useRef<HTMLElement>(null);
   /** 끄는 «동안»의 최신값. 상태는 다음 렌더에 오므로 놓는 순간에는 늦습니다 */
   const widthRef = useRef<number | null>(null);
@@ -348,6 +357,17 @@ export function ChatPanel({ userId }: { userId: string }) {
       root.style.removeProperty("--chat-width");
     };
   }, [width]);
+
+  /** 실제로 그려진 폭을 잰다 — 읽어 주기(`aria-valuenow`)에만 쓴다 */
+  useEffect(() => {
+    const el = asideRef.current;
+    if (!el) return;
+    const read = () => setMeasured(Math.round(el.getBoundingClientRect().width));
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open]);
 
   /*
    * **창이 바뀌면 다시 잽니다.**
@@ -619,7 +639,19 @@ export function ChatPanel({ userId }: { userId: string }) {
         aria-label="도우미 너비 조절"
         aria-valuemin={MIN_WIDTH}
         aria-valuemax={MAX_WIDTH}
-        {...(width !== null ? { "aria-valuenow": width } : {})}
+        /*
+         * **`aria-valuenow` 는 언제나 있어야 합니다.**
+         *
+         * `tabindex` 가 붙은 `separator` 는 ARIA 에서 «움직이는 칸막이»라
+         * `aria-valuenow` 가 **필수**입니다(`aria-required-attr`). 전에는
+         * `width` 가 있을 때만 달았는데, 그 값은 저장된 폭을 읽는 이펙트가
+         * 채우므로 **첫 렌더에는 언제나 `null`** 입니다 — `npm run e2e` 의
+         * 접근성 검사가 바로 그 순간을 훑어 위반으로 잡았습니다.
+         *
+         * 아직 안 끌었으면 `currentWidth()` 가 **실제로 재 줍니다**(20rem 일 수도
+         * 24rem 일 수도 있어 상수를 적으면 틀립니다 — 그 함수의 주석과 같은 이유).
+         */
+        aria-valuenow={width ?? measured ?? MIN_WIDTH}
         tabIndex={0}
         onPointerDown={startResize}
         onPointerMove={moveResize}

@@ -84,7 +84,7 @@ function cspFor(nonce: string): string {
     // 자료 본문의 마크다운이 외부 이미지를 겁니다 (`rehype-sanitize` 가 태그를 거름)
     "img-src 'self' blob: data: https:",
     /*
-     * 디오의 목소리는 서버가 만든 WAV 를 `blob:` 으로 틉니다 (`DEC-072`).
+     * 네오의 목소리는 서버가 만든 WAV 를 `blob:` 으로 틉니다 (`DEC-072`).
      * `media-src` 가 없으면 `default-src 'self'` 로 떨어져 **`blob:` 이 막힙니다** —
      * 실제로 첫 재생이 CSP 위반으로 죽었습니다. 바깥 주소는 여전히 안 됩니다.
      */

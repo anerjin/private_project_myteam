@@ -1,6 +1,6 @@
 # Neowave Work
 
-DOI(드론 공간정보) 개발팀이 AI 자료 · GitHub 오픈소스 · MCP 서버 · Skill · 개발 참고 자료를
+네오웨이브가 AI 자료 · GitHub 오픈소스 · MCP 서버 · Skill · 개발 참고 자료를
 한곳에 모아 검색·재사용·보관하는 **사내 전용 정보 시스템**.
 
 > **문서가 먼저입니다.** 코드를 쓰기 전에 [`_docs/README.md`](_docs/README.md) 를 읽으세요.

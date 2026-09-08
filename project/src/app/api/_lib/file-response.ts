@@ -64,7 +64,7 @@ export interface FilePayload {
    * 한 번 더 봅니다 — 부르는 쪽이 실수해도 `attachment` 로 떨어집니다.
    * PNG 는 `nosniff` 와 함께라면 브라우저가 무엇을 해도 실행되지 않습니다.
    *
-   * 쓰는 곳: 디오가 찍은 화면 캡처를 답 안에 그릴 때.
+   * 쓰는 곳: 네오가 찍은 화면 캡처를 답 안에 그릴 때.
    */
   inline?: boolean;
 }
