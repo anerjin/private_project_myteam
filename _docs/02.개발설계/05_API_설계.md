@@ -484,7 +484,8 @@ Authorization: Bearer nw_live_<32자>
 5. `createResource(input, actor, { via: 'MCP' })` 호출
    → `source_channel = MCP` (**검수 상태 같은 것은 붙이지 않는다** — `DEC-029`)
 6. 후속 작업 큐 등록 (`FETCH_URL_META` / `FETCH_GITHUB_META`)
-   > **`FETCH_URL_META` 는 아직 «이름»뿐입니다** — 핸들러가 없습니다 (`OPEN-018`).
+   > **`FETCH_URL_META` 도 실제로 돕니다** (`DEC-079` — `server/jobs/url-meta`).
+   > URL 이 있으면 GitHub 여부에 따라 둘 중 하나를 겁니다 — **화면 등록과 같은 조건**입니다.
    > 걸어 두면 `QUEUED` 로 영원히 남고 응답의 `queuedJobs` 가 **돌지 않는 작업의
    > 이름**을 말하게 되므로, `P7` 구현은 **실제로 건 것만** 담습니다.
 7. 감사 로그 (`via=MCP`, `api_key_id`)

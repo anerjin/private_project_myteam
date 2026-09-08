@@ -69,23 +69,31 @@ export const POST = ingest("resources:write", async ({ actor, req }) => {
    * 않습니다. `DEC-029` 가 검수를 폐기하며 「구분은 `source_channel` 이
    * 한다」로 정했고, 그 값이 여기서 채워집니다.
    */
+  /*
+   * **화면 등록과 같은 작업을 겁니다** (`DEV-08` — 「경로는 둘이지만 로직은
+   * 하나」, `OPEN-018` 해소).
+   *
+   * 🔄 전에는 `FETCH_GITHUB_META` 만 걸었습니다. `FETCH_URL_META` 의 **핸들러가
+   *    없던 시절**의 코드이고, 걸어 두면 `QUEUED` 로 영원히 남아 응답이
+   *    「돌지 않는 작업의 이름」을 말하게 되므로 일부러 뺐던 것입니다.
+   *    지금은 `server/jobs/url-meta` 가 등록돼 있습니다.
+   *
+   * **이 자리가 갈려 있으면 에이전트가 넣은 자료만 비어 있게 됩니다** —
+   * 헤르메스·오픈클로가 arXiv·문서 사이트·블로그를 밀어넣어도 제목과 요약을
+   * 아무도 안 채웁니다. 사람이 화면으로 넣은 것과 달라질 이유가 없습니다.
+   */
   const queuedJobs: string[] = [];
-  if (result.type === "GITHUB_REPO") {
+  // 화면 등록과 **같은 조건**입니다 — 저장 결과가 아니라 «들어온 값»을 봅니다
+  if (parsed.data.url) {
+    const type =
+      result.type === "GITHUB_REPO" ? "FETCH_GITHUB_META" : "FETCH_URL_META";
     await jobService.enqueueAndRun({
-      type: "FETCH_GITHUB_META",
+      type,
       resourceId: result.id,
       requestedById: actor.id,
     });
-    queuedJobs.push("FETCH_GITHUB_META");
+    queuedJobs.push(type);
   }
-  /*
-   * **`FETCH_URL_META` 는 여기에 없습니다.** `DEV-05 · 5.11` 6번은 그것도
-   * 건다고 적었지만 그 작업의 **핸들러가 아직 없습니다**(`REQ-04` 의 작업 표에는
-   * 있고 「URL 빠른 등록」(`FR-RES-005`)의 몫인데 `P5` 가 타입 추정까지만
-   * 만들었습니다). 걸어 두면 `QUEUED` 로 영원히 남고, 응답의 `queuedJobs` 는
-   * **돌지 않는 작업의 이름**을 말하게 됩니다 — `OPEN-018` 로 남깁니다.
-   * 여기 목록은 **실제로 건 것만** 담습니다.
-   */
 
   return json(
     {

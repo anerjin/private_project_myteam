@@ -57,9 +57,13 @@ export async function createResourceAction(
      * 정했습니다. 등록마다 받으면 개발 PC 디스크가 며칠 만에 찹니다.
      */
     /*
-     * **GitHub 이 아닌 자료도 채웁니다.** `FETCH_URL_META` 는 스키마와 라벨에만
-     * 있고 처리기가 없어서, arXiv·문서 사이트·블로그는 등록해도 제목·요약을
-     * 아무도 안 채웠습니다 — `REQ-01 · 1.2` 가 GitHub 에만 해당됐습니다.
+     * **GitHub 이 아닌 자료도 채웁니다.** arXiv·문서 사이트·블로그는 한동안
+     * 등록해도 제목·요약을 아무도 안 채웠습니다 — `REQ-01 · 1.2` 의 「URL
+     * 하나로 등록하면 메타데이터가 자동으로 채워진다」가 GitHub 에만
+     * 해당됐습니다. `server/jobs/url-meta` 가 그 자리를 메웁니다.
+     *
+     * **Ingest API 도 같은 작업을 겁니다**(`api/ingest/resources`) — 사람이
+     * 넣은 것과 에이전트가 넣은 것이 달라질 이유가 없습니다 (`DEV-08`).
      */
     if (parsed.data.url) {
       await jobService.enqueueAndRun({
