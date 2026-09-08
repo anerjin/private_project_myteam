@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-  QueenBee 서버를 VS Code 와 상관없이 띄우고 · 내리고 · 들여다본다.
+  Neowave Work 서버를 VS Code 와 상관없이 띄우고 · 내리고 · 들여다본다.
 
 .DESCRIPTION
   ```powershell
@@ -147,7 +147,7 @@ function Register-QbTask {
         Action      = $action
         Settings    = $settings
         Principal   = $principal
-        Description = 'QueenBee 애플리케이션 서버 (포트 3100). 편집기·터미널과 무관하게 돕니다 — project/scripts/server.ps1'
+        Description = 'Neowave Work 애플리케이션 서버 (포트 3100). 편집기·터미널과 무관하게 돕니다 — project/scripts/server.ps1'
         Force       = $true
     }
     if ($triggers.Count -gt 0) { $params['Trigger'] = $triggers }
@@ -182,7 +182,7 @@ function Show-QbStatus {
     $listener = Get-QbListener
     $health = if ($listener) { Get-QbHealth -TimeoutSec 10 } else { $null }
 
-    Write-Head 'QueenBee 서버'
+    Write-Head 'Neowave Work 서버'
 
     if ($listener) {
         Write-Ok "포트 $QbPort — $($listener.ProcessName) (PID $($listener.Id))"

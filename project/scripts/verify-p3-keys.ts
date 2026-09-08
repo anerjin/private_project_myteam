@@ -196,7 +196,7 @@ async function run() {
     const m2 = await msg(() => verifyKey(expiring.plaintext));
     check("만료된 키", m2.includes("만료된"), m2);
 
-    const m3 = await msg(() => verifyKey("qb_live_존재하지않는키"));
+    const m3 = await msg(() => verifyKey("nw_live_존재하지않는키"));
     check("없는 키", m3.includes("유효하지 않은"), m3);
   }
 
@@ -284,7 +284,7 @@ async function run() {
       data: Array.from({ length: MAX_KEYS_PER_USER }, (_, i) => ({
         userId: u.id,
         name: `옛 키 ${i}`,
-        keyPrefix: `qb_live_x${i}`,
+        keyPrefix: `nw_live_x${i}`,
         keyHash: `hash-${randomBytes(8).toString("hex")}`,
         scopes: ["resources:read"],
         expiresAt: new Date(Date.now() - 86_400_000),

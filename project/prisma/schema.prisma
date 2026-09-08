@@ -1,4 +1,4 @@
-// QueenBee 데이터 모델
+// Neowave Work 데이터 모델
 // 정본: _docs/02.개발설계/02_데이터_모델.md (DEV-02)
 //
 // 명명 규칙: 테이블 snake_case 복수형 / 모델 PascalCase 단수 / 필드 camelCase + @map
@@ -229,7 +229,7 @@ model ApiKey {
   id         String    @id @default(cuid())
   userId     String    @map("user_id")
   name       String
-  /// `qb_live_a1b2c3d4` — 조회·표시용 앞 자리
+  /// `nw_live_a1b2c3d4` — 조회·표시용 앞 자리
   keyPrefix  String    @map("key_prefix")
   /// SHA-256. 원문은 저장하지 않는다 (NFR-SEC-017)
   keyHash    String    @unique @map("key_hash")

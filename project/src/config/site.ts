@@ -1,5 +1,5 @@
 export const SITE = {
-  name: "QueenBee",
+  name: "Neowave Work",
   description: "DOI 개발팀 정보 시스템",
 } as const;
 

@@ -1,4 +1,4 @@
-# QueenBee
+# Neowave Work
 
 DOI(드론 공간정보) 개발팀이 AI 자료 · GitHub 오픈소스 · MCP 서버 · Skill · 개발 참고 자료를
 한곳에 모아 검색·재사용·보관하는 **사내 전용 정보 시스템**.
@@ -16,9 +16,9 @@ docker compose -f docker/docker-compose.dev.yml up -d
 Copy-Item .env.example project\.env      # 값을 채운 뒤 진행
 
 # 3) 파일 저장 경로 (저장소 밖 — DEC-016)
-New-Item -ItemType Directory -Force E:\queenbee-data\files\tmp
-New-Item -ItemType Directory -Force E:\queenbee-data\files\attachments
-New-Item -ItemType Directory -Force E:\queenbee-data\files\archives
+New-Item -ItemType Directory -Force E:\neowave-work-data\files\tmp
+New-Item -ItemType Directory -Force E:\neowave-work-data\files\attachments
+New-Item -ItemType Directory -Force E:\neowave-work-data\files\archives
 
 # 4) 앱 + DB 스키마
 cd project
@@ -57,7 +57,7 @@ doi_dev_team/
 ├─ docker/      컨테이너 구성 (1단계는 postgres · redis 둘뿐)
 └─ .env.example
 
-E:\queenbee-data\   DB · 파일 데이터 — 저장소 밖. 커밋하지 않는다
+E:\neowave-work-data\   DB · 파일 데이터 — 저장소 밖. 커밋하지 않는다
 ```
 
 ## 알아둘 것

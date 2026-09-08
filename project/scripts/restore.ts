@@ -7,7 +7,7 @@
  *
  * ## 기본이 «리허설»입니다
  *
- * 임시 데이터베이스(`queenbee_restore_test`)에 넣고, 행 수를 세어 보고,
+ * 임시 데이터베이스(`neowave_work_restore_test`)에 넣고, 행 수를 세어 보고,
  * 지웁니다. **실제 DB 는 건드리지 않습니다.**
  *
  * 분기 1회 리허설(`NFR-BACKUP-005`)이 요구사항인데, 「리허설용 절차」를 따로
@@ -36,12 +36,12 @@ import path from "node:path";
 
 import { env } from "@/lib/env";
 
-const CONTAINER = process.env.PG_CONTAINER ?? "queenbee-postgres";
-const BACKUP_ROOT = process.env.BACKUP_ROOT ?? "C:\\queenbee-backup";
+const CONTAINER = process.env.PG_CONTAINER ?? "neowave-work-postgres";
+const BACKUP_ROOT = process.env.BACKUP_ROOT ?? "C:\\neowave-work-backup";
 const DB_DIR = path.join(BACKUP_ROOT, "db");
 
 /** 리허설용 임시 DB — 끝나면 지웁니다 */
-const SCRATCH = "queenbee_restore_test";
+const SCRATCH = "neowave_work_restore_test";
 
 /**
  * 판정이 «실패»라는 뜻 — 스크립트가 터진 것과 구별합니다.

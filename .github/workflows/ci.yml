@@ -52,4 +52,4 @@ jobs:
           APP_URL: http://localhost:3100
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
           REDIS_URL: redis://localhost:6379
-          STORAGE_ROOT: /tmp/queenbee-files
+          STORAGE_ROOT: /tmp/neowave-work-files

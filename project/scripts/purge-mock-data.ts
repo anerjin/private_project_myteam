@@ -16,7 +16,7 @@
  * | `admin` 계정 | 지우면 아무도 못 들어옵니다 |
  * | 카테고리 27 | `REQ-04` 가 정의한 **운영 데이터**입니다. 목이 아닙니다 |
  * | 콘텐츠 타입 설정 | 같은 이유 |
- * | `queenbee-collect` Skill 자료 | `M3` DoD 의 「자기 참조」 — 실제 자산입니다 |
+ * | `neowave-work-collect` Skill 자료 | `M3` DoD 의 「자기 참조」 — 실제 자산입니다 |
  *
  * ## 무엇을 지우는가
  *
@@ -78,7 +78,7 @@ async function main() {
       detail: devUsers.map((u) => `${u.name}(@${u.username})`).join(", "),
       run: async () => {
         /*
-         * **자료는 남기고 작성자만 옮깁니다.** `queenbee-collect` Skill 이
+         * **자료는 남기고 작성자만 옮깁니다.** `neowave-work-collect` Skill 이
          * `seoyeon` 소유인데, 그건 실제 자산입니다 — 계정을 지운다고 자료가
          * 사라지면 안 됩니다.
          */

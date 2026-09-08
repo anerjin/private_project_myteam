@@ -26,7 +26,7 @@ import { hashPassword } from "@/server/auth/password";
 import { issue as issueSession } from "@/server/auth/session";
 
 const BASE = "http://localhost:3100";
-const COOKIE = process.env.SESSION_COOKIE_NAME || "qb_session";
+const COOKIE = process.env.SESSION_COOKIE_NAME || "nw_session";
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 let pass = 0;
@@ -160,7 +160,7 @@ async function run() {
         headers: {
           "content-type": "application/json",
           // 헤더 값은 ByteString 입니다 — 한글을 넣으면 `fetch` 가 던집니다
-          authorization: "Bearer qb_no_such_key",
+          authorization: "Bearer nw_no_such_key",
         },
         body,
       });

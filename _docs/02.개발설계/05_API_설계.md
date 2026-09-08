@@ -422,12 +422,12 @@ export async function updateResourceAction(
 
 ## 5.11 Ingest API (CLI 수집)
 
-QueenBee MCP 서버가 호출하는 HTTP API입니다. 설계 배경은 [DEV-08 자료 수집 파이프라인](08_자료수집_파이프라인.md). (`DEC-012`)
+Neowave Work MCP 서버가 호출하는 HTTP API입니다. 설계 배경은 [DEV-08 자료 수집 파이프라인](08_자료수집_파이프라인.md). (`DEC-012`)
 
 ### 인증
 
 ```
-Authorization: Bearer qb_live_<32자>
+Authorization: Bearer nw_live_<32자>
 ```
 
 키 검증을 마치면 **웹 요청과 동일한 `actor` 컨텍스트**를 만들어 같은 service 계층으로 합류합니다.
@@ -555,5 +555,5 @@ Authorization: Bearer qb_live_<32자>
 | 2026-08-28 | v0.4 | `ARCHIVE_QUOTA_EXCEEDED` 에러 코드 추가 (`DEC-022`) |
 | 2026-08-28 | v0.5 | **검수 폐기 반영**(`DEC-029`) — `API-104` 동작·응답에서 `needsReview` 제거 |
 | 2026-08-28 | v0.6 | **5.3 인증 절 재작성**(`DEC-030`) — Auth.js 미도입으로 **`API-001` 폐기**, 로그인·로그아웃을 Server Action(`API-004`·`API-005`)으로 신설, 세션 개별 종료(`API-007`) 추가. 5.10 액션 6단계가 **유일한 인가 방어선**임을 명시(`DEC-031`) |
-| 2026-08-29 | v0.8 | **`P7` 구현 반영** — ① 오류 상태 코드는 `lib/errors.ts` 의 `httpStatusOf` 하나가 냅니다(`DEC-056`). 라우트에 표를 복사했다가 `KEY_*` 세 개가 빠져 **틀린 키가 500** 으로 나갔습니다 ② `API-104` 의 `409` 는 문구뿐 아니라 **본문에 기존 자료**(`data.duplicate`)를 싣습니다 ③ `API-101` 결과 항목에 QueenBee 안의 절대 주소(`url`)를 넣고 원본 링크는 `sourceUrl` 로 나눴습니다 ④ `FETCH_URL_META` 는 핸들러가 없어 `queuedJobs` 에 담지 않습니다(`OPEN-018`) |
+| 2026-08-29 | v0.8 | **`P7` 구현 반영** — ① 오류 상태 코드는 `lib/errors.ts` 의 `httpStatusOf` 하나가 냅니다(`DEC-056`). 라우트에 표를 복사했다가 `KEY_*` 세 개가 빠져 **틀린 키가 500** 으로 나갔습니다 ② `API-104` 의 `409` 는 문구뿐 아니라 **본문에 기존 자료**(`data.duplicate`)를 싣습니다 ③ `API-101` 결과 항목에 Neowave Work 안의 절대 주소(`url`)를 넣고 원본 링크는 `sourceUrl` 로 나눴습니다 ④ `FETCH_URL_META` 는 핸들러가 없어 `queuedJobs` 에 담지 않습니다(`OPEN-018`) |
 | 2026-08-29 | v0.7 | **페이지네이션 절을 코드에 맞춘다** — 「커서만 쓴다. OFFSET 은 쓰지 않는다」였으나 `DEC-045` 의 **탐색/관리 축**이 맞다(관리 목록은 「총 N건 중 2페이지」와 점프가 필요하다). 커서 형식도 실제(`직전 항목의 id` + 정렬 축마다 `id` 타이브레이커)로 정정. **검색 후보 상한**(`DEC-048`)과 `meta.searchTruncated` 추가 |

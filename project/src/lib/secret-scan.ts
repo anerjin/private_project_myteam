@@ -49,11 +49,11 @@ const PATTERNS: readonly Pattern[] = [
     re: /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/,
   },
   /*
-   * **QueenBee 자기 키.** 팀원이 MCP 설정 스니펫을 자료로 등록하다가
+   * **Neowave Work 자기 키.** 팀원이 MCP 설정 스니펫을 자료로 등록하다가
    * 키가 통째로 들어오는 것이 가장 그럴듯한 유출 경로입니다 (`SCR-141` 이
    * 그 스니펫을 화면에서 복사하게 만들기 때문에 더 그렇습니다).
    */
-  { label: "QueenBee API 키", re: /\bqb_live_[A-Za-z0-9]{24,}\b/ },
+  { label: "Neowave Work API 키", re: /\bnw_live_[A-Za-z0-9]{24,}\b/ },
 ];
 
 /** 잡힌 종류들. 비어 있으면 깨끗하다 */

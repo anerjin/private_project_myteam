@@ -34,7 +34,7 @@ import { hashPassword } from "@/server/auth/password";
 import { issue } from "@/server/auth/session";
 
 const BASE = "http://localhost:3100";
-const COOKIE = process.env.SESSION_COOKIE_NAME || "qb_session";
+const COOKIE = process.env.SESSION_COOKIE_NAME || "nw_session";
 
 let pass = 0;
 let fail = 0;

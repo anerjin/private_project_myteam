@@ -5,8 +5,8 @@
 .env.*
 !.env.example
 
-# 데이터는 저장소 밖(E:\queenbee-data)에 두지만, 실수로 안에 만든 경우를 막습니다
-queenbee-data/
+# 데이터는 저장소 밖(E:\neowave-work-data)에 두지만, 실수로 안에 만든 경우를 막습니다
+neowave-work-data/
 
 # OS
 .DS_Store

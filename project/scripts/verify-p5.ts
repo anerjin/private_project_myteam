@@ -152,7 +152,7 @@ const CASES: Case[] = [
     type: "SKILL",
     table: "skill",
     full: {
-      skillName: "queenbee-collect",
+      skillName: "neowave-work-collect",
       definition: "# Skill\n본문",
       triggerCondition: "자료를 등록할 때",
       usageExample: "«찾아서 등록해줘»",
@@ -161,7 +161,7 @@ const CASES: Case[] = [
     },
     cleared: { targetClients: "", version: "" },
     expect: {
-      skillName: "queenbee-collect",
+      skillName: "neowave-work-collect",
       triggerCondition: "자료를 등록할 때",
       targetClients: ["Claude Code", "Cursor"],
       version: "1.0.0",
@@ -172,11 +172,11 @@ const CASES: Case[] = [
     table: "devNote",
     full: {
       noteKind: "TROUBLESHOOT",
-      relatedProject: "QueenBee",
+      relatedProject: "Neowave Work",
       occurredAt: "2026-02-01",
     },
     cleared: { relatedProject: "", occurredAt: "" },
-    expect: { noteKind: "TROUBLESHOOT", relatedProject: "QueenBee" },
+    expect: { noteKind: "TROUBLESHOOT", relatedProject: "Neowave Work" },
   },
   {
     type: "PROMPT",
@@ -410,7 +410,7 @@ async function checkRenderedForms(userId: string) {
 
   const { issue } = await import("@/server/auth/session");
   const { token } = await issue(userId, { userAgent: "verify-p5" });
-  const cookie = `${process.env.SESSION_COOKIE_NAME || "qb_session"}=${token}`;
+  const cookie = `${process.env.SESSION_COOKIE_NAME || "nw_session"}=${token}`;
 
   /** 타입마다 «Select 로 그린» 칸 하나씩 — 가장 의심스러운 자리 */
   const PROBE: [ResourceType, string][] = [

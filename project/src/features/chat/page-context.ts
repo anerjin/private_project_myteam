@@ -80,5 +80,5 @@ export function describePage(pathname: string, query?: string): PageContext {
    * **모르면 «모른다»고 합니다.** 그럴듯한 이름을 지어내면 모델이 그것을
    * 사실로 받아 엉뚱한 화면 이야기를 합니다.
    */
-  return { label: "QueenBee", detail: `경로 ${clean} (설명이 없는 화면)` };
+  return { label: "Neowave Work", detail: `경로 ${clean} (설명이 없는 화면)` };
 }

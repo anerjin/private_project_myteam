@@ -1,5 +1,5 @@
 {
-  "name": "queenbee",
+  "name": "neowave-work",
   "version": "0.1.0",
   "private": true,
   "workspaces": [
@@ -30,7 +30,7 @@
     "maintenance": "tsx --conditions=react-server --env-file=.env scripts/maintenance.ts",
     "seed:collect-skill": "tsx --conditions=react-server --env-file=.env scripts/register-collect-skill.ts",
     "verify:p8": "tsx --conditions=react-server --env-file=.env scripts/verify-p8.ts",
-    "verify:p7-mcp": "npm run --workspace @queenbee/mcp build && tsx --conditions=react-server --env-file=.env scripts/verify-p7-mcp.ts",
+    "verify:p7-mcp": "npm run --workspace @neowave-work/mcp build && tsx --conditions=react-server --env-file=.env scripts/verify-p7-mcp.ts",
     "verify:p6": "tsx --conditions=react-server --env-file=.env scripts/verify-p6.ts",
     "verify:empty-db": "tsx --conditions=react-server --env-file=.env scripts/verify-empty-db.ts",
     "verify:sec": "tsx --conditions=react-server --env-file=.env scripts/verify-security.ts",

@@ -17,7 +17,7 @@ import * as authService from "@/server/services/auth.service";
 import * as memberService from "@/server/services/member.service";
 
 const BASE = "http://localhost:3100";
-const COOKIE = process.env.SESSION_COOKIE_NAME || "qb_session";
+const COOKIE = process.env.SESSION_COOKIE_NAME || "nw_session";
 const PASSWORD = "Verify!12345";
 
 let pass = 0;

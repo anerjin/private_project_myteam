@@ -16,7 +16,7 @@
  * `--restricted` 는 「명령·코드를 **실행**하는」 도구만 없애고,
  * `--allowedTools` 는 「물어보지 않고 허용할 것」 목록입니다. 둘 다
  * **「이것만 있다」가 아닙니다.** 실제로는 `WebSearch`·`Write`·`Task` 와
- * `queenbee_create_resource` 까지 손에 쥐고 있었습니다.
+ * `nwwork_create_resource` 까지 손에 쥐고 있었습니다.
  *
  * ## 그래서 「막았다」를 믿지 않습니다
  *
@@ -225,7 +225,7 @@ async function main() {
   if (configured) {
     for (const want of chat.EXPECTED_TOOLS) {
       if (want === "ToolSearch") continue;
-      check(`«${want.replace("mcp__queenbee__queenbee_", "")}» 를 쓸 수 있다`, tools.includes(want));
+      check(`«${want.replace("mcp__neowave-work__nwwork_", "")}» 를 쓸 수 있다`, tools.includes(want));
     }
   }
 
@@ -268,7 +268,7 @@ async function main() {
     prompt.includes(`«${ASSISTANT}»`),
     "화면과 같은 이름이어야 한다"
   );
-  check("프롬프트가 «등록된 자료»로 한정한다", prompt.includes("QueenBee 에 등록된 자료"));
+  check("프롬프트가 «등록된 자료»로 한정한다", prompt.includes("Neowave Work 에 등록된 자료"));
   check(
     "빈손을 바깥 지식으로 채우지 말라고 한다",
     prompt.includes("빈손을 바깥 지식으로 채우지 마십시오")

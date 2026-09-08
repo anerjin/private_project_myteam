@@ -33,7 +33,7 @@ export const skillSchema = z.object({
      */
     .regex(
       /^[a-z0-9][a-z0-9-]*$/,
-      "영문 소문자·숫자·하이픈만 쓸 수 있습니다 (예: queenbee-collect)."
+      "영문 소문자·숫자·하이픈만 쓸 수 있습니다 (예: neowave-work-collect)."
     ),
   definition: z
     .string()

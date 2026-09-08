@@ -2,18 +2,18 @@ import { z } from "zod";
 
 import {
   flatten,
-  type QueenBeeClient,
+  type NeowaveWorkClient,
   type ResourceArgs,
   type ToolDef,
 } from "../client.js";
 
 /**
- * `queenbee_create_resource` — 자료 등록 (`FR-CLI-005`).
+ * `nwwork_create_resource` — 자료 등록 (`FR-CLI-005`).
  *
  * ## 필드를 여기에 적지 않습니다
  *
  * `detail` 은 **자유 형식**입니다. 타입별 필수·선택 필드는
- * `queenbee_list_content_types` 가 JSON Schema 로 알려 주고, 검증은 서버가
+ * `nwwork_list_content_types` 가 JSON Schema 로 알려 주고, 검증은 서버가
  * 합니다. 여기에 타입별 칸을 나열하면 **타입이 늘 때마다 이 파일이 늙고**,
  * 늙은 것을 알아차릴 방법이 없습니다 (`REQ-04 · 4.9`, `DEV-06 · 6.2`).
  *
@@ -29,14 +29,14 @@ import {
  * 오염됩니다 (`FR-CLI-005` 수용 기준).
  */
 export const createResource: ToolDef<ResourceArgs> = {
-  name: "queenbee_create_resource",
+  name: "nwwork_create_resource",
   title: "자료 등록",
   description:
-    "QueenBee 에 자료를 등록한다. 먼저 queenbee_list_content_types 로 타입별 필드를 확인하고, queenbee_check_duplicate 로 중복을 확인한 뒤에 부른다. 중복이면 409 로 거절되며 기존 자료를 알려 준다. 실패해도 같은 내용으로 다시 부르지 말고, 알려 준 문제를 고쳐서 부른다.",
+    "Neowave Work 에 자료를 등록한다. 먼저 nwwork_list_content_types 로 타입별 필드를 확인하고, nwwork_check_duplicate 로 중복을 확인한 뒤에 부른다. 중복이면 409 로 거절되며 기존 자료를 알려 준다. 실패해도 같은 내용으로 다시 부르지 말고, 알려 준 문제를 고쳐서 부른다.",
   inputSchema: {
     type: z
       .string()
-      .describe("콘텐츠 타입 코드 (queenbee_list_content_types 의 code)"),
+      .describe("콘텐츠 타입 코드 (nwwork_list_content_types 의 code)"),
     title: z.string().describe("자료 제목"),
     summary: z
       .string()
@@ -47,20 +47,20 @@ export const createResource: ToolDef<ResourceArgs> = {
     category: z
       .string()
       .optional()
-      .describe("카테고리 slug (queenbee_list_taxonomy 의 값)"),
+      .describe("카테고리 slug (nwwork_list_taxonomy 의 값)"),
     tags: z
       .array(z.string())
       .optional()
-      .describe("태그 3~5개. 새로 만들기 전에 queenbee_list_taxonomy 를 본다"),
+      .describe("태그 3~5개. 새로 만들기 전에 nwwork_list_taxonomy 를 본다"),
     detail: z
       .record(z.string(), z.unknown())
       .optional()
       .describe(
-        "타입별 상세 필드. queenbee_list_content_types 가 준 detailSchema 를 그대로 따른다"
+        "타입별 상세 필드. nwwork_list_content_types 가 준 detailSchema 를 그대로 따른다"
       ),
   },
   readOnly: false,
-  async run(client: QueenBeeClient, args: ResourceArgs) {
+  async run(client: NeowaveWorkClient, args: ResourceArgs) {
     return (await client.post("/resources", flatten(args))).data;
   },
 };

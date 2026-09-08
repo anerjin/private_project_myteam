@@ -1,5 +1,5 @@
 /**
- * `queenbee-collect` Skill 자신을 QueenBee 에 등록한다 (`FR-CLI-009` · M3 DoD 「자기 참조」).
+ * `neowave-work-collect` Skill 자신을 Neowave Work 에 등록한다 (`FR-CLI-009` · M3 DoD 「자기 참조」).
  *
  *   npm run seed:collect-skill
  *
@@ -23,7 +23,7 @@ import { AppError } from "@/lib/errors";
 import type { Actor } from "@/server/auth/actor";
 import * as resourceWrite from "@/server/services/resource.write";
 
-const SKILL_NAME = "queenbee-collect";
+const SKILL_NAME = "neowave-work-collect";
 const SKILL_PATH = path.join(
   process.cwd(),
   "packages",
@@ -60,18 +60,18 @@ async function main() {
 
   const input = parseResourceInput({
     type: "SKILL",
-    title: "QueenBee 자료 수집 Skill (queenbee-collect)",
+    title: "Neowave Work 자료 수집 Skill (neowave-work-collect)",
     summary:
-      "웹에서 찾은 AI·개발 자료를 QueenBee 에 등록하는 절차와 품질 규칙을 담은 Claude Code Skill",
+      "웹에서 찾은 AI·개발 자료를 Neowave Work 에 등록하는 절차와 품질 규칙을 담은 Claude Code Skill",
     body,
     category: "dev-tools",
-    tags: "queenbee, mcp, skill, 자료수집",
+    tags: "neowave-work, mcp, skill, 자료수집",
     skillName: SKILL_NAME,
     definition:
       "웹 검색 → 후보 선별 → 중복 확인 → 요약 → 분류 → 등록의 절차와, applicability 를 비워 두지 않는다·한 대화 10건 이하 같은 품질 규칙을 정의한다.",
     triggerCondition:
-      "「○○ 관련 자료 찾아서 등록해줘」, 「이 저장소 QueenBee 에 넣어줘」, 「applicability 비어 있는 자료 채워줘」 같은 요청을 받았을 때.",
-    usageExample: "MCP 서버 보안 관련 자료 최근 6개월 것으로 찾아서 QueenBee에 등록해줘",
+      "「○○ 관련 자료 찾아서 등록해줘」, 「이 저장소 Neowave Work 에 넣어줘」, 「applicability 비어 있는 자료 채워줘」 같은 요청을 받았을 때.",
+    usageExample: "MCP 서버 보안 관련 자료 최근 6개월 것으로 찾아서 Neowave Work에 등록해줘",
     targetClients: "Claude Code",
     usageStatus: "ADOPTED",
     version: "0.1.0",

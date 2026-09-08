@@ -29,7 +29,7 @@ export function Form({ detail }: { detail?: ResourceDetail }) {
           id="skillName"
           name="skillName"
           defaultValue={d?.skillName}
-          placeholder="queenbee-collect"
+          placeholder="neowave-work-collect"
         />
         <p className="text-muted-foreground text-xs">
           파일명·디렉터리명이 됩니다. 영문 소문자·숫자·하이픈만 쓸 수 있습니다.

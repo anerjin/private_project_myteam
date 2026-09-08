@@ -44,11 +44,11 @@ import { AppError } from "@/lib/errors";
 
 /** 읽기 도구만. `create`·`update`·`archive` 는 **일부러 뺐습니다** */
 const READ_TOOLS = [
-  "mcp__queenbee__queenbee_search",
-  "mcp__queenbee__queenbee_get_resource",
-  "mcp__queenbee__queenbee_list_taxonomy",
-  "mcp__queenbee__queenbee_list_content_types",
-  "mcp__queenbee__queenbee_check_duplicate",
+  "mcp__neowave-work__nwwork_search",
+  "mcp__neowave-work__nwwork_get_resource",
+  "mcp__neowave-work__nwwork_list_taxonomy",
+  "mcp__neowave-work__nwwork_list_content_types",
+  "mcp__neowave-work__nwwork_check_duplicate",
 ];
 
 /**
@@ -62,8 +62,8 @@ const READ_TOOLS = [
  * 있었습니다:
  *
  * > `Task` `Edit` `Glob` `Grep` `Read` `Write` `WebSearch` `SendMessage`
- * > `PushNotification` `Skill` … 그리고 `queenbee_create_resource` ·
- * > `queenbee_update_resource` · `queenbee_archive_github`
+ * > `PushNotification` `Skill` … 그리고 `nwwork_create_resource` ·
+ * > `nwwork_update_resource` · `nwwork_archive_github`
  *
  * 그래서 운영자가 「공간정보 저장소를 찾아줘」라고 물었을 때 **사내 자료가
  * 아니라 바깥 저장소 목록**이 나왔습니다. 이 채팅은 **사내 전용**입니다 —
@@ -108,9 +108,9 @@ const DENIED_TOOLS = [
   "DesignSync",
   "ReportFindings",
   // 키 스코프가 이미 막지만, 부르지도 못하게 합니다 (`DEC-047`)
-  "mcp__queenbee__queenbee_create_resource",
-  "mcp__queenbee__queenbee_update_resource",
-  "mcp__queenbee__queenbee_archive_github",
+  "mcp__neowave-work__nwwork_create_resource",
+  "mcp__neowave-work__nwwork_update_resource",
+  "mcp__neowave-work__nwwork_archive_github",
 
   /*
    * ── 브라우저를 켰을 때도 **주지 않는 것 셋** ──────────────────────
@@ -405,7 +405,7 @@ function asAppError(e: unknown): AppError {
 /**
  * 우리 자료를 가리키는 절대 주소를 **상대 경로로** 바꾼다.
  *
- * MCP 검색이 `QUEENBEE_URL`(= `APP_URL`) 로 주소를 만듭니다. 그 값은
+ * MCP 검색이 `NEOWAVE_WORK_URL`(= `APP_URL`) 로 주소를 만듭니다. 그 값은
  * `http://localhost:3100` 이라서, 사내망 `192.168.0.205` 로 들어온 팀원에게는
  * **자기 PC 를 가리키는 죽은 링크**가 갑니다. 채팅은 언제나 같은 서버 안에서
  * 열리므로 `/resources/…` 로 두면 어느 주소로 들어왔든 맞습니다.
@@ -642,12 +642,12 @@ function mcpConfig(): string {
   const servers: Record<string, unknown> = {};
 
   if (toolsConfigured()) {
-    servers.queenbee = {
+    servers.neowave-work = {
       command: process.execPath,
       args: [path.join(process.cwd(), "packages/mcp-server/dist/index.js")],
       env: {
-        QUEENBEE_URL: env.APP_URL,
-        QUEENBEE_API_KEY: env.CHAT_API_KEY,
+        NEOWAVE_WORK_URL: env.APP_URL,
+        NEOWAVE_WORK_API_KEY: env.CHAT_API_KEY,
       },
     };
   }
@@ -913,7 +913,7 @@ export function systemPromptFor(context: string): string {
 
 function systemPrompt(context: string, tools: boolean): string {
   return [
-    `당신의 이름은 «${ASSISTANT}» 입니다. 사내 자료 시스템 «QueenBee» 의 도우미이고,`,
+    `당신의 이름은 «${ASSISTANT}» 입니다. 사내 자료 시스템 «Neowave Work» 의 도우미이고,`,
     "DOI(드론 공간정보) 개발팀이 씁니다. 이름을 물으면 그렇게 답하십시오.",
     "한국어로, 짧고 사실만 답하십시오. 모르면 모른다고 하십시오 — 지어내지 마십시오.",
     "",
@@ -923,8 +923,8 @@ function systemPrompt(context: string, tools: boolean): string {
       ? [
           "## 이 시스템 «안에» 있는 것만 답합니다",
           "",
-          "자료·저장소·문서를 **찾아 달라**는 말은 언제나 **QueenBee 에 등록된 자료**를",
-          "뜻합니다. 반드시 `queenbee_search` 로 찾고 **검색 결과에 있는 것만** 말하십시오.",
+          "자료·저장소·문서를 **찾아 달라**는 말은 언제나 **Neowave Work 에 등록된 자료**를",
+          "뜻합니다. 반드시 `nwwork_search` 로 찾고 **검색 결과에 있는 것만** 말하십시오.",
           "",
           "- 당신이 알고 있는 **바깥 저장소·라이브러리를 목록으로 내놓지 마십시오.**",
           "  이 채팅은 사내 전용입니다. 바깥 정보는 사용자가 다른 데서 찾습니다.",
@@ -1006,11 +1006,11 @@ function systemPrompt(context: string, tools: boolean): string {
           "않으면 지어내지 말고 물어보십시오.** 틀린 주소는 그대로 저장됩니다.",
           "",
           "붙이기 전에 반드시 이 순서를 밟으십시오:",
-          "1. `queenbee_check_duplicate` — 이미 있으면 등록하지 말고 그 자료를 알려 주십시오",
-          "2. `queenbee_list_content_types` — 타입별 **필수 항목**을 확인하십시오",
-          "3. `queenbee_list_taxonomy` — `category` 는 **거기 있는 slug** 중에서만 고르십시오",
+          "1. `nwwork_check_duplicate` — 이미 있으면 등록하지 말고 그 자료를 알려 주십시오",
+          "2. `nwwork_list_content_types` — 타입별 **필수 항목**을 확인하십시오",
+          "3. `nwwork_list_taxonomy` — `category` 는 **거기 있는 slug** 중에서만 고르십시오",
           "",
-          "```queenbee-register",
+          "```neowave-work-register",
           '{ "type": "GITHUB_REPO", "title": "...", "summary": "...", "url": "https://...",',
           '  "category": "gis", "tags": ["태그1","태그2"] }',
           "```",

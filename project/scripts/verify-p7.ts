@@ -94,7 +94,7 @@ async function run() {
     );
 
     // ASCII 여야 합니다 — 헤더는 ByteString 이라 한글 키는 fetch 가 먼저 막습니다
-    r = await call("/whoami", "qb_live_0000000000000000000000000000");
+    r = await call("/whoami", "nw_live_0000000000000000000000000000");
     check("틀린 키는 401", r.status === 401, r.body.error?.code ?? "");
   }
 

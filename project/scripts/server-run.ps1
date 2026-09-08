@@ -1,9 +1,9 @@
 ﻿<#
 .SYNOPSIS
-  QueenBee 서버를 실제로 띄우는 스크립트. **사람이 직접 부르지 않습니다.**
+  Neowave Work 서버를 실제로 띄우는 스크립트. **사람이 직접 부르지 않습니다.**
 
 .DESCRIPTION
-  작업 스케줄러의 「QueenBee 서버」 작업이 이것을 부릅니다. 사람이 쓰는 문은
+  작업 스케줄러의 「Neowave Work 서버」 작업이 이것을 부릅니다. 사람이 쓰는 문은
   `server.ps1` 입니다 (`npm run serve`).
 
   ## 왜 작업 스케줄러가 부르는가
@@ -80,7 +80,7 @@ function Get-UrlPort {
 
 Set-Location -LiteralPath $QbProjectDir
 
-Write-Log "QueenBee 서버 — $Mode 모드 · $QbProjectDir"
+Write-Log "Neowave Work 서버 — $Mode 모드 · $QbProjectDir"
 Write-Log "로그: $LogPath (지난 판은 server.prev.log)"
 
 # ── 1. 컨테이너가 먼저 ──────────────────────────────────────────────────

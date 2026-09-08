@@ -29,7 +29,7 @@ export const GET = ingest("resources:read", async ({ actor, url }) => {
     data: page.items.map((r) => ({
       ...resourceRef(r),
       summary: r.summary,
-      /** 원본 링크. 위 `url` 은 **QueenBee 안의 주소**입니다 — 둘은 다른 것입니다 */
+      /** 원본 링크. 위 `url` 은 **Neowave Work 안의 주소**입니다 — 둘은 다른 것입니다 */
       sourceUrl: r.url,
       tags: r.tags,
       author: r.author.username,

@@ -109,8 +109,8 @@ export async function issue(
   // 같은 스코프를 여러 번 넣어도 한 번만 저장한다
   const unique = [...new Set(scopes)];
 
-  const raw = `qb_live_${randomBytes(24).toString("base64url")}`;
-  const keyPrefix = raw.slice(0, "qb_live_".length + PREFIX_LENGTH);
+  const raw = `nw_live_${randomBytes(24).toString("base64url")}`;
+  const keyPrefix = raw.slice(0, "nw_live_".length + PREFIX_LENGTH);
   const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
 
   const key = await db.$transaction(async (tx) => {

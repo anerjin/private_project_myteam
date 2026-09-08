@@ -52,7 +52,7 @@ export interface ChatAnswer {
  *
  * 그래서 작성자·권한·감사 기록이 전부 그 사람 것이 됩니다.
  */
-const BLOCK = /```queenbee-register\s*\n([\s\S]*?)```/;
+const BLOCK = /```neowave-work-register\s*\n([\s\S]*?)```/;
 
 function takeProposal(reply: string): { text: string; proposal: unknown | null } {
   const m = BLOCK.exec(reply);

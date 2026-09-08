@@ -1,7 +1,7 @@
-import type { QueenBeeClient, ToolDef } from "../client.js";
+import type { NeowaveWorkClient, ToolDef } from "../client.js";
 
 /**
- * `queenbee_list_content_types` — 타입 목록 + **타입별 JSON Schema** (`FR-CLI-002`).
+ * `nwwork_list_content_types` — 타입 목록 + **타입별 JSON Schema** (`FR-CLI-002`).
  *
  * ## 이 도구가 왜 필요한가
  *
@@ -13,12 +13,12 @@ import type { QueenBeeClient, ToolDef } from "../client.js";
  * 스키마도 서버가 만듭니다. 여기에 타입 이름을 적어 두면 그 순간부터 늙습니다.
  */
 export const listContentTypes: ToolDef = {
-  name: "queenbee_list_content_types",
+  name: "nwwork_list_content_types",
   title: "콘텐츠 타입 목록",
   description:
-    "QueenBee 의 콘텐츠 타입과 타입별 필수/선택 필드 스키마를 조회한다. 자료를 등록하기 전에 반드시 먼저 부른다 — 어떤 타입이 있고 무엇을 채워야 하는지가 여기서만 나온다.",
+    "Neowave Work 의 콘텐츠 타입과 타입별 필수/선택 필드 스키마를 조회한다. 자료를 등록하기 전에 반드시 먼저 부른다 — 어떤 타입이 있고 무엇을 채워야 하는지가 여기서만 나온다.",
   inputSchema: {},
   readOnly: true,
-  run: async (client: QueenBeeClient) =>
+  run: async (client: NeowaveWorkClient) =>
     (await client.get("/content-types")).data,
 };

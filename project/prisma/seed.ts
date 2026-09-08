@@ -201,7 +201,7 @@ async function seedDevUsers() {
     );
   }
 
-  const passwordHash = await hash("queenbee-dev-1234", ARGON2);
+  const passwordHash = await hash("neowave-work-dev-1234", ARGON2);
   const users = [
     { username: "minsu", name: "박민수", department: "개발팀", role: "MEMBER" },
     {

@@ -75,7 +75,7 @@ async function requestMeta() {
 function safeNext(next: string | undefined): string {
   if (!next) return "/dashboard";
   try {
-    const base = "http://queenbee.invalid";
+    const base = "http://neowave-work.invalid";
     const url = new URL(next, base);
     // 다른 오리진으로 해석되면 외부 링크다
     if (url.origin !== base) return "/dashboard";

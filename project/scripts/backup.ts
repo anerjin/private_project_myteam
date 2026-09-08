@@ -22,7 +22,7 @@
  *
  * ## 어디에 두는가
  *
- * `BACKUP_ROOT`(기본 `C:\queenbee-backup`) — **데이터와 다른 드라이브**입니다
+ * `BACKUP_ROOT`(기본 `C:\neowave-work-backup`) — **데이터와 다른 드라이브**입니다
  * (`DEC-024`). 같은 PC 라는 위험은 그 결정이 이미 적어 두었습니다:
  * **PC 고장·랜섬웨어에는 원본과 백업이 함께 사라집니다.**
  * 분기 복구 리허설 때 외부 매체로 1부 복사하는 것이 그 완화책입니다.
@@ -33,7 +33,7 @@
  * $act = New-ScheduledTaskAction -Execute "npm.cmd" -Argument "run backup" `
  *   -WorkingDirectory "E:\github\doi_dev_team\project"
  * $trg = New-ScheduledTaskTrigger -Daily -At 3am
- * Register-ScheduledTask -TaskName "QueenBee 백업" -Action $act -Trigger $trg
+ * Register-ScheduledTask -TaskName "Neowave Work 백업" -Action $act -Trigger $trg
  * ```
  */
 import { execFileSync } from "node:child_process";
@@ -42,8 +42,8 @@ import path from "node:path";
 
 import { env } from "@/lib/env";
 
-const CONTAINER = process.env.PG_CONTAINER ?? "queenbee-postgres";
-const BACKUP_ROOT = process.env.BACKUP_ROOT ?? "C:\\queenbee-backup";
+const CONTAINER = process.env.PG_CONTAINER ?? "neowave-work-postgres";
+const BACKUP_ROOT = process.env.BACKUP_ROOT ?? "C:\\neowave-work-backup";
 const DB_DIR = path.join(BACKUP_ROOT, "db");
 const FILES_DIR = path.join(BACKUP_ROOT, "files");
 
@@ -94,11 +94,11 @@ async function main() {
   }
 
   const { user, db } = dbUrlParts();
-  const name = `queenbee-${stamp()}.dump`;
+  const name = `neowave-work-${stamp()}.dump`;
   const inContainer = `/tmp/${name}`;
   const outPath = path.join(DB_DIR, name);
 
-  console.log("QueenBee 백업");
+  console.log("Neowave Work 백업");
   console.log(`  대상 : ${BACKUP_ROOT} (여유 ${free.toFixed(1)}GB)`);
 
   /*
@@ -188,7 +188,7 @@ function prune(): string[] {
   const weekSeen = new Set<string>();
   const monthSeen = new Set<string>();
   for (const f of files) {
-    const m = /^queenbee-(\d{4})-(\d{2})-(\d{2})-/.exec(f);
+    const m = /^neowave-work-(\d{4})-(\d{2})-(\d{2})-/.exec(f);
     if (!m) continue;
     const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     const week = `${d.getFullYear()}-W${Math.ceil(((+d - +new Date(d.getFullYear(), 0, 1)) / 86400000 + 1) / 7)}`;

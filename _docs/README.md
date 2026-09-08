@@ -1,7 +1,7 @@
-# QueenBee — 문서 진입점
+# Neowave Work — 문서 진입점
 
 > **새 세션은 이 파일부터 읽습니다.** 여기만 읽으면 지금 상태와 다음 할 일을 알 수 있습니다.
-> 마지막 갱신: 2026-08-28 (`[018]` — **`P2` 인증·세션 완료** · `DEC-035` 인가 구조 재정립)
+> 마지막 갱신: 2026-09-08 (`[067]` — **서비스 명칭 `Neowave Work` 로 개정** · `DEC-073`)
 
 ---
 
@@ -26,21 +26,21 @@ flowchart LR
 
 ## 1. 프로젝트 한 줄 정의
 
-**QueenBee** — DOI(드론 공간정보) 개발팀이 AI 자료 · GitHub 오픈소스 · MCP 서버 · Skill · 개발 참고 자료를
+**Neowave Work** — DOI(드론 공간정보) 개발팀이 AI 자료 · GitHub 오픈소스 · MCP 서버 · Skill · 개발 참고 자료를
 한곳에 모아 검색·재사용·보관하는 **사내 전용 정보 시스템**.
 
 | 항목 | 값 |
 | --- | --- |
-| 서비스명 | **QueenBee** (소문자 식별자 `queenbee`) |
+| 서비스명 | **Neowave Work** (소문자 식별자 `neowave-work`) |
 | 사용자 | DOI 개발팀 (동시 20명 내외, 총 계정 50개 이하) |
 | 로그인 | **아이디 + 비밀번호** → **관리자 승인** 후 이용 (`DEC-014`) |
 | 자료 접근 | 승인된 회원은 **모든 자료 열람** (`DEC-018`) |
-| **자료 수집** | **Claude Code CLI + QueenBee MCP 서버** (주력) + 웹 등록 (`DEC-012`) |
+| **자료 수집** | **Claude Code CLI + Neowave Work MCP 서버** (주력) + 웹 등록 (`DEC-012`) |
 | 구성 | 서비스 페이지 + 관리자 페이지 + Ingest API + MCP 서버 |
 | 스택 | Next.js(App Router) · PostgreSQL · Redis · Prisma · shadcn/ui |
 | **실행 (1단계)** | **현재 개발 PC(Windows 11)** — Docker Desktop + 호스트 실행 (`DEC-013`) |
 | 실행 (2단계) | 사내 서버 + Docker Compose (`DEC-001`) |
-| 파일 보관 | 이 PC 디스크 `E:\queenbee-data` — **로컬 파일시스템** (MinIO 미사용, `DEC-016`·`DEC-019`) |
+| 파일 보관 | 이 PC 디스크 `E:\neowave-work-data` — **로컬 파일시스템** (MinIO 미사용, `DEC-016`·`DEC-019`) |
 | 외부 공개 | **하지 않음** (`DEC-017`) · 알림도 **인앱만** (`DEC-015`) |
 | 개발 서버 | `http://localhost:3100` (포트 고정 — `DEC-028`) |
 | 현재 단계 | **`P0`~`P8` 완료** (사내망 개방 제외) — 웹 · CLI 수집(MCP) · 관리자 전체가 실데이터로 동작. 다음은 `P9`(안정화·E2E·백업 리허설·오픈) |
@@ -133,11 +133,11 @@ _docs/
 | --- | --- | --- |
 | 요구사항 정의 | ✅ 완료 (Draft) | 팀 검토 후 `Confirmed` 로 승격 필요 |
 | 개발 설계 | ✅ 완료 (Draft) | 구현 결과를 역반영 중 (각 문서 하단 변경 이력 참조) |
-| 의사결정 | ✅ 완료 | 확정 **72건** (`DEC-072` 까지) / 열린 항목 **1건** (`OPEN-018`) |
+| 의사결정 | ✅ 완료 | 확정 **73건** (`DEC-073` 까지) / 열린 항목 **1건** (`OPEN-018`) |
 | **M0.5 UI 프로토타입** | ✅ **완료** | 목 데이터는 `P4` 에서 전부 제거됐습니다 |
 | **M0 · M1 · M2** | ✅ **완료** | 기반 · 인증/회원/감사/API키 · 자료 코어 |
 | **M4.1 · M4.2** | ✅ **완료** | 콘텐츠 타입 6종 · 파일/GitHub/워커 |
-| **M3 CLI 수집 (MCP)** | ✅ **완료** | 도구 8종 + `queenbee-collect` Skill |
+| **M3 CLI 수집 (MCP)** | ✅ **완료** | 도구 8종 + `neowave-work-collect` Skill |
 | **M5 관리자** | ✅ **완료** | 요구사항 24건 전부. 사내망 개방(`DEC-023`)은 사람이 결정할 운영 항목 |
 | M6 안정화 · 오픈 | 🔶 **진행 중** | E2E 6종 ✅ · 백업/복구 ✅ · 남은 것: 부하 · 접근성 · 보안 · 초기 자료 40건 |
 | **M7 프로젝트 (문서 + 일정)** | 🔶 **진행 중** | `P0` 요구사항 13건 동작 — 표 5개 · 화면 6개 · 간트 이식(`DEC-070`). 남은 것: 선후행 UI · 활동 기록 · `verify:p10` · E2E |
@@ -179,7 +179,7 @@ _docs/
 
 가짜 사람(`minsu`·`seoyeon`)은 오픈 준비로 지웠습니다 (`DEC-063`).
 개발 중 필요하면 `.env` 의 `SEED_DEV_USERS` 를 `true` 로 바꾸고
-`npx prisma db seed` 를 다시 돌리십시오 — 비밀번호는 `queenbee-dev-1234` 입니다.
+`npx prisma db seed` 를 다시 돌리십시오 — 비밀번호는 `neowave-work-dev-1234` 입니다.
 
 > **오픈 전 정리는 `npm run purge:mock` 한 곳입니다.** 기본이 미리보기이고
 > `--apply` 를 붙여야 지웁니다. **오픈 뒤에는 쓰지 마십시오** — 감사 로그를
@@ -213,7 +213,7 @@ _docs/
 6. **조직 GitHub 계정에서 PAT 발급** (`DEC-020`) — 없어도 돕니다. 다만 비인증 한도가
    시간당 60회라 `latestRelease` 를 **토큰이 있을 때만** 부릅니다.
 7. **문서 팀 검토** — `01`·`02` 문서를 읽고 `Draft` → `Confirmed` 로 승격
-8. **QueenBee 로고** 제작 (파비콘은 `app/icon.svg` 로 임시 대응 중)
+8. **Neowave Work 로고** 제작 (파비콘은 `app/icon.svg` 로 임시 대응 중)
 
 **MCP 로 자료를 넣어 보려면** — 마이페이지 > API 키에서 키를 발급하면 Claude Code
 설정 스니펫이 **키가 채워진 채로** 나옵니다. 자세한 절차는
@@ -327,10 +327,10 @@ doi_dev_team/
 │  ├─ src/app/            라우트 (+ _shell/ 조립 코드)
 │  ├─ src/features/       도메인 기능 (resources/content-types 가 확장의 핵심)
 │  ├─ src/mocks/          ※ M2에서 삭제할 임시 목 데이터
-│  └─ packages/mcp-server/   @queenbee/mcp — Claude Code 용 MCP 서버 (M3)
+│  └─ packages/mcp-server/   @neowave-work/mcp — Claude Code 용 MCP 서버 (M3)
 └─ docker/        컨테이너 구성 — 아직 없음 (M0 에서 생성)
 
-E:\queenbee-data\   DB · 파일 데이터 (저장소 밖. 커밋하지 않는다)
+E:\neowave-work-data\   DB · 파일 데이터 (저장소 밖. 커밋하지 않는다)
 ```
 
 ```powershell

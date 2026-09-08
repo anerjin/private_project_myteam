@@ -1,12 +1,12 @@
 ---
-name: queenbee-collect
-description: 웹에서 AI·개발 자료를 찾아 QueenBee 지식 베이스에 등록한다. 사용자가 "○○ 관련 자료 찾아서 등록해줘", "이 저장소 QueenBee에 넣어줘", "applicability 비어 있는 자료 채워줘" 같은 요청을 할 때 쓴다.
+name: neowave-work-collect
+description: 웹에서 AI·개발 자료를 찾아 Neowave Work 지식 베이스에 등록한다. 사용자가 "○○ 관련 자료 찾아서 등록해줘", "이 저장소 Neowave Work에 넣어줘", "applicability 비어 있는 자료 채워줘" 같은 요청을 할 때 쓴다.
 ---
 
-# QueenBee 자료 수집
+# Neowave Work 자료 수집
 
-QueenBee는 사내 AI 개발 자료 지식 베이스입니다. 이 Skill은 **무엇을 채워야 하는지**가 아니라
-**어떻게 채워야 좋은지**를 정합니다. 필드 목록은 `queenbee_list_content_types` 가 알려 줍니다.
+Neowave Work는 사내 AI 개발 자료 지식 베이스입니다. 이 Skill은 **무엇을 채워야 하는지**가 아니라
+**어떻게 채워야 좋은지**를 정합니다. 필드 목록은 `nwwork_list_content_types` 가 알려 줍니다.
 
 ## 왜 절차가 있는가
 
@@ -39,18 +39,18 @@ QueenBee는 사내 AI 개발 자료 지식 베이스입니다. 이 Skill은 **�
 ### 4. 중복을 확인한다 — 등록 전에 반드시
 
 ```
-queenbee_check_duplicate { "url": "..." }
+nwwork_check_duplicate { "url": "..." }
 ```
 
 - **중복이면 등록하지 않습니다.** 사용자에게 기존 자료를 알려 주고 넘어갑니다.
 - 기존 자료에 비어 있는 칸이 있으면 **보강**을 제안합니다 (5-보강 참고).
-- 같은 내용을 다른 주소로 쓴 자료는 URL로 안 걸립니다 — `queenbee_search` 로 제목·주제도 함께 봅니다.
+- 같은 내용을 다른 주소로 쓴 자료는 URL로 안 걸립니다 — `nwwork_search` 로 제목·주제도 함께 봅니다.
 - 검색 결과에 `searchTruncated: true` 가 오면 **"없다"고 판단하지 않습니다.** 질의를 좁혀 다시 봅니다.
 
 ### 5. 타입을 정하고 필드를 확인한다
 
 ```
-queenbee_list_content_types {}
+nwwork_list_content_types {}
 ```
 
 돌아오는 `detailSchema` 가 그 타입의 **필수·선택 필드 전부**입니다.
@@ -76,7 +76,7 @@ queenbee_list_content_types {}
 ### 7. 분류한다
 
 ```
-queenbee_list_taxonomy {}
+nwwork_list_taxonomy {}
 ```
 
 - 카테고리는 **1개.** 목록에 있는 `slug` 만 씁니다.
@@ -86,7 +86,7 @@ queenbee_list_taxonomy {}
 ### 8. 등록한다
 
 ```
-queenbee_create_resource {
+nwwork_create_resource {
   "type": "...", "title": "...", "summary": "...", "url": "...",
   "category": "...", "tags": ["...", "..."],
   "detail": { ... }
@@ -117,25 +117,25 @@ queenbee_create_resource {
 
 이미 있는 자료를 채울 때:
 
-1. `queenbee_get_resource` 로 **지금 값을 먼저 봅니다.**
+1. `nwwork_get_resource` 로 **지금 값을 먼저 봅니다.**
 2. **비어 있는 칸만** 보냅니다. 전부 다시 보내면 사람이 손으로 고쳐 놓은 것을 덮어씁니다.
 3. 타입은 바꿀 수 없습니다.
 
 ## GitHub 저장소
 
 `GITHUB_REPO` 타입으로 등록하면 서버가 메타(스타·라이선스·최근 커밋)를 수집합니다.
-소스 사본이 필요하면 등록 후 `queenbee_archive_github` 를 겁니다 —
+소스 사본이 필요하면 등록 후 `nwwork_archive_github` 를 겁니다 —
 작업만 걸고 즉시 돌아오며, 완료를 기다리지 않습니다.
 
 ## 도구
 
 | 도구 | 언제 |
 | --- | --- |
-| `queenbee_list_content_types` | 등록 전, 타입별 필드 확인 |
-| `queenbee_search` | 비슷한 자료가 있는지 (주제로) |
-| `queenbee_check_duplicate` | 등록 전, 같은 URL이 있는지 |
-| `queenbee_get_resource` | 보강 전, 지금 값 확인 |
-| `queenbee_list_taxonomy` | 분류 전, 카테고리·태그 확인 |
-| `queenbee_create_resource` | 등록 |
-| `queenbee_update_resource` | 보강 |
-| `queenbee_archive_github` | 저장소 소스 아카이브 |
+| `nwwork_list_content_types` | 등록 전, 타입별 필드 확인 |
+| `nwwork_search` | 비슷한 자료가 있는지 (주제로) |
+| `nwwork_check_duplicate` | 등록 전, 같은 URL이 있는지 |
+| `nwwork_get_resource` | 보강 전, 지금 값 확인 |
+| `nwwork_list_taxonomy` | 분류 전, 카테고리·태그 확인 |
+| `nwwork_create_resource` | 등록 |
+| `nwwork_update_resource` | 보강 |
+| `nwwork_archive_github` | 저장소 소스 아카이브 |

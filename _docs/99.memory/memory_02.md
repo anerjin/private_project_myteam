@@ -683,3 +683,61 @@ Chrome 이 끝을 안 정해 주므로 **침묵 시계**를 우리가 듭니다 
 실측(실제 Chrome): 커서 `grab` → 끄는 동안 `grabbing`, 정면 → 커서 오른쪽 위에
 두면 눈과 머리가 그쪽으로 → 왼쪽으로 120px 끌면 옆얼굴 → 놓고 4초 뒤 정면.
 스크린샷 다섯 장으로 «봄». 페이지 오류 0.
+
+---
+
+## [067] 2026-09-08 · 서비스 명칭을 Neowave Work 로 바꾼다
+
+> QueenBee는 이전 이름이야. 지금은 neowave work 로 변경했어.
+> 표시명은 Neowave Work, 식별자는 neowave-work 로 가자
+
+- **한 일:** 코드·문서 **76개 파일 412곳**의 `QueenBee`/`queenbee` 를 치환.
+  Skill 폴더 `queenbee-collect` → `neowave-work-collect` (`git mv`).
+  `DEC-011` 에 개정 표시, `DEC-073` 신설
+- **이유:** 서비스가 `team.neowave.one` 으로 나가는데 이름이 도메인과 따로 놀았습니다
+- **결정:** `DEC-073`
+- **남은 것:** NAS 이관 결정들(`DEC-074`~) · 이 맥에서는 빌드 검증 불가
+
+### 세 갈래로 나눠서 바꿨습니다
+
+| 갈래 | 어떻게 |
+| --- | --- |
+| 단순 표기 | `QueenBee` → `Neowave Work`, `queenbee` → `neowave-work` |
+| 데이터·프로토콜 | 키 `nw_live_` · 쿠키 `nw_session` · MCP 도구 `nwwork_*` · 패키지 `@neowave-work/mcp` · DB `neowave_work` |
+| **역사 기록** | **손대지 않았습니다** — `memory_01`·`memory_02` 와 기존 `DEC` 본문 |
+
+역사를 고치지 않은 이유는 규칙(`README · 7장`)이기도 하지만, 그때는 실제로 그
+이름으로 결정했기 때문입니다. 소급해 고치면 「왜 이 이름이었나」를 잃습니다.
+
+### 순서를 지켜야 했던 치환
+
+`queenbee-` 를 먼저 통째로 바꾸면 DB 이름까지 `neowave-work` 가 되는데,
+**Postgres 식별자에는 하이픈을 쓸 수 없습니다.** 그래서 `postgresql://…` ·
+`POSTGRES_USER|PASSWORD|DB` 를 **가장 먼저** `neowave_work` 로 처리한 뒤
+나머지를 하이픈으로 넘겼습니다. 식별자가 두 벌인 유일한 자리입니다.
+
+### 기계 치환이 만든 결함 하나
+
+`verify-chat.ts` 가 `mcp__queenbee__queenbee_` 를 잘라내고 있었는데,
+서버명과 도구 접두사가 **같은 단어였다가 갈라지면서**
+`mcp__neowave-work__neowave-work_` 가 됐습니다. 실제 도구는
+`mcp__neowave-work__nwwork_*` 이라 잘라내기가 통째로 빗나갑니다.
+치환 후 전수 확인에서 잡았습니다 — **한 단어가 두 역할을 하던 자리**는
+이름을 나눌 때 반드시 깨집니다.
+
+### 확인한 것 / 못 한 것
+
+| 확인 | 결과 |
+| --- | --- |
+| 잔여 `queenbee`/`qb_` | **0건** (역사 기록 제외) |
+| 이중 치환(`neowave-work-work` 등) | **0건** |
+| Skill 폴더명 ↔ `SKILL.md` `name` ↔ `register-collect-skill.ts` | 일치 |
+| `npm run verify` · `typecheck` · `build` | **못 했습니다** — 이 맥에 `node_modules`·`.env`·컨테이너가 없습니다 |
+
+빌드 검증은 실행 PC(또는 NAS 이관 후)에서 해야 합니다.
+
+### 이관하는 사람이 겪을 것
+
+① 기존 `qb_live_…` 키 전부 무효 → 재발급 ② 로그인 세션 전부 끊김
+③ DB·볼륨명이 바뀌어 **컨테이너 재생성 필요** — 기존 데이터를 살리려면
+덤프 후 새 DB(`neowave_work`)로 복원해야 합니다 ④ 팀원 Claude Code MCP 설정 갱신

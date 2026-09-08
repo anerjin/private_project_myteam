@@ -36,7 +36,7 @@ import * as tagService from "@/server/services/tag.service";
 import * as userService from "@/server/services/user.service";
 
 const BASE = "http://localhost:3100";
-const COOKIE = process.env.SESSION_COOKIE_NAME || "qb_session";
+const COOKIE = process.env.SESSION_COOKIE_NAME || "nw_session";
 
 let pass = 0;
 let fail = 0;

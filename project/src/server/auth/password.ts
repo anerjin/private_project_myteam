@@ -79,7 +79,7 @@ export async function verifyPassword(
 let dummyHash: Promise<string> | null = null;
 
 export async function burnPasswordTime(): Promise<false> {
-  dummyHash ??= hash("queenbee-timing-equalizer", OPTIONS);
+  dummyHash ??= hash("neowave-work-timing-equalizer", OPTIONS);
   await verifyPassword(await dummyHash, "wrong-on-purpose");
   return false;
 }

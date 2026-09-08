@@ -1,4 +1,4 @@
-﻿# QueenBee 서버 스크립트의 공통 값 — `server.ps1` 과 `server-run.ps1` 이 함께 씁니다.
+﻿# Neowave Work 서버 스크립트의 공통 값 — `server.ps1` 과 `server-run.ps1` 이 함께 씁니다.
 #
 # 이 파일은 **점 소싱(dot-source)** 으로만 씁니다:
 #
@@ -19,8 +19,8 @@ Set-StrictMode -Off
 # 포트는 3100 고정입니다 (DEC-028). 이 PC 의 다른 프로젝트가 3000 을 씁니다.
 $QbPort = 3100
 
-# 작업 스케줄러에 등록되는 이름. 「QueenBee 백업」·「QueenBee 유지보수」와 나란히 섭니다.
-$QbTaskName = 'QueenBee 서버'
+# 작업 스케줄러에 등록되는 이름. 「Neowave Work 백업」·「Neowave Work 유지보수」와 나란히 섭니다.
+$QbTaskName = 'Neowave Work 서버'
 
 # scripts 의 부모 = project/
 $QbProjectDir = Split-Path -Parent $PSScriptRoot
@@ -53,7 +53,7 @@ function Get-QbEnvValue {
   서버 로그가 쌓이는 곳.
 .DESCRIPTION
   **저장소 밖입니다** (DEC-016 과 같은 이유 — 커밋될 일이 없어야 합니다).
-  `STORAGE_ROOT` 가 `E:\queenbee-data\files` 이면 `E:\queenbee-data\logs` 입니다.
+  `STORAGE_ROOT` 가 `E:\neowave-work-data\files` 이면 `E:\neowave-work-data\logs` 입니다.
 #>
 function Get-QbLogDir {
     $storage = Get-QbEnvValue 'STORAGE_ROOT'
@@ -61,7 +61,7 @@ function Get-QbLogDir {
         $parent = Split-Path -Parent $storage
         if ($parent) { return (Join-Path $parent 'logs') }
     }
-    return (Join-Path $env:LOCALAPPDATA 'queenbee\logs')
+    return (Join-Path $env:LOCALAPPDATA 'neowave-work\logs')
 }
 
 function Get-QbLogPath { Join-Path (Get-QbLogDir) 'server.log' }

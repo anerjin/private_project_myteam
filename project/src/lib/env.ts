@@ -76,7 +76,7 @@ const envSchema = z.object({
    * 모델 호출 자격은 CLI 가 이미 갖고 있으므로(`claude auth`, Max 구독)
    * **여기에 모델 API 키를 두지 않습니다.**
    *
-   * `CHAT_API_KEY` 는 **QueenBee 자기 자신의** API 키입니다 — CLI 가 MCP
+   * `CHAT_API_KEY` 는 **Neowave Work 자기 자신의** API 키입니다 — CLI 가 MCP
    * 서버를 통해 우리 자료를 «읽을» 때 씁니다. 읽기 전용 키를 넣으십시오.
    * 없으면 채팅은 뜨지만 **검색 도구 없이** 답합니다(그 사실을 화면이 말합니다).
    */

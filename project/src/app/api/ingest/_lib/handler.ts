@@ -60,7 +60,7 @@ export function ingest(
       if (!raw) {
         throw new AppError(
           "UNAUTHENTICATED",
-          "API 키가 없습니다. Authorization: Bearer qb_live_… 헤더를 넣어 주세요."
+          "API 키가 없습니다. Authorization: Bearer nw_live_… 헤더를 넣어 주세요."
         );
       }
 

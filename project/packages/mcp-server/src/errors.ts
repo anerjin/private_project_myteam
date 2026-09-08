@@ -25,7 +25,7 @@ export interface Explained {
 }
 
 const KEY_HINT =
-  "QueenBee 마이페이지 > API 키에서 키를 발급하고 QUEENBEE_API_KEY 에 넣어 주세요.";
+  "Neowave Work 마이페이지 > API 키에서 키를 발급하고 NEOWAVE_WORK_API_KEY 에 넣어 주세요.";
 
 export function explain(
   status: number,
@@ -100,7 +100,7 @@ export function explain(
     return { text: `인증에 실패했습니다. ${KEY_HINT}`, fixable: false };
   }
   return {
-    text: message || `QueenBee 서버가 오류를 반환했습니다 (HTTP ${status}).`,
+    text: message || `Neowave Work 서버가 오류를 반환했습니다 (HTTP ${status}).`,
     fixable: false,
   };
 }
@@ -113,5 +113,5 @@ export function explain(
  */
 export function explainOffline(baseUrl: string, cause: unknown): string {
   const reason = cause instanceof Error ? cause.message : String(cause);
-  return `QueenBee 서버(${baseUrl})에 연결하지 못했습니다. 서버가 실행 중인지, QUEENBEE_URL 이 맞는지 확인하세요. (${reason})`;
+  return `Neowave Work 서버(${baseUrl})에 연결하지 못했습니다. 서버가 실행 중인지, NEOWAVE_WORK_URL 이 맞는지 확인하세요. (${reason})`;
 }

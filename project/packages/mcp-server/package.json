@@ -1,11 +1,11 @@
 {
-  "name": "@queenbee/mcp",
+  "name": "@neowave-work/mcp",
   "version": "0.1.0",
   "private": true,
-  "description": "QueenBee 자료 수집용 stdio MCP 서버 (FR-CLI-001)",
+  "description": "Neowave Work 자료 수집용 stdio MCP 서버 (FR-CLI-001)",
   "type": "module",
   "bin": {
-    "queenbee-mcp": "./dist/index.js"
+    "neowave-work-mcp": "./dist/index.js"
   },
   "main": "./dist/index.js",
   "files": [

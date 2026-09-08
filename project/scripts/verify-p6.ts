@@ -310,7 +310,7 @@ async function run() {
       type: "GITHUB_REPO",
       title: "없는 저장소",
       summary: "",
-      url: `https://github.com/queenbee-verify/${randomBytes(8).toString("hex")}`,
+      url: `https://github.com/neowave-work-verify/${randomBytes(8).toString("hex")}`,
       body: "",
       category: "",
       tags: "",
@@ -490,7 +490,7 @@ async function run() {
       );
       check(
         "본문 글자가 담겼다",
-        buf.toString("utf8").includes("QueenBee"),
+        buf.toString("utf8").includes("Neowave Work"),
         "빈 껍데기를 저장하면 보관이 아니다"
       );
 
@@ -825,7 +825,7 @@ async function checkScreens(userId: string) {
 
   const { issue } = await import("@/server/auth/session");
   const { token } = await issue(userId, { userAgent: "verify-p6" });
-  const cookie = `${process.env.SESSION_COOKIE_NAME || "qb_session"}=${token}`;
+  const cookie = `${process.env.SESSION_COOKIE_NAME || "nw_session"}=${token}`;
     const NOT_FOUND = "NEXT_HTTP_ERROR_FALLBACK;404";
 
   /**

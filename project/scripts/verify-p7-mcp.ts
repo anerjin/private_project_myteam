@@ -173,7 +173,7 @@ async function run() {
   console.log("\n★ 설정이 틀리면 «기동할 때» 죽는다 (DEV-06 · 6.2)");
   {
     const child = spawn(process.execPath, [SERVER], {
-      env: { ...process.env, QUEENBEE_URL: "", QUEENBEE_API_KEY: "" },
+      env: { ...process.env, NEOWAVE_WORK_URL: "", NEOWAVE_WORK_API_KEY: "" },
       stdio: ["pipe", "pipe", "pipe"],
     });
     let err = "";
@@ -185,14 +185,14 @@ async function run() {
     check("키가 없으면 종료한다", code === 1, `exit ${code}`);
     check(
       "무엇을 고쳐야 하는지 stderr 로 말한다",
-      err.includes("QUEENBEE_URL") && err.includes("마이페이지"),
+      err.includes("NEOWAVE_WORK_URL") && err.includes("마이페이지"),
       err.split("\n")[0] ?? ""
     );
   }
 
   const { rpc, init } = await start({
-    QUEENBEE_URL: "http://localhost:3100",
-    QUEENBEE_API_KEY: issued.plaintext,
+    NEOWAVE_WORK_URL: "http://localhost:3100",
+    NEOWAVE_WORK_API_KEY: issued.plaintext,
   });
 
   try {
@@ -206,27 +206,27 @@ async function run() {
       JSON.stringify(names) ===
         JSON.stringify(
           [
-            "queenbee_archive_github",
-            "queenbee_check_duplicate",
-            "queenbee_create_resource",
-            "queenbee_get_resource",
-            "queenbee_list_content_types",
-            "queenbee_list_taxonomy",
-            "queenbee_search",
-            "queenbee_update_resource",
+            "nwwork_archive_github",
+            "nwwork_check_duplicate",
+            "nwwork_create_resource",
+            "nwwork_get_resource",
+            "nwwork_list_content_types",
+            "nwwork_list_taxonomy",
+            "nwwork_search",
+            "nwwork_update_resource",
           ].sort()
         ),
       names.join(" ")
     );
     check(
-      "서버 이름이 queenbee 다",
+      "서버 이름이 neowave-work 다",
       (init.result as { serverInfo: { name: string } }).serverInfo.name ===
-        "queenbee"
+        "neowave-work"
     );
 
     console.log("\n★ 타입 스키마가 서버에서 온다 (FR-CLI-002)");
     {
-      const res = await callTool(rpc, "queenbee_list_content_types", {});
+      const res = await callTool(rpc, "nwwork_list_content_types", {});
       const types = parse(res) as { code: string; detailSchema: unknown }[];
       check("오류가 아니다", !res.isError);
       check("여섯 타입", types.length === 6, `${types.length}종`);
@@ -240,7 +240,7 @@ async function run() {
        * **도구 입력은 `detail` 이 나뉜 모양입니다** (`DEV-08 · 8.3` 입출력 예시).
        * 서버는 평평한 본문을 받으므로 `client.flatten` 이 한 곳에서 번역합니다.
        */
-      const res = await callTool(rpc, "queenbee_create_resource", {
+      const res = await callTool(rpc, "nwwork_create_resource", {
         type: "AI_MATERIAL",
         title: "MCP 로 등록한 자료",
         summary: "도구 호출 한 번으로 들어왔다",
@@ -278,14 +278,14 @@ async function run() {
 
     console.log("\n★ 중복 URL 은 등록되지 않고 기존 자료를 안내한다 (M3 DoD)");
     {
-      const dup = await callTool(rpc, "queenbee_check_duplicate", {
+      const dup = await callTool(rpc, "nwwork_check_duplicate", {
         url: "https://example.com/p7-mcp-verify?utm_source=x",
       });
       const d = parse(dup) as { duplicate: { id: string } | null };
       check("중복 확인은 오류가 아니다", !dup.isError);
       check("추적 파라미터를 걷고 같은 것으로 본다", d.duplicate?.id === createdId);
 
-      const again = await callTool(rpc, "queenbee_create_resource", {
+      const again = await callTool(rpc, "nwwork_create_resource", {
         type: "AI_MATERIAL",
         title: "같은 URL 두 번째",
         url: "https://example.com/p7-mcp-verify",
@@ -307,7 +307,7 @@ async function run() {
 
     console.log("\n★ 검증 실패는 «고칠 수 있게» 돌려준다 (FR-CLI-005)");
     {
-      const res = await callTool(rpc, "queenbee_create_resource", {
+      const res = await callTool(rpc, "nwwork_create_resource", {
         type: "SKILL",
         title: "필수 빠짐",
       });
@@ -318,7 +318,7 @@ async function run() {
 
     console.log("\n★ 보강 — 보낸 칸만 바뀐다 (FR-CLI-006)");
     {
-      const res = await callTool(rpc, "queenbee_update_resource", {
+      const res = await callTool(rpc, "nwwork_update_resource", {
         id: createdId,
         detail: { keyPoints: "- MCP 로 채운 요점" },
       });
@@ -332,13 +332,13 @@ async function run() {
 
     console.log("\n★ 검색·분류 (FR-CLI-003 · 007)");
     {
-      const res = await callTool(rpc, "queenbee_search", { q: "MCP 로 등록한" });
+      const res = await callTool(rpc, "nwwork_search", { q: "MCP 로 등록한" });
       const d = parse(res) as {
         results: { id: string; url: string }[];
         searchTruncated?: boolean;
       };
       check("찾힌다", d.results.some((r) => r.id === createdId));
-      check("QueenBee 안의 주소를 함께 준다", d.results[0]?.url?.startsWith("http") === true);
+      check("Neowave Work 안의 주소를 함께 준다", d.results[0]?.url?.startsWith("http") === true);
       /*
        * **`meta` 를 버리지 않습니다** (`DEC-048`). 봉투를 벗겨 `data` 만 주면
        * 「없다」와 「안 보여준다」의 구별이 조용히 사라집니다.
@@ -349,14 +349,14 @@ async function run() {
         String(d.searchTruncated)
       );
 
-      const tax = await callTool(rpc, "queenbee_list_taxonomy", {});
+      const tax = await callTool(rpc, "nwwork_list_taxonomy", {});
       const t = parse(tax) as { categories: unknown[] };
       check("분류가 온다", Array.isArray(t.categories) && t.categories.length > 0);
     }
 
     console.log("\n★ 아카이브는 GitHub 자료에만 (FR-CLI-008)");
     {
-      const res = await callTool(rpc, "queenbee_archive_github", {
+      const res = await callTool(rpc, "nwwork_archive_github", {
         id: createdId,
       });
       check("GitHub 자료가 아니면 거절", res.isError === true);
@@ -395,11 +395,11 @@ async function run() {
     );
 
     const s = await start({
-      QUEENBEE_URL: "http://localhost:3100",
-      QUEENBEE_API_KEY: disposable.plaintext,
+      NEOWAVE_WORK_URL: "http://localhost:3100",
+      NEOWAVE_WORK_API_KEY: disposable.plaintext,
     });
     try {
-      const res = await callTool(s.rpc, "queenbee_list_taxonomy", {});
+      const res = await callTool(s.rpc, "nwwork_list_taxonomy", {});
       check("도구 호출이 실패한다", res.isError === true);
       const text = res.content?.[0]?.text ?? "";
       check("폐기된 키라고 말한다", text.includes("폐기"), text.slice(0, 80));

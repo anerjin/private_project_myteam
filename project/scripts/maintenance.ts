@@ -21,7 +21,7 @@
  * $act = New-ScheduledTaskAction -Execute "npm.cmd" -Argument "run maintenance" `
  *   -WorkingDirectory "E:\github\doi_dev_team\project"
  * $trg = New-ScheduledTaskTrigger -Daily -At 4am
- * Register-ScheduledTask -TaskName "QueenBee 유지보수" -Action $act -Trigger $trg
+ * Register-ScheduledTask -TaskName "Neowave Work 유지보수" -Action $act -Trigger $trg
  * ```
  */
 import { db } from "@/lib/db";
@@ -61,7 +61,7 @@ async function main() {
   const actor = await batchActor();
   const r = await maintenanceService.runDue(actor);
 
-  console.log("QueenBee 유지보수");
+  console.log("Neowave Work 유지보수");
   console.log(`  큐에 넣음 : ${r.queued.join(", ") || "없음"}`);
   console.log(`  건너뜀    : ${r.skipped.join(", ") || "없음"}`);
   console.log(

@@ -56,7 +56,7 @@ export interface ToolDef<A = Record<string, unknown>> {
   /** 읽기 전용 도구인가 — 클라이언트가 확인 없이 부를 수 있는지 판단합니다 */
   readOnly: boolean;
   /** 메서드 문법입니다(양변성) — `index.ts` 가 여덟 개를 한 배열에 담습니다 */
-  run(client: QueenBeeClient, args: A): Promise<unknown>;
+  run(client: NeowaveWorkClient, args: A): Promise<unknown>;
 }
 
 /**
@@ -79,7 +79,7 @@ export interface ResourceArgs {
  *
  * **서버는 평평한 본문을 받습니다** — 웹 폼과 같은 zod 를 지나기 때문입니다
  * (`FR-CLI-005`: 「웹 등록과 같은 서비스 계층을 거친다」). 반면 에이전트에게는
- * `detail` 이 나뉘어 있는 편이 낫습니다 — `queenbee_list_content_types` 가
+ * `detail` 이 나뉘어 있는 편이 낫습니다 — `nwwork_list_content_types` 가
  * 주는 것이 **`detailSchema`** 라서 그대로 채우면 되기 때문입니다.
  *
  * **그 번역이 여기 한 곳에 있습니다.** 도구마다 펼치면 등록과 수정이 서로
@@ -95,7 +95,7 @@ export function flatten(args: ResourceArgs): Record<string, unknown> {
   };
 }
 
-export class QueenBeeClient {
+export class NeowaveWorkClient {
   constructor(private readonly config: Config) {}
 
   get baseUrl(): string {

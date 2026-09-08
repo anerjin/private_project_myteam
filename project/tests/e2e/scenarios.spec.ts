@@ -399,7 +399,7 @@ test("④ 일반 회원은 관리 영역에 못 들어간다", async ({ page }) 
    * 실제로 받아 저장한 쿠키만이 증거입니다. `verify:sec` 이 이 항목을
    * 「e2e 가 증명한다」고 적어 두었으니, 그 말이 참이어야 합니다.
    */
-  const cookieName = process.env.SESSION_COOKIE_NAME || "qb_session";
+  const cookieName = process.env.SESSION_COOKIE_NAME || "nw_session";
   const jar = await page.context().cookies();
   const session = jar.find((c) => c.name === cookieName);
   expect(session, `${cookieName} 쿠키가 없습니다`).toBeDefined();
@@ -451,10 +451,10 @@ test("⑤ 정지하면 그 사람의 세션과 API 키가 즉시 죽는다", asy
 
   const plainKey = await page
     .locator("code")
-    .filter({ hasText: /^qb_/ })
+    .filter({ hasText: /^nw_/ })
     .first()
     .textContent();
-  expect(plainKey).toMatch(/^qb_/);
+  expect(plainKey).toMatch(/^nw_/);
 
   // 그 키가 실제로 통한다
   const before = await fetch(`${BASE_URL}/api/ingest/whoami`, {
@@ -517,7 +517,7 @@ test("⑥ CLI 로 넣은 자료가 화면에 «CLI 수집»으로 뜬다", async
   await page.getByLabel(/이름/).last().fill("E2E 수집 키");
   await page.getByRole("button", { name: /발급/ }).last().click();
   const key = (
-    await page.locator("code").filter({ hasText: /^qb_/ }).first().textContent()
+    await page.locator("code").filter({ hasText: /^nw_/ }).first().textContent()
   )!.trim();
 
   // 그 키로 «HTTP 로» 등록합니다 — CLI 가 하는 그대로

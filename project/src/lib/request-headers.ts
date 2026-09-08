@@ -16,4 +16,4 @@
  *
  * **`proxy` 가 매 요청 덮어씁니다** — 클라이언트가 같은 헤더를 보내도 무시됩니다.
  */
-export const PATHNAME_HEADER = "x-queenbee-pathname";
+export const PATHNAME_HEADER = "x-neowave-work-pathname";

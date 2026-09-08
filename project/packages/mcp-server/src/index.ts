@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * QueenBee stdio MCP 서버 진입점 (`FR-CLI-001`, `DEV-08 · 8.3`).
+ * Neowave Work stdio MCP 서버 진입점 (`FR-CLI-001`, `DEV-08 · 8.3`).
  *
- * 개발자 PC 에서 Claude Code 가 **자식 프로세스로** 실행합니다. QueenBee
+ * 개발자 PC 에서 Claude Code 가 **자식 프로세스로** 실행합니다. Neowave Work
  * 서버에 배포되는 것이 아니라 사용자 쪽에서 도는 클라이언트입니다.
  *
  * ## stdout 은 프로토콜 전용입니다
@@ -18,7 +18,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-import { QueenBeeClient, ToolFailure, type ToolDef } from "./client.js";
+import { NeowaveWorkClient, ToolFailure, type ToolDef } from "./client.js";
 import { loadConfig } from "./env.js";
 import { archiveGithub } from "./tools/archive-github.js";
 import { checkDuplicate } from "./tools/check-duplicate.js";
@@ -41,18 +41,18 @@ const TOOLS: ToolDef<never>[] = [
 ];
 
 function log(line: string): void {
-  process.stderr.write(`[queenbee-mcp] ${line}\n`);
+  process.stderr.write(`[neowave-work-mcp] ${line}\n`);
 }
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const client = new QueenBeeClient(config);
+  const client = new NeowaveWorkClient(config);
 
   const server = new McpServer(
-    { name: "queenbee", version: "0.1.0" },
+    { name: "neowave-work", version: "0.1.0" },
     {
       instructions:
-        "QueenBee 는 사내 AI 개발 자료 지식 베이스다. 자료를 등록하기 전에 queenbee_list_content_types 로 타입별 필드를 확인하고 queenbee_check_duplicate 로 중복을 확인한다. 등록 실패는 자동으로 재시도하지 않는다.",
+        "Neowave Work 는 사내 AI 개발 자료 지식 베이스다. 자료를 등록하기 전에 nwwork_list_content_types 로 타입별 필드를 확인하고 nwwork_check_duplicate 로 중복을 확인한다. 등록 실패는 자동으로 재시도하지 않는다.",
     }
   );
 
@@ -108,7 +108,7 @@ async function main(): Promise<void> {
  */
 async function runTool(
   tool: ToolDef<never>,
-  client: QueenBeeClient,
+  client: NeowaveWorkClient,
   args: unknown
 ) {
   try {

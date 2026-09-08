@@ -86,7 +86,7 @@ const SPECS: Record<Transition["kind"], TransitionSpec> = {
     label: "승인",
     notifyUser: () => ({
       title: "가입이 승인되었습니다",
-      body: "이제 QueenBee 를 이용할 수 있습니다.",
+      body: "이제 Neowave Work 를 이용할 수 있습니다.",
     }),
   },
   /**

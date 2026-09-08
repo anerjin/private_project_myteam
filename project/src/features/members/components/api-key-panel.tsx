@@ -78,12 +78,12 @@ export interface ApiKeyRow {
 function mcpSnippet(appUrl: string, apiKey: string) {
   return `{
   "mcpServers": {
-    "queenbee": {
+    "neowave-work": {
       "command": "npx",
-      "args": ["-y", "@queenbee/mcp"],
+      "args": ["-y", "@neowave-work/mcp"],
       "env": {
-        "QUEENBEE_URL": "${appUrl}",
-        "QUEENBEE_API_KEY": "${apiKey}"
+        "NEOWAVE_WORK_URL": "${appUrl}",
+        "NEOWAVE_WORK_API_KEY": "${apiKey}"
       }
     }
   }
@@ -163,7 +163,7 @@ export function ApiKeyPanel({
             API 키
           </CardTitle>
           <CardDescription>
-            Claude Code에서 QueenBee에 자료를 등록하려면 API 키가 필요합니다.
+            Claude Code에서 Neowave Work에 자료를 등록하려면 API 키가 필요합니다.
             키의 권한은 내 역할을 넘지 못합니다.
           </CardDescription>
         </div>

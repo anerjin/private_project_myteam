@@ -1,4 +1,4 @@
-// QueenBee 도메인 타입
+// Neowave Work 도메인 타입
 // 정본: _docs/01.요구사항/04_콘텐츠_도메인_모델.md (REQ-04)
 
 export type ResourceType =

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import {
   flatten,
-  type QueenBeeClient,
+  type NeowaveWorkClient,
   type ResourceArgs,
   type ToolDef,
 } from "../client.js";
@@ -12,7 +12,7 @@ interface Args extends ResourceArgs {
 }
 
 /**
- * `queenbee_update_resource` — 자료 보강 (`FR-CLI-006`).
+ * `nwwork_update_resource` — 자료 보강 (`FR-CLI-006`).
  *
  * ## **보낸 칸만 바뀝니다**
  *
@@ -29,10 +29,10 @@ interface Args extends ResourceArgs {
  * 새로 등록하고 «대체함» 으로 이어 주십시오.
  */
 export const updateResource: ToolDef<Args> = {
-  name: "queenbee_update_resource",
+  name: "nwwork_update_resource",
   title: "자료 보강",
   description:
-    "이미 등록된 자료의 빈 칸을 채운다. 보낸 필드만 바뀌고 나머지는 그대로 남는다. 먼저 queenbee_get_resource 로 지금 값을 확인하고, 비어 있는 것만 보낸다. 타입은 바꿀 수 없다.",
+    "이미 등록된 자료의 빈 칸을 채운다. 보낸 필드만 바뀌고 나머지는 그대로 남는다. 먼저 nwwork_get_resource 로 지금 값을 확인하고, 비어 있는 것만 보낸다. 타입은 바꿀 수 없다.",
   inputSchema: {
     id: z.string().describe("자료 id"),
     title: z.string().optional(),
@@ -47,7 +47,7 @@ export const updateResource: ToolDef<Args> = {
       .describe("타입별 상세 필드 중 «채울 것만»"),
   },
   readOnly: false,
-  async run(client: QueenBeeClient, args: Args) {
+  async run(client: NeowaveWorkClient, args: Args) {
     const { id, ...rest } = args;
     return (
       await client.patch(`/resources/${encodeURIComponent(id)}`, flatten(rest))

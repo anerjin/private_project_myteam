@@ -7,7 +7,7 @@
  * `env.ts` 와 기본값이 어긋나면 로그인이 조용히 깨지므로 **한 곳에서만 정합니다** —
  * `env.ts` 가 이 상수를 가져다 씁니다.
  */
-export const DEFAULT_SESSION_COOKIE_NAME = "qb_session";
+export const DEFAULT_SESSION_COOKIE_NAME = "nw_session";
 
 /** proxy 는 `env.ts` 를 못 쓰므로 `process.env` 를 직접 읽습니다 */
 export function sessionCookieName(): string {
